@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a certification challenge project for AI Engineering Bootcamp Cohort 8. It's a minimal Python starter project using `uv` for dependency management.
+This is a certification challenge project for AI Engineering Bootcamp Cohort 8. The project follows a product-focused approach that requires answering three core questions before building:
+
+1. **Problem**: What problem are you trying to solve? Why is this a problem?
+2. **Solution**: What is your proposed solution? Why is this the best solution?
+3. **Audience**: Who has this problem and would use your solution? Do they validate the need?
+
+This is a minimal Python starter project using `uv` for dependency management, ready to be expanded based on your unique product vision.
 
 ## Python Environment
 
