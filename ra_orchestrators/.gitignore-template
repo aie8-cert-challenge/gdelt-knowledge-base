@@ -1,0 +1,15 @@
+# Repository Analyzer Framework
+# Add these lines to your .gitignore when using the ra_orchestrators framework
+
+# Framework directories (optional - commit if you want to version the framework)
+# ra_orchestrators/
+# ra_agents/
+# ra_tools/
+
+# Analysis outputs (can commit specific analyses if desired, or ignore all)
+ra_output/
+
+# Or selectively commit analyses:
+# ra_output/architecture_*/
+# ra_output/ux_*/
+# !ra_output/architecture_20251003_120000/  # Keep specific analysis
