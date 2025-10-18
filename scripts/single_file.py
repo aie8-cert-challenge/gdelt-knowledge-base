@@ -356,15 +356,13 @@ for retriever_name, graph in retrievers_config.items():
 
 print("\n   ✓ All retriever datasets populated!")
 
-# 8. Create RAGAS EvaluationDatasets (with schema validation)
+# 8. Create RAGAS EvaluationDatasets
 print("\n8. Creating RAGAS EvaluationDatasets...")
-print("   Validating and normalizing schemas...")
 
 evaluation_datasets = {}
 for retriever_name, dataset in datasets.items():
-    # Validate and normalize schema before creating EvaluationDataset
-    validated_dataset = validate_and_normalize_ragas_schema(dataset, retriever_name)
-    evaluation_datasets[retriever_name] = EvaluationDataset.from_pandas(validated_dataset)
+    # Create EvaluationDataset directly from populated dataset (no schema mutation)
+    evaluation_datasets[retriever_name] = EvaluationDataset.from_pandas(dataset)
     print(f"   ✓ {retriever_name}: EvaluationDataset created")
 
 # 9. Run RAGAS Evaluation for All Retrievers

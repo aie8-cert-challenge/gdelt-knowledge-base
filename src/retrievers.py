@@ -1,58 +1,89 @@
 # retrievers.py
 
-# LangChain
+"""
+Retriever factory functions for GDELT RAG system.
+
+This module provides factory functions to create retrievers. Retrievers cannot
+be instantiated at module level because they require documents and vector stores
+that must be loaded first.
+"""
+
+from typing import Dict, List
+from langchain_core.documents import Document
+from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
-from langchain_community.retrievers import BM25Retriever
-
-# LangChain Integrations
 from langchain_cohere import CohereRerank
 from langchain_qdrant import QdrantVectorStore
-from langchain_openai import OpenAIEmbeddings
-
-# Qdrant
-from qdrant_client import QdrantClient
-
-# Configuration
-QDRANT_HOST = "localhost"
-QDRANT_PORT = 6333
-COLLECTION_NAME = "gdelt_comparative_eval"
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 
-qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+def create_retrievers(
+    documents: List[Document],
+    vector_store: QdrantVectorStore,
+    k: int = 5,
+) -> Dict[str, object]:
+    """
+    Create all retriever instances.
 
-# Check if collection exists, recreate if needed
-collections = qdrant_client.get_collections().collections
-collection_names = [c.name for c in collections]
+    This factory function creates 4 different retrieval strategies:
+    1. Naive: Dense vector search using embeddings
+    2. BM25: Sparse keyword matching
+    3. Ensemble: Hybrid combination of dense + sparse
+    4. Cohere Rerank: Contextual compression with reranking
 
-# Create vector store
-vector_store = QdrantVectorStore(
-    client=qdrant_client,
-    collection_name=COLLECTION_NAME,
-    embedding=embeddings,
-)
+    Args:
+        documents: List of Document objects (required for BM25)
+        vector_store: Populated QdrantVectorStore instance
+        k: Number of documents to retrieve (default: 5)
 
-# Baseline: Dense vector search (k=5)
-baseline_retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    Returns:
+        Dictionary mapping retriever names to retriever instances.
+        Keys: 'naive', 'bm25', 'ensemble', 'cohere_rerank'
 
-# BM25: Sparse keyword matching
-bm25_retriever = BM25Retriever.from_documents(documents, k=5)
+    Example:
+        >>> from src.utils import load_documents_from_huggingface
+        >>> from src.config import create_vector_store
+        >>> from src.retrievers import create_retrievers
+        >>>
+        >>> documents = load_documents_from_huggingface()
+        >>> vector_store = create_vector_store(documents, recreate_collection=True)
+        >>> retrievers = create_retrievers(documents, vector_store)
+        >>>
+        >>> # Use individual retrievers
+        >>> naive_docs = retrievers['naive'].invoke("What is GDELT?")
+        >>> bm25_docs = retrievers['bm25'].invoke("What is GDELT?")
 
-# Cohere Rerank: Contextual compression (retrieve 20, rerank to 5)
-baseline_retriever_20 = vector_store.as_retriever(search_kwargs={"k": 20})
+    Notes:
+        - All retrievers return up to k documents
+        - BM25 operates on in-memory document collection
+        - Ensemble combines dense and sparse with 50/50 weighting
+        - Cohere rerank retrieves 20 documents then reranks to top k
+    """
+    # Naive: Dense vector search using embeddings
+    naive_retriever = vector_store.as_retriever(search_kwargs={"k": k})
 
-# Ensemble: Hybrid search (dense + sparse)
-ensemble_retriever = EnsembleRetriever(
-    retrievers=[baseline_retriever, bm25_retriever],
-    weights=[0.5, 0.5]
-)
+    # BM25: Sparse keyword matching over in-memory docs
+    bm25_retriever = BM25Retriever.from_documents(documents, k=k)
 
-# Cohere Rerank: Contextual compression (retrieve 20, rerank to 5)
-baseline_retriever_20 = vector_store.as_retriever(search_kwargs={"k": 20})
-compressor = CohereRerank(model="rerank-v3.5")
-compression_retriever = ContextualCompressionRetriever(
-    base_compressor=compressor,
-    base_retriever=baseline_retriever_20,
-    search_kwargs={"k": 5}
-)
+    # Ensemble: Hybrid search (dense + sparse)
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[naive_retriever, bm25_retriever],
+        weights=[0.5, 0.5]
+    )
+
+    # Cohere Rerank: Contextual compression
+    # First retrieve a wider set (20 docs), then rerank to top k
+    wide_retriever = vector_store.as_retriever(search_kwargs={"k": max(20, k)})
+    reranker = CohereRerank(model="rerank-v3.5")  # Explicit model for reproducibility
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=reranker,
+        base_retriever=wide_retriever
+        # Note: search_kwargs not valid here - k controlled by base_retriever
+    )
+
+    return {
+        "naive": naive_retriever,
+        "bm25": bm25_retriever,
+        "ensemble": ensemble_retriever,
+        "cohere_rerank": compression_retriever,
+    }

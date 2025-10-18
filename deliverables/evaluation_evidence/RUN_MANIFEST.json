@@ -87,36 +87,36 @@
     "Fine-tuned embeddings out of scope per instructor guidance",
     "Evaluation follows RAGAS 0.2.10 API patterns from session08"
   ],
-  "generated_at": "2025-10-18T06:30:25.633045Z",
+  "generated_at": "2025-10-18T07:45:39.037151Z",
   "generated_by": "scripts/generate_run_manifest.py",
   "results_summary": {
     "naive": {
-      "faithfulness": 0.9798856621773288,
-      "answer_relevancy": 0.9484688147299063,
-      "context_precision": 0.8457175925533055,
-      "context_recall": 0.9416666666666668,
-      "average": 0.9289346840318019
+      "faithfulness": 0.9653368587786669,
+      "answer_relevancy": 0.9467987699632895,
+      "context_precision": 0.7998842592294859,
+      "context_recall": 0.9833333333333334,
+      "average": 0.9238383053261939
     },
     "bm25": {
-      "faithfulness": 0.9501873478099734,
-      "answer_relevancy": 0.9524545531332574,
-      "context_precision": 0.8638888888535184,
+      "faithfulness": 0.9385871853577021,
+      "answer_relevancy": 0.9559689036142053,
+      "context_precision": 0.8424768518139342,
       "context_recall": 0.9833333333333334,
-      "average": 0.9374660307825207
+      "average": 0.9300915685297937
     },
     "ensemble": {
-      "faithfulness": 0.9485825322279147,
-      "answer_relevancy": 0.9599657147211951,
-      "context_precision": 0.8401421957387131,
+      "faithfulness": 0.954482308020773,
+      "answer_relevancy": 0.962528181352707,
+      "context_precision": 0.8565839946747519,
       "context_recall": 0.9833333333333334,
-      "average": 0.933005944005289
+      "average": 0.9392319543453913
     },
     "cohere_rerank": {
-      "faithfulness": 0.9438650473630313,
-      "answer_relevancy": 0.9463723294153822,
-      "context_precision": 0.9861111110604167,
+      "faithfulness": 0.9614648120440453,
+      "answer_relevancy": 0.9500922576918419,
+      "context_precision": 0.9999999999458332,
       "context_recall": 0.9833333333333334,
-      "average": 0.9649204552930409
+      "average": 0.9737226007537635
     }
   }
 }

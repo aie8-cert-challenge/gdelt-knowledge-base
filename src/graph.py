@@ -1,71 +1,141 @@
 # graph.py
 
-# LangChain
+"""
+LangGraph workflow factory for GDELT RAG system.
+
+This module provides factory functions to create LangGraph workflows. Graphs
+cannot be instantiated at module level because they depend on retrievers that
+must be created first.
+"""
+
+from typing import Dict, List
+from langgraph.graph import StateGraph, START, END
+from langchain_core.documents import Document
 from langchain.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
-# LangGraph
-from langgraph.graph import START, StateGraph
-
-# import src/prompts.py and src/retrievers.py
-from src.prompts import BASELINE_PROMPT
-from src.retrievers import baseline_retriever, bm25_retriever, compression_retriever, ensemble_retriever
 from src.state import State
+from src.prompts import BASELINE_PROMPT
+from src.config import get_llm
 
-# Configuration
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
-rag_prompt = ChatPromptTemplate.from_template(BASELINE_PROMPT)
 
-# Modular retriever functions (following session08 pattern)
-def retrieve_baseline(state):
-    """Naive dense vector search"""
-    retrieved_docs = baseline_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+def build_graph(retriever, llm=None, prompt_template: str = None):
+    """
+    Build a compiled LangGraph pipeline for a single retriever.
 
-def retrieve_bm25(state):
-    """BM25 sparse keyword matching"""
-    retrieved_docs = bm25_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+    This creates a simple two-node graph:
+    START → retrieve → generate → END
 
-def retrieve_reranked(state):
-    """Cohere contextual compression with reranking"""
-    retrieved_docs = compression_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+    The retrieve node fetches relevant documents, and the generate node
+    produces an answer based on those documents.
 
-def retrieve_ensemble(state):
-    """Ensemble hybrid search (dense + sparse)"""
-    retrieved_docs = ensemble_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+    Args:
+        retriever: Retriever instance to use for document retrieval
+        llm: ChatOpenAI instance (defaults to get_llm() if None)
+        prompt_template: RAG prompt template string (defaults to BASELINE_PROMPT)
 
-# Shared generate function
-def generate(state):
-    """Generate answer from context"""
-    docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-    messages = rag_prompt.format_messages(question=state["question"], context=docs_content)
-    response = llm.invoke(messages)
-    return {"response": response.content}
+    Returns:
+        Compiled StateGraph that can be invoked with {"question": "..."}
 
-# Create LangGraphs for each retriever
-print("   Creating LangGraphs...")
-baseline_graph_builder = StateGraph(State).add_sequence([retrieve_baseline, generate])
-baseline_graph_builder.add_edge(START, "retrieve_baseline")
-baseline_graph = baseline_graph_builder.compile()
+    Example:
+        >>> from src.utils import load_documents_from_huggingface
+        >>> from src.config import create_vector_store
+        >>> from src.retrievers import create_retrievers
+        >>> from src.graph import build_graph
+        >>>
+        >>> documents = load_documents_from_huggingface()
+        >>> vector_store = create_vector_store(documents)
+        >>> retrievers = create_retrievers(documents, vector_store)
+        >>> graph = build_graph(retrievers['naive'])
+        >>>
+        >>> result = graph.invoke({"question": "What is GDELT?"})
+        >>> print(result['response'])
 
-bm25_graph_builder = StateGraph(State).add_sequence([retrieve_bm25, generate])
-bm25_graph_builder.add_edge(START, "retrieve_bm25")
-bm25_graph = bm25_graph_builder.compile()
+    Notes:
+        - Node functions return partial state updates (dict)
+        - LangGraph automatically merges updates into state
+        - This follows LangGraph best practices for state management
+    """
+    if llm is None:
+        llm = get_llm()
 
-ensemble_graph_builder = StateGraph(State).add_sequence([retrieve_ensemble, generate])
-ensemble_graph_builder.add_edge(START, "retrieve_ensemble")
-ensemble_graph = ensemble_graph_builder.compile()
+    if prompt_template is None:
+        prompt_template = BASELINE_PROMPT
 
-rerank_graph_builder = StateGraph(State).add_sequence([retrieve_reranked, generate])
-rerank_graph_builder.add_edge(START, "retrieve_reranked")
-rerank_graph = rerank_graph_builder.compile()
-# Configure retrievers
-retrievers_config = {
-    "naive": baseline_graph,
-    "bm25": bm25_graph,
-    "ensemble": ensemble_graph,
-    "cohere_rerank": rerank_graph,
-}
+    rag_prompt = ChatPromptTemplate.from_template(prompt_template)
+
+    # Define node functions (return partial state updates)
+    def retrieve(state: State) -> dict:
+        """
+        Retrieve relevant documents for the question.
+
+        Args:
+            state: Current state with 'question' key
+
+        Returns:
+            Dict with 'context' key containing List[Document]
+        """
+        docs: List[Document] = retriever.invoke(state["question"])
+        return {"context": docs}
+
+    def generate(state: State) -> dict:
+        """
+        Generate answer from retrieved context.
+
+        Args:
+            state: Current state with 'question' and 'context' keys
+
+        Returns:
+            Dict with 'response' key containing answer string
+        """
+        docs_content = "\n\n".join(d.page_content for d in state.get("context", []))
+        msgs = rag_prompt.format_messages(
+            question=state["question"],
+            context=docs_content
+        )
+        response = llm.invoke(msgs)
+        return {"response": response.content}
+
+    # Build graph
+    graph = StateGraph(State)
+    graph.add_node("retrieve", retrieve)
+    graph.add_node("generate", generate)
+    graph.add_edge(START, "retrieve")
+    graph.add_edge("retrieve", "generate")
+    graph.add_edge("generate", END)
+
+    return graph.compile()
+
+
+def build_all_graphs(retrievers: Dict[str, object], llm=None) -> Dict[str, object]:
+    """
+    Build compiled graphs for all retrievers.
+
+    Convenience function to create a graph for each retriever in the
+    retrievers dictionary.
+
+    Args:
+        retrievers: Dictionary of retriever instances from create_retrievers()
+        llm: Optional ChatOpenAI instance (shared across all graphs)
+
+    Returns:
+        Dictionary mapping retriever names to compiled graphs.
+        Same keys as input retrievers dict.
+
+    Example:
+        >>> from src.utils import load_documents_from_huggingface
+        >>> from src.config import create_vector_store
+        >>> from src.retrievers import create_retrievers
+        >>> from src.graph import build_all_graphs
+        >>>
+        >>> documents = load_documents_from_huggingface()
+        >>> vector_store = create_vector_store(documents)
+        >>> retrievers = create_retrievers(documents, vector_store)
+        >>> graphs = build_all_graphs(retrievers)
+        >>>
+        >>> # All graphs ready to use
+        >>> result_naive = graphs['naive'].invoke({"question": "What is GDELT?"})
+        >>> result_bm25 = graphs['bm25'].invoke({"question": "What is GDELT?"})
+        >>> result_ensemble = graphs['ensemble'].invoke({"question": "What is GDELT?"})
+        >>> result_rerank = graphs['cohere_rerank'].invoke({"question": "What is GDELT?"})
+    """
+    return {name: build_graph(ret, llm) for name, ret in retrievers.items()}
