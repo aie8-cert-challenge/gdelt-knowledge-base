@@ -326,6 +326,10 @@ print(f"   Processing {len(golden_df)} questions × {len(retrievers_config)} ret
 
 datasets = {}
 
+# Create output directory for immediate persistence
+output_dir = Path(__file__).parent.parent / "deliverables" / "evaluation_evidence"
+output_dir.mkdir(parents=True, exist_ok=True)
+
 for retriever_name, graph in retrievers_config.items():
     print(f"\n   Processing {retriever_name} retriever...")
 
@@ -345,6 +349,11 @@ for retriever_name, graph in retrievers_config.items():
 
     print(f"   ✓ {retriever_name}: {len(datasets[retriever_name])} questions processed")
 
+    # 💾 PERSIST IMMEDIATELY - Don't wait until Step 9 to prevent data loss
+    raw_file = output_dir / f"{retriever_name}_raw_dataset.parquet"
+    datasets[retriever_name].to_parquet(raw_file, index=False)
+    print(f"   💾 Saved: {raw_file.name}")
+
 print("\n   ✓ All retriever datasets populated!")
 
 # 8. Create RAGAS EvaluationDatasets (with schema validation)
@@ -361,10 +370,6 @@ for retriever_name, dataset in datasets.items():
 # 9. Run RAGAS Evaluation for All Retrievers
 print("\n9. Running RAGAS evaluation for all retrievers...")
 print("   Metrics: faithfulness, answer_relevancy, context_precision, context_recall")
-
-# Create output directory for immediate persistence
-output_dir = Path(__file__).parent.parent / "deliverables" / "evaluation_evidence"
-output_dir.mkdir(parents=True, exist_ok=True)
 
 custom_run_config = RunConfig(timeout=360)
 evaluation_results = {}
