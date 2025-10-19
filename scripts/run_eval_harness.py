@@ -344,7 +344,9 @@ print("\n" + "="*80)
 print("STEP 6: GENERATING RUN MANIFEST")
 print("="*80)
 
-from scripts.generate_run_manifest import generate_manifest
+# Add scripts directory to path for manifest import (matches single_file.py pattern)
+sys.path.insert(0, str(Path(__file__).parent))
+from generate_run_manifest import generate_manifest
 
 manifest_path = OUT_DIR / "RUN_MANIFEST.json"
 manifest = generate_manifest(
