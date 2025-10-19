@@ -24,6 +24,7 @@ Following session08-ragas-rag-evals.py LangGraph pattern.
 
 # Imports
 import copy
+import json
 import os
 import sys
 from pathlib import Path
@@ -144,9 +145,27 @@ llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
 
+# Load ingestion manifest if available (for data lineage)
+ingest_manifest_path = Path(__file__).parent.parent / "data/interim/manifest.json"
+data_provenance = None
+if ingest_manifest_path.exists():
+    with open(ingest_manifest_path) as f:
+        ingest_manifest = json.load(f)
+    data_provenance = {
+        "ingest_manifest_id": ingest_manifest["id"],
+        "ingest_timestamp": ingest_manifest["generated_at"],
+        "sources_sha256": ingest_manifest["fingerprints"]["sources"]["jsonl_sha256"],
+        "golden_testset_sha256": ingest_manifest["fingerprints"]["golden_testset"]["jsonl_sha256"],
+        "source_pdfs_count": ingest_manifest["params"]["MAX_DOCS"] or "all",
+        "ragas_testset_size": ingest_manifest["params"]["TESTSET_SIZE"]
+    }
+
 print("="*80)
 print("COMPREHENSIVE RAG EVALUATION WITH RAGAS (TASKS 5 & 7)")
 print("="*80)
+
+if data_provenance:
+    print(f"✓ Linked to ingestion manifest: {ingest_manifest['id'][:8]}...")
 
 # 1. Load Golden Testset
 print("\n1. Loading golden testset from HuggingFace...")
@@ -507,7 +526,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from generate_run_manifest import generate_manifest
 
 manifest_path = output_dir / "RUN_MANIFEST.json"
-manifest = generate_manifest(manifest_path, evaluation_results, retrievers_config)
+manifest = generate_manifest(manifest_path, evaluation_results, retrievers_config, data_provenance)
 print(f"   ✓ Manifest saved to {manifest_path}")
 print(f"   ✓ Captured: RAGAS {manifest['ragas_version']}, Python {manifest['python_version']}")
 print(f"   ✓ Contains: {len(manifest['retrievers'])} retriever configs + evaluation settings")
+if data_provenance:
+    print(f"   ✓ Data lineage: Linked to ingestion manifest {data_provenance['ingest_manifest_id'][:8]}...")

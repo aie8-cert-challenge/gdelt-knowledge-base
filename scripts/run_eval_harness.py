@@ -27,6 +27,7 @@ Usage:
 import os
 import sys
 import copy
+import json
 import argparse
 from pathlib import Path
 import pandas as pd
@@ -99,6 +100,24 @@ if cohere_key:
     print("✓ Cohere API key configured (cohere_rerank will work)")
 else:
     print("⚠ Cohere API key not set (cohere_rerank may fail)")
+
+# Load ingestion manifest if available (for data lineage)
+ingest_manifest_path = Path(__file__).parent.parent / "data/interim/manifest.json"
+data_provenance = None
+if ingest_manifest_path.exists():
+    with open(ingest_manifest_path) as f:
+        ingest_manifest = json.load(f)
+    data_provenance = {
+        "ingest_manifest_id": ingest_manifest["id"],
+        "ingest_timestamp": ingest_manifest["generated_at"],
+        "sources_sha256": ingest_manifest["fingerprints"]["sources"]["jsonl_sha256"],
+        "golden_testset_sha256": ingest_manifest["fingerprints"]["golden_testset"]["jsonl_sha256"],
+        "source_pdfs_count": ingest_manifest["params"]["MAX_DOCS"] or "all",
+        "ragas_testset_size": ingest_manifest["params"]["TESTSET_SIZE"]
+    }
+    print(f"✓ Linked to ingestion manifest: {ingest_manifest['id'][:8]}...")
+else:
+    print(f"⚠ No ingestion manifest found at {ingest_manifest_path}")
 
 
 # ==============================================================================
@@ -317,6 +336,35 @@ Metrics Computed:
 All results saved to: {OUT_DIR.absolute()}
 """)
 
+# ==============================================================================
+# GENERATE RUN MANIFEST FOR REPRODUCIBILITY
+# ==============================================================================
+
+print("\n" + "="*80)
+print("STEP 6: GENERATING RUN MANIFEST")
 print("="*80)
+
+from scripts.generate_run_manifest import generate_manifest
+
+manifest_path = OUT_DIR / "RUN_MANIFEST.json"
+manifest = generate_manifest(
+    output_path=manifest_path,
+    evaluation_results=results,
+    retrievers_config={
+        "naive": {"graph": graphs["naive"], "k": K},
+        "bm25": {"graph": graphs["bm25"], "k": K},
+        "ensemble": {"graph": graphs["ensemble"], "k": K},
+        "cohere_rerank": {"graph": graphs["cohere_rerank"], "k": K}
+    },
+    data_provenance=data_provenance
+)
+
+print(f"\n💾 Saved run manifest: {manifest_path.name}")
+print(f"   ✓ RAGAS version: {manifest['ragas_version']}")
+print(f"   ✓ Python version: {manifest['python_version']}")
+print(f"   ✓ Retriever configs: {len(manifest['retrievers'])}")
+print(f"   ✓ Evaluation settings captured")
+
+print("\n" + "="*80)
 print("✅ EVALUATION COMPLETE")
 print("="*80)

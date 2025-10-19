@@ -8,6 +8,18 @@ Certification challenge project for AI Engineering Bootcamp Cohort 8: a producti
 
 **Project Goal**: Compare naive, BM25, ensemble, and Cohere rerank retrievers to determine optimal RAG configuration for GDELT documentation Q&A.
 
+## ⚠️ Documentation Status Notice
+
+**Current Implementation**: This project has evolved through multiple refactoring cycles. The canonical implementation is:
+- **Core library**: `src/` modules (config, utils, retrievers, graph, state, prompts)
+- **Scripts**: `scripts/single_file.py` (self-contained reference) and `scripts/run_eval_harness.py` (modular)
+- **Deployment**: `app/graph_app.py` (LangGraph Platform entrypoint only)
+- **UI**: LangGraph Studio (`uv run langgraph dev`)
+
+**Documentation Drift**: Some documentation (architecture.md, deliverables.md) may reference prototype files that were refactored into `src/` modules. When in doubt, trust the code in `src/` and the commands in this CLAUDE.md file.
+
+**Reference Implementation**: Use `scripts/single_file.py` as the learning reference - it shows the full evaluation pipeline in one file without abstractions.
+
 ## Essential Commands
 
 ### Environment Setup

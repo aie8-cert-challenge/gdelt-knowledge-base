@@ -65,8 +65,8 @@ This table maps each certification challenge requirement to its location in this
 | Requirement | Location | Evidence |
 |------------|----------|----------|
 | End-to-end prototype | **Implementation Overview** section | Architecture and components |
-| Local deployment | **Deployment** section | CLI + Streamlit commands |
-| Code implementation | See code files | `app/baseline_rag.py`, `app/retriever_registry.py` |
+| Local deployment | **Deployment** section | LangGraph Studio + CLI commands |
+| Code implementation | See code files | `src/graph.py`, `src/retrievers.py`, `scripts/single_file.py` |
 | Sample Q&A demonstrations | **Sample Q&A Demonstrations** section | 3 live system examples |
 | Deployment verification | **Deployment Verification Checklist** section | 24-item testing checklist |
 
@@ -85,7 +85,7 @@ This table maps each certification challenge requirement to its location in this
 |------------|----------|----------|
 | Retrieval techniques + rationale | **Implemented Advanced Retrieval Techniques** section | BM25, Cohere Rerank, Ensemble with code refs |
 | Testing infrastructure | **Testing Infrastructure** section | Registry pattern + batch processing |
-| Code implementation | See code file | `app/retriever_registry.py:88-147` |
+| Code implementation | See code file | `src/retrievers.py:20-89` |
 
 ### Task 7: Assessing Performance
 
@@ -248,34 +248,35 @@ Built a production-ready RAG system with multiple retrieval strategies for compa
 
 **Status**: ✅ Complete
 **Core Components**:
-- `app/baseline_rag.py` - Naive RAG implementation (Task 4 baseline)
-- `app/retriever_registry.py` - Advanced retrievers (Task 6)
-- `app/streamlit_ui.py` - Interactive demo UI
+- `src/graph.py` - LangGraph workflow factory (RAG pipeline)
+- `src/retrievers.py` - 4 retrieval strategies (naive, BM25, ensemble, Cohere rerank)
+- `src/config.py` - Singleton factories for LLM, embeddings, Qdrant client
+- `app/graph_app.py` - LangGraph Platform deployment entrypoint
 **Evaluation Infrastructure**:
-- `notebooks/task5_baseline_evaluation.ipynb` - RAGAS baseline metrics
-- `notebooks/task7_comparative_evaluation.ipynb` - Retriever comparison
+- `scripts/single_file.py` - Self-contained evaluation (reference implementation)
+- `scripts/run_eval_harness.py` - Modular evaluation using src/ modules
 
 ### Architecture
 
 The system follows a modular architecture with clear separation of concerns:
 
-1. **Data Layer** (`baseline_rag.py:78-110`)
+1. **Data Layer** (`src/utils.py:15-75`)
    - Loads documents from HuggingFace dataset `dwb2023/gdelt-rag-sources`
    - Handles nested metadata structures from HF
    - Converts to LangChain Document format
 
-2. **Retrieval Layer** (`retriever_registry.py`)
+2. **Retrieval Layer** (`src/retrievers.py:20-89`)
    - **Naive Retriever**: Dense vector search with OpenAI embeddings (baseline)
    - **BM25 Retriever**: Sparse keyword matching using `rank-bm25`
    - **Cohere Rerank**: Contextual compression with `rerank-v3.5`
    - **Ensemble Retriever**: Hybrid search (dense + sparse, equal weighting)
 
-3. **Generation Layer** (`baseline_rag.py:127-162`)
-   - LangChain LCEL chains for consistent output format
+3. **Generation Layer** (`src/graph.py:21-106`)
+   - LangGraph StateGraph for RAG workflow
    - GPT-4.1-mini for cost-effective generation
-   - Prompt template with context formatting and citation instructions
+   - Prompt template with context formatting (`src/prompts.py`)
 
-4. **Evaluation Layer** (notebooks)
+4. **Evaluation Layer** (`scripts/`)
    - RAGAS integration for faithfulness, relevancy, precision, recall
    - Batch processing across all retrievers
    - Comparison table generation
@@ -293,37 +294,49 @@ vectorstore = Qdrant.from_documents(
 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 ```
 
-**LCEL Chain Pattern** (`retriever_registry.py:148-172`):
+**LangGraph Workflow Pattern** (`src/graph.py:21-106`):
 ```python
-chain = (
-    {"context": itemgetter("question") | retriever, "question": itemgetter("question")}
-    | RunnablePassthrough.assign(raw_contexts=itemgetter("context"))
-    | RunnablePassthrough.assign(context=lambda x: format_contexts(x["context"]))
-    | {"response": prompt | llm | StrOutputParser(), "contexts": itemgetter("raw_contexts")}
-)
+def build_graph(retriever, llm=None):
+    def retrieve(state):
+        docs = retriever.invoke(state["question"])
+        return {"context": docs}
+
+    def generate(state):
+        docs_content = "\n\n".join(d.page_content for d in state["context"])
+        msgs = rag_prompt.format_messages(question=state["question"], context=docs_content)
+        response = llm.invoke(msgs)
+        return {"response": response.content}
+
+    graph = StateGraph(State)
+    graph.add_node("retrieve", retrieve)
+    graph.add_node("generate", generate)
+    graph.add_edge(START, "retrieve")
+    graph.add_edge("retrieve", "generate")
+    graph.add_edge("generate", END)
+    return graph.compile()
 ```
 
 **Why This Pattern**:
-- Preserves raw `Document` objects for citation tracking
-- Formats contexts for LLM prompt
-- Consistent output: `{"response": str, "contexts": List[Document]}`
+- Factory function approach (creates graphs at runtime)
+- Partial state updates (nodes return dicts, LangGraph merges)
+- Consistent output: `{"question": str, "context": List[Document], "response": str}`
 - Enables fair comparison across retrievers
 
 ### Deployment
 
 **Local Demo**:
 ```bash
-# CLI testing with example queries
-python app/baseline_rag.py
+# Interactive LangGraph Studio UI (recommended)
+uv run langgraph dev --allow-blocking
+# Access at: http://localhost:2024
+# Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
-# Interactive Streamlit UI
-streamlit run app/streamlit_ui.py
+# CLI testing with self-contained evaluation
+python scripts/single_file.py
 
-# Test all retrievers
-python app/retriever_registry.py
+# Modular evaluation (uses src/ modules)
+python scripts/run_eval_harness.py
 ```
-
-**Access**: http://localhost:8501 (Streamlit)
 
 ### Evaluation Integration
 
@@ -818,10 +831,10 @@ This repository contains:
 - HuggingFace datasets (published separately)
 
 **Key Files**:
-- `app/baseline_rag.py` - Naive RAG implementation (Task 4)
-- `app/retriever_registry.py` - 4 retrieval strategies with registry pattern (Task 6)
-- `notebooks/task5_baseline_evaluation_don.py` - Complete RAGAS evaluation script (Tasks 5 & 7)
-- `data/processed/comparative_ragas_results.csv` - Main comparative findings
+- `src/graph.py` - LangGraph RAG workflow factory (Task 4)
+- `src/retrievers.py` - 4 retrieval strategies with factory pattern (Task 6)
+- `scripts/single_file.py` - Complete RAGAS evaluation script (Tasks 5 & 7)
+- `deliverables/evaluation_evidence/comparative_ragas_results.csv` - Main comparative findings
 
 ### Loom Video Demonstration
 
@@ -873,7 +886,7 @@ cert-challenge/
 | **Task 1: Problem & Audience** | ✅ Complete | Lines 11-22 of this document |
 | **Task 2: Solution & Stack** | ✅ Complete | Lines 25-82 with all 8 tech stack components |
 | **Task 3: Data Sources** | ✅ Complete | Lines 86-116, HuggingFace datasets published |
-| **Task 4: Prototype** | ✅ Complete | `app/baseline_rag.py`, `app/retriever_registry.py` |
+| **Task 4: Prototype** | ✅ Complete | `src/graph.py`, `src/retrievers.py`, `scripts/single_file.py` |
 | **Task 5: Baseline Evaluation** | ✅ Complete | Lines 219-273, 90.18% average RAGAS score |
 | **Task 6: Advanced Retrieval** | ✅ Complete | Lines 277-343, 3 techniques implemented |
 | **Task 7: Comparative Assessment** | ✅ Complete | Lines 347-428, Cohere Rerank winner (96.47%) |
@@ -915,26 +928,27 @@ This section provides a comprehensive catalog of all artifacts demonstrating com
 ### Code Artifacts
 
 **Core Application** (Task 4 - End-to-End Prototype):
-- `app/baseline_rag.py` (243 lines) - Naive RAG implementation with BaselineRAG class
-  - Lines 78-110: HuggingFace dataset loading
-  - Lines 112-125: Qdrant vector store creation
-  - Lines 127-162: LCEL chain with context formatting
-  - Lines 164-181: Query interface with citation tracking
-- `app/retriever_registry.py` (242 lines) - Advanced retrieval strategies (Task 6)
-  - Lines 49-86: Document loading utilities
-  - Lines 88-96: BM25 sparse retriever
-  - Lines 99-122: Cohere rerank compression retriever
-  - Lines 125-147: Ensemble hybrid retriever
-  - Lines 174-196: Registry pattern for batch evaluation
-- `app/streamlit_ui.py` (~150 lines) - Interactive chat UI for demonstrations
+- `src/graph.py` (142 lines) - LangGraph RAG workflow factory
+  - Lines 21-106: `build_graph()` factory for single retriever
+  - Lines 109-141: `build_all_graphs()` factory for all retrievers
+  - Two-node workflow: START → retrieve → generate → END
+- `src/retrievers.py` (90 lines) - 4 retrieval strategies (Task 6)
+  - Lines 20-89: `create_retrievers()` factory function
+  - Naive (dense), BM25 (sparse), Ensemble (hybrid), Cohere Rerank (compression)
+- `src/utils.py` (114 lines) - HuggingFace data loaders
+  - Lines 15-75: `load_documents_from_huggingface()`
+  - Lines 78-113: `load_golden_testset_from_huggingface()`
+- `src/config.py` - Cached singletons for LLM, embeddings, Qdrant client
+- `app/graph_app.py` (18 lines) - LangGraph Platform deployment entrypoint
 
 **Evaluation Scripts** (Tasks 5 & 7):
-- `notebooks/task5_baseline_evaluation_don.py` (489 lines) - Production-grade RAGAS evaluation
+- `scripts/single_file.py` (535 lines) - Self-contained RAGAS evaluation (reference implementation)
   - LangGraph-based evaluation workflow
   - Generates all baseline + comparative results
-  - Exports to 12 CSV files
-- `notebooks/task5_baseline_evaluation.ipynb` - Jupyter version for interactive exploration
-- `notebooks/task7_comparative_evaluation.ipynb` - Comparative analysis notebook
+  - Exports to 16 files (12 CSVs + manifest)
+- `scripts/run_eval_harness.py` (370 lines) - Modular evaluation using src/ modules
+  - Same functionality as single_file.py but uses factory pattern
+  - Now generates RUN_MANIFEST.json with data provenance
 
 **Data Processing** (Task 3):
 - `scripts/upload_to_hf.py` - HuggingFace dataset publisher
@@ -1037,11 +1051,11 @@ This section provides a comprehensive catalog of all artifacts demonstrating com
 ### Deployment Evidence
 
 **Local Deployment Verification**:
-- ✅ Baseline RAG runs: `python app/baseline_rag.py`
-- ✅ All 4 retrievers tested: `python app/retriever_registry.py`
-- ✅ Streamlit UI launches: `streamlit run app/streamlit_ui.py` on http://localhost:8501
-- ✅ Task 5 evaluation completes: `jupyter notebook` → `task5_baseline_evaluation.ipynb`
-- ✅ Task 7 evaluation completes: `jupyter notebook` → `task7_comparative_evaluation.ipynb`
+- ✅ LangGraph Studio UI: `uv run langgraph dev` on http://localhost:2024
+- ✅ Self-contained evaluation: `python scripts/single_file.py`
+- ✅ Modular evaluation: `python scripts/run_eval_harness.py`
+- ✅ Validation suite: `make validate` (100% pass required)
+- ✅ All 4 retrievers tested: Via evaluation scripts or LangGraph Studio
 
 **Code Quality Metrics**:
 - Total Python files: 15+
@@ -1104,13 +1118,13 @@ cert-challenge/
 | 2 | Agentic reasoning | **Agentic Reasoning Approach** section | ✅ |
 | 3 | Data sources | **Data Sources and External APIs** section + HF dataset dwb2023/gdelt-rag-sources | ✅ |
 | 3 | Chunking strategy | **Chunking Strategy** section | ✅ |
-| 4 | End-to-end prototype | app/baseline_rag.py + app/retriever_registry.py | ✅ |
-| 4 | Local deployment | **Deployment** section + Streamlit UI on localhost:8501 | ✅ |
+| 4 | End-to-end prototype | src/graph.py + src/retrievers.py + scripts/single_file.py | ✅ |
+| 4 | Local deployment | **Deployment** section + LangGraph Studio on localhost:2024 | ✅ |
 | 4 | Sample Q&A | **Sample Q&A Demonstrations** section | ✅ |
-| 5 | RAGAS metrics table | **RAGAS Baseline Evaluation Results** table + baseline_ragas_results.csv | ✅ |
+| 5 | RAGAS metrics table | **RAGAS Baseline Evaluation Results** table + evaluation CSVs | ✅ |
 | 5 | Performance conclusions | **Performance Analysis** + **Failure Case Analysis** sections | ✅ |
 | 5 | Golden testset | HF dataset dwb2023/gdelt-rag-golden-testset | ✅ |
-| 6 | Retrieval techniques | **Implemented Advanced Retrieval Techniques** section + app/retriever_registry.py:88-147 | ✅ |
+| 6 | Retrieval techniques | **Implemented Advanced Retrieval Techniques** section + src/retrievers.py:20-89 | ✅ |
 | 6 | Testing infrastructure | **Testing Infrastructure** section | ✅ |
 | 7 | Performance comparison | **Comparative Evaluation Results** table + comparative_ragas_results.csv | ✅ |
 | 7 | Improvement analysis | **Detailed Improvement Analysis** + **Cost-Benefit Analysis** sections | ✅ |

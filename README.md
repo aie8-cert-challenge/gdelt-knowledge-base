@@ -68,14 +68,21 @@ cp .env.example .env
 ### Run the Application
 
 ```bash
-# Option 1: CLI demo with example queries
-python app/baseline_rag.py
+# Option 1: LangGraph Studio UI (Interactive, Recommended)
+uv run langgraph dev --allow-blocking
+# Access at: http://localhost:2024
+# Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
-# Option 2: Streamlit UI (interactive)
-streamlit run app/streamlit_ui.py
+# Option 2: Command-line evaluation (self-contained reference)
+python scripts/single_file.py
 
-# Option 3: Test all retrievers
-python app/retriever_registry.py
+# Option 3: Modular evaluation (uses src/ modules)
+python scripts/run_eval_harness.py
+# Or use make command:
+make eval
+
+# Option 4: Quick validation
+make validate
 ```
 
 ---
