@@ -522,11 +522,10 @@ print(f"   - [retriever]_detailed_results.csv (per-question metrics)")
 
 # 13. Generate Run Manifest for Reproducibility
 print("\n13. Generating RUN_MANIFEST.json for reproducibility...")
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-from generate_run_manifest import generate_manifest
+from src.utils import generate_run_manifest
 
 manifest_path = output_dir / "RUN_MANIFEST.json"
-manifest = generate_manifest(manifest_path, evaluation_results, retrievers_config, data_provenance)
+manifest = generate_run_manifest(manifest_path, evaluation_results, retrievers_config, data_provenance)
 print(f"   ✓ Manifest saved to {manifest_path}")
 print(f"   ✓ Captured: RAGAS {manifest['ragas_version']}, Python {manifest['python_version']}")
 print(f"   ✓ Contains: {len(manifest['retrievers'])} retriever configs + evaluation settings")
