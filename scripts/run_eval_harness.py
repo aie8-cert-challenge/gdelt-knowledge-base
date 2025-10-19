@@ -6,7 +6,7 @@ THIS IS THE SAME AS single_file.py BUT USES src/ MODULES INSTEAD OF INLINE CODE.
 
 What it does:
 - Runs 12 test questions through 4 retrievers (naive, bm25, ensemble, cohere_rerank)
-- Evaluates with RAGAS (faithfulness, answer_relevancy, context_precision, context_recall)
+- Evaluates with RAGAS (Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall)
 - Saves results to deliverables/evaluation_evidence/
 
 Time: 20-30 minutes

@@ -2,20 +2,22 @@
 
 ## Overview
 
-This codebase implements a comprehensive RAG (Retrieval-Augmented Generation) evaluation system using RAGAS metrics. The project compares multiple retrieval strategies (naive dense vector search, BM25 sparse keyword matching, Cohere reranking, and ensemble hybrid search) on a GDELT knowledge graph dataset.
+This is a **GDELT RAG (Retrieval-Augmented Generation) System** built with LangChain and LangGraph. The project implements a production-grade RAG pipeline for querying knowledge graphs from the GDELT (Global Database of Events, Language, and Tone) dataset.
+
+The codebase follows a clean **factory pattern architecture** where:
+- Configuration and infrastructure are managed centrally (`src/config.py`)
+- Data loading is handled by utilities (`src/utils.py`)
+- Retrievers are created via factory functions (`src/retrievers.py`)
+- LangGraph workflows are built dynamically (`src/graph.py`)
+- State management uses TypedDict schemas (`src/state.py`)
+- Prompts are centralized as constants (`src/prompts.py`)
+
+The project includes comprehensive evaluation tooling using RAGAS metrics, data ingestion pipelines, and HuggingFace dataset management.
 
 **Project Structure:**
-- `src/` - Core RAG system implementation (configuration, retrievers, graphs, state management)
-- `scripts/` - Pipeline scripts for data ingestion, dataset generation, and upload
-- `main.py` - Simple entry point placeholder
-
-**Key Technologies:**
-- LangChain for RAG pipeline orchestration
-- LangGraph for stateful workflow graphs
-- RAGAS for evaluation metrics
-- Qdrant for vector storage
-- OpenAI for embeddings and LLM inference
-- Cohere for reranking
+- `src/` - Core RAG system library (public API)
+- `scripts/` - Command-line tools and utilities (entry points)
+- `main.py` - Simple hello-world entry point
 
 ---
 
@@ -23,58 +25,26 @@ This codebase implements a comprehensive RAG (Retrieval-Augmented Generation) ev
 
 ### Modules
 
-#### `src/config.py`
-Configuration constants and shared model instances for the RAG system.
+#### src/ - Core RAG System
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/__init__.py`
 
-**Purpose:** Centralized configuration for Qdrant connection and model initialization.
+The main package providing the RAG system. Exported modules:
+- `config` - Configuration management
+- `graph` - LangGraph workflow builders
+- `prompts` - Prompt templates
+- `retrievers` - Retriever factory functions
+- `state` - State schema definitions
+- `utils` - Document loading utilities
 
-**Exports:**
-- `QDRANT_HOST`, `QDRANT_PORT`, `COLLECTION_NAME` - Database configuration
-- `llm` - Shared ChatOpenAI instance
-- `embeddings` - Shared OpenAIEmbeddings instance
+**Version:** 0.1.0
 
-#### `src/graph.py`
-LangGraph-based RAG pipeline definitions for each retrieval strategy.
-
-**Purpose:** Defines executable graphs combining retrieval and generation for evaluation.
-
-**Exports:**
-- `baseline_graph` - Naive dense vector search graph
-- `bm25_graph` - BM25 sparse keyword graph
-- `ensemble_graph` - Hybrid search graph
-- `rerank_graph` - Cohere reranking graph
-- `retrievers_config` - Dictionary mapping retriever names to graphs
-
-#### `src/retrievers.py`
-Retriever implementations for different search strategies.
-
-**Purpose:** Initialize and configure various retrieval approaches.
-
-**Exports:**
-- `baseline_retriever` - Dense vector search (k=5)
-- `bm25_retriever` - BM25 sparse keyword matching
-- `compression_retriever` - Cohere rerank with contextual compression
-- `ensemble_retriever` - Hybrid search (50% dense + 50% sparse)
-
-#### `src/state.py`
-TypedDict state definition for LangGraph workflows.
-
-**Purpose:** Type-safe state management for RAG pipeline.
-
-**Exports:**
-- `State` class - TypedDict with `question`, `context`, `response` fields
-
-#### `src/prompts.py`
-Prompt templates for RAG question-answering.
-
-**Purpose:** Centralized prompt management.
-
-**Exports:**
-- `BASELINE_PROMPT` - Template for context-grounded QA
+---
 
 ### Classes
 
-#### `State` (src/state.py:7)
+#### State (TypedDict)
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/state.py:7`
+
 ```python
 class State(TypedDict):
     question: str
@@ -82,439 +52,943 @@ class State(TypedDict):
     response: str
 ```
 
-**Purpose:** Type-safe state container for LangGraph RAG workflows.
+**Purpose:** LangGraph state schema defining the data flow through RAG workflow nodes.
 
-**Key Fields:**
-- `question` - User input query
-- `context` - Retrieved documents
-- `response` - Generated answer
+**Fields:**
+- `question` (str) - User's input question
+- `context` (List[Document]) - Retrieved documents from vector store
+- `response` (str) - Generated answer from LLM
+
+**Usage:** Used internally by all LangGraph workflows built via `build_graph()` and `build_all_graphs()`.
+
+---
 
 ### Functions
 
-#### Retrieval Functions (src/graph.py)
+#### Public API Functions (src/)
 
-##### `retrieve_baseline(state)` (src/graph.py:20)
+##### load_documents_from_huggingface()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/utils.py:15`
+
 ```python
-def retrieve_baseline(state):
-    """Naive dense vector search"""
-    retrieved_docs = baseline_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+def load_documents_from_huggingface(
+    dataset_name: str = "dwb2023/gdelt-rag-sources",
+    split: str = "train",
+    revision: str = None
+) -> List[Document]
 ```
 
-**Purpose:** Execute baseline dense vector retrieval strategy.
+**Purpose:** Load documents from HuggingFace dataset and convert to LangChain Documents.
 
-##### `retrieve_bm25(state)` (src/graph.py:25)
+**Parameters:**
+- `dataset_name` - HuggingFace dataset identifier (default: "dwb2023/gdelt-rag-sources")
+- `split` - Dataset split to load (default: "train")
+- `revision` - Dataset revision/commit SHA to pin (default: None, uses HF_SOURCES_REV env var)
+
+**Returns:** List of LangChain Document objects with page_content and metadata
+
+**Features:**
+- Handles nested metadata structures automatically
+- Supports revision pinning for reproducibility via parameter or `HF_SOURCES_REV` env var
+- Preserves all metadata fields from source dataset
+
+---
+
+##### load_golden_testset_from_huggingface()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/utils.py:78`
+
 ```python
-def retrieve_bm25(state):
-    """BM25 sparse keyword matching"""
-    retrieved_docs = bm25_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+def load_golden_testset_from_huggingface(
+    dataset_name: str = "dwb2023/gdelt-rag-golden-testset",
+    split: str = "train",
+    revision: str = None
+)
 ```
 
-**Purpose:** Execute BM25 lexical retrieval strategy.
+**Purpose:** Load golden testset from HuggingFace dataset for evaluation.
 
-##### `retrieve_reranked(state)` (src/graph.py:30)
+**Parameters:**
+- `dataset_name` - HuggingFace dataset identifier (default: "dwb2023/gdelt-rag-golden-testset")
+- `split` - Dataset split to load (default: "train")
+- `revision` - Dataset revision/commit SHA to pin (default: None, uses HF_GOLDEN_REV env var)
+
+**Returns:** HuggingFace Dataset object
+
+**Features:**
+- Revision pinning ensures test set consistency across runs
+- Prevents score drift due to dataset updates
+
+---
+
+##### get_llm()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py:28`
+
 ```python
-def retrieve_reranked(state):
-    """Cohere contextual compression with reranking"""
-    retrieved_docs = compression_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+@lru_cache(maxsize=1)
+def get_llm()
 ```
 
-**Purpose:** Execute Cohere reranking retrieval strategy (retrieves 20, reranks to top 5).
+**Purpose:** Get cached LLM instance (ChatOpenAI with temperature=0).
 
-##### `retrieve_ensemble(state)` (src/graph.py:35)
+**Returns:** ChatOpenAI instance configured from environment
+
+**Configuration:**
+- Model: `OPENAI_MODEL` env var (default: "gpt-4.1-mini")
+- Temperature: 0 (deterministic outputs)
+- Cached: Yes (singleton pattern)
+
+---
+
+##### get_embeddings()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py:39`
+
 ```python
-def retrieve_ensemble(state):
-    """Ensemble hybrid search (dense + sparse)"""
-    retrieved_docs = ensemble_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
+@lru_cache(maxsize=1)
+def get_embeddings()
 ```
 
-**Purpose:** Execute ensemble hybrid retrieval combining dense and sparse approaches.
+**Purpose:** Get cached embeddings instance (OpenAI embeddings).
 
-#### Generation Function (src/graph.py)
+**Returns:** OpenAIEmbeddings instance
 
-##### `generate(state)` (src/graph.py:41)
+**Configuration:**
+- Model: `OPENAI_EMBED_MODEL` env var (default: "text-embedding-3-small")
+- Dimensions: 1536
+- Cached: Yes (singleton pattern)
+
+---
+
+##### get_qdrant()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py:50`
+
 ```python
-def generate(state):
-    """Generate answer from context"""
-    docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-    messages = rag_prompt.format_messages(question=state["question"], context=docs_content)
-    response = llm.invoke(messages)
-    return {"response": response.content}
+@lru_cache(maxsize=1)
+def get_qdrant()
 ```
 
-**Purpose:** Generate answers from retrieved context using LLM.
+**Purpose:** Get cached Qdrant client instance.
+
+**Returns:** QdrantClient connected to configured host/port
+
+**Configuration:**
+- Host: `QDRANT_HOST` env var (default: "localhost")
+- Port: `QDRANT_PORT` env var (default: 6333)
+- Cached: Yes (singleton pattern)
+
+---
+
+##### get_collection_name()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py:60`
+
+```python
+def get_collection_name() -> str
+```
+
+**Purpose:** Get configured Qdrant collection name.
+
+**Returns:** Collection name string from `QDRANT_COLLECTION` env var (default: "gdelt_comparative_eval")
+
+---
+
+##### create_vector_store()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py:70`
+
+```python
+def create_vector_store(
+    documents: List[Document],
+    collection_name: str = None,
+    recreate_collection: bool = False
+) -> QdrantVectorStore
+```
+
+**Purpose:** Create and populate Qdrant vector store (factory function).
+
+**Parameters:**
+- `documents` - List of Document objects to add to vector store
+- `collection_name` - Override default collection name (optional)
+- `recreate_collection` - If True, delete existing collection first (default: False)
+
+**Returns:** Populated QdrantVectorStore instance
+
+**Features:**
+- Creates Qdrant collection if it doesn't exist
+- Optionally recreates collection (deletes old data)
+- Automatically populates with documents
+- Uses cosine distance with 1536-dimensional vectors
+
+---
+
+##### create_retrievers()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py:20`
+
+```python
+def create_retrievers(
+    documents: List[Document],
+    vector_store: QdrantVectorStore,
+    k: int = 5,
+) -> Dict[str, object]
+```
+
+**Purpose:** Create all retriever instances (factory function).
+
+**Parameters:**
+- `documents` - List of Document objects (required for BM25)
+- `vector_store` - Populated QdrantVectorStore instance
+- `k` - Number of documents to retrieve (default: 5)
+
+**Returns:** Dictionary mapping retriever names to retriever instances
+
+**Retriever Strategies:**
+1. **naive** - Dense vector search using embeddings
+2. **bm25** - Sparse keyword matching (lexical search)
+3. **ensemble** - Hybrid combination (50% dense + 50% sparse)
+4. **cohere_rerank** - Contextual compression with Cohere rerank-v3.5 (retrieves 20, reranks to top k)
+
+---
+
+##### build_graph()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py:21`
+
+```python
+def build_graph(retriever, llm=None, prompt_template: str = None)
+```
+
+**Purpose:** Build a compiled LangGraph pipeline for a single retriever.
+
+**Parameters:**
+- `retriever` - Retriever instance to use for document retrieval
+- `llm` - ChatOpenAI instance (defaults to get_llm() if None)
+- `prompt_template` - RAG prompt template string (defaults to BASELINE_PROMPT)
+
+**Returns:** Compiled StateGraph that can be invoked with `{"question": "..."}`
+
+**Graph Structure:**
+- START → retrieve → generate → END
+- `retrieve` node: Fetches relevant documents
+- `generate` node: Produces answer based on documents
+
+**Node Functions:**
+- Return partial state updates (dict)
+- LangGraph automatically merges updates into state
+- Follows LangGraph best practices for state management
+
+---
+
+##### build_all_graphs()
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py:109`
+
+```python
+def build_all_graphs(retrievers: Dict[str, object], llm=None) -> Dict[str, object]
+```
+
+**Purpose:** Build compiled graphs for all retrievers (convenience function).
+
+**Parameters:**
+- `retrievers` - Dictionary of retriever instances from create_retrievers()
+- `llm` - Optional ChatOpenAI instance (shared across all graphs)
+
+**Returns:** Dictionary mapping retriever names to compiled graphs (same keys as input)
+
+**Usage:** Creates a graph for each retriever in the dictionary, enabling easy batch evaluation.
 
 ---
 
 ## Internal Implementation
 
-### Modules
+### Core Modules
 
-#### `src/utils.py`
-Utility functions module (currently empty).
+#### src/config.py - Configuration Management
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py`
 
-**Purpose:** Reserved for shared utility functions.
+**Purpose:** Centralized configuration for LLM, embeddings, and Qdrant client.
 
-**Status:** Empty file (2 lines, only comment/whitespace)
+**Responsibilities:**
+- Environment variable management
+- Singleton pattern for expensive resources (LRU cache)
+- Vector store factory functions
+- Configuration constants
 
-#### `src/__init__.py`
-Package initialization file.
+**Constants:**
+- `QDRANT_HOST` (line 20) - Default: "localhost"
+- `QDRANT_PORT` (line 21) - Default: 6333
+- `COLLECTION_NAME` (line 22) - Default: "gdelt_comparative_eval"
+- `OPENAI_MODEL` (line 23) - Default: "gpt-4.1-mini"
+- `OPENAI_EMBED_MODEL` (line 24) - Default: "text-embedding-3-small"
 
-**Status:** Empty/minimal file
+**Design Pattern:** All getters use `@lru_cache(maxsize=1)` to implement singleton pattern, preventing duplicate API connections.
 
-### Module Configuration Details
+---
 
-#### `src/config.py` Implementation Details
-- **Line 6-8:** Qdrant connection constants
-- **Line 10:** LLM initialization with `gpt-4.1-mini` at temperature 0 for determinism
-- **Line 11:** Embeddings with `text-embedding-3-small` (1536 dimensions)
+#### src/graph.py - LangGraph Workflow Factory
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py`
 
-#### `src/retrievers.py` Implementation Details
-- **Line 17-20:** Configuration constants (duplicates config.py - potential refactor opportunity)
-- **Line 23:** Qdrant client initialization
-- **Line 25-27:** Collection existence check
-- **Line 30-34:** Vector store creation
-- **Line 37:** Baseline retriever (k=5)
-- **Line 40:** BM25 retriever (k=5) - Note: `documents` variable appears undefined in this file
-- **Line 43-58:** Cohere reranker configuration (retrieves k=20, reranks to top 5)
+**Purpose:** Factory functions to create LangGraph workflows.
 
-#### `src/graph.py` Implementation Details
-- **Line 11-13:** Import retrieval strategies and prompts
-- **Line 16-17:** Model and prompt initialization
-- **Line 49-71:** Graph compilation and configuration
-  - Each retrieval strategy gets its own compiled StateGraph
-  - All use the same `generate` function
-  - Graphs are stored in `retrievers_config` dictionary
+**Why Factory Pattern?**
+- Graphs depend on retrievers that must be created first
+- Cannot instantiate at module level (would cause import-time failures)
+- Allows dynamic configuration of retrieval strategies
+
+**Internal Node Functions:**
+- `retrieve(state: State) -> dict` (line 67) - Retrieves documents for question
+- `generate(state: State) -> dict` (line 80) - Generates answer from context
+
+**Graph Construction:**
+```python
+graph = StateGraph(State)
+graph.add_node("retrieve", retrieve)
+graph.add_node("generate", generate)
+graph.add_edge(START, "retrieve")
+graph.add_edge("retrieve", "generate")
+graph.add_edge("generate", END)
+return graph.compile()
+```
+
+---
+
+#### src/retrievers.py - Retriever Factory
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py`
+
+**Purpose:** Factory functions to create retriever instances.
+
+**Why Factory Pattern?**
+- Retrievers require documents and vector stores to be created first
+- Cannot instantiate at module level without triggering errors
+- Enables flexible configuration of k values and retrieval strategies
+
+**Retriever Implementations:**
+
+1. **Naive Retriever** (line 63)
+   - Type: Dense vector search
+   - Implementation: `vector_store.as_retriever(search_kwargs={"k": k})`
+   - Strategy: Semantic similarity using embeddings
+
+2. **BM25 Retriever** (line 66)
+   - Type: Sparse keyword matching
+   - Implementation: `BM25Retriever.from_documents(documents, k=k)`
+   - Strategy: Lexical matching (TF-IDF variant)
+
+3. **Ensemble Retriever** (line 69)
+   - Type: Hybrid search
+   - Implementation: `EnsembleRetriever(retrievers=[naive, bm25], weights=[0.5, 0.5])`
+   - Strategy: Combines dense and sparse with equal weighting
+
+4. **Cohere Rerank Retriever** (line 76)
+   - Type: Contextual compression
+   - Implementation: `ContextualCompressionRetriever` with `CohereRerank(model="rerank-v3.5")`
+   - Strategy: Retrieve 20 candidates, rerank to top k using Cohere's neural reranker
+
+---
+
+### Utility Modules
+
+#### src/utils.py - Document Loading
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/utils.py`
+
+**Purpose:** Helper functions for loading and processing documents from HuggingFace.
+
+**Responsibilities:**
+- HuggingFace dataset integration
+- Document format conversion (HF Dataset → LangChain Documents)
+- Metadata handling and sanitization
+- Revision pinning for reproducibility
+
+**Internal Implementation Details:**
+- Handles nested metadata structures (line 64-69)
+- Supports environment variable configuration for revisions (line 52, 111)
+- Preserves all metadata fields from source datasets
+
+---
+
+#### src/state.py - State Schema
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/state.py`
+
+**Purpose:** TypedDict schema for LangGraph state management.
+
+**Design:** Simple, minimal state representation (3 fields only)
+- Keeps graph logic clean and predictable
+- Enables type checking in development
+- Documents expected state shape for node functions
+
+---
+
+#### src/prompts.py - Prompt Templates
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/src/prompts.py`
+
+**Purpose:** Centralized prompt template constants.
+
+**Template:** `BASELINE_PROMPT` (line 4)
+```
+You are a helpful assistant who answers questions based on provided context.
+You must only use the provided context, and cannot use your own knowledge.
+
+### Question
+{question}
+
+### Context
+{context}
+```
+
+**Design Rationale:**
+- Enforces context-only answering (prevents hallucination)
+- Clear structure for evaluation
+- Reusable across all retrieval strategies
+
+---
+
+### Configuration
+
+**Environment Variables:**
+- `OPENAI_API_KEY` - Required for LLM and embeddings
+- `COHERE_API_KEY` - Required for cohere_rerank retriever
+- `QDRANT_HOST` - Qdrant server host (default: "localhost")
+- `QDRANT_PORT` - Qdrant server port (default: "6333")
+- `QDRANT_COLLECTION` - Collection name (default: "gdelt_comparative_eval")
+- `OPENAI_MODEL` - LLM model (default: "gpt-4.1-mini")
+- `OPENAI_EMBED_MODEL` - Embedding model (default: "text-embedding-3-small")
+- `HF_SOURCES_REV` - Pin HuggingFace sources dataset revision (optional)
+- `HF_GOLDEN_REV` - Pin HuggingFace golden testset revision (optional)
+- `HF_HUB_DISABLE_XET` - Disable XetHub progress bars (default: "1")
+- `HF_HUB_DISABLE_PROGRESS_BARS` - Disable HF progress bars (default: "1")
 
 ---
 
 ## Entry Points
 
-### Main Application Entry Point
+### Main Scripts
 
-#### `main.py`
+#### main.py
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/main.py:5`
+
 ```python
-def main():
-    print("Hello from cert-challenge!")
-
 if __name__ == "__main__":
     main()
 ```
 
-**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/main.py:1`
+**Purpose:** Simple hello-world entry point (minimal functionality).
 
-**Purpose:** Placeholder entry point. Currently prints a simple message.
-
-**Status:** Not actively used - real entry points are in `scripts/` directory.
-
-### Script Entry Points
-
-#### `scripts/single_file.py`
-**Purpose:** Comprehensive RAG evaluation with RAGAS metrics.
-
-**Entry Point:** Line 508 (`if __name__ == "__main__"`)
-
-**Key Responsibilities:**
-1. Load golden testset from HuggingFace (`dwb2023/gdelt-rag-golden-testset`)
-2. Load source documents from HuggingFace (`dwb2023/gdelt-rag-sources`)
-3. Initialize Qdrant vector store with documents
-4. Create 4 retrieval strategies (naive, BM25, ensemble, Cohere rerank)
-5. Generate RAG responses for all test questions × all retrievers
-6. Evaluate using RAGAS metrics (faithfulness, answer_relevancy, context_precision, context_recall)
-7. Generate comparative summary tables and save results
-8. Create RUN_MANIFEST.json for reproducibility
-
-**Key Classes/Functions:**
-- `State` (line 254) - TypedDict for LangGraph state
-- `validate_and_normalize_ragas_schema()` (line 66) - Schema validation for RAGAS 0.2.10
-- `retrieve_baseline()`, `retrieve_bm25()`, `retrieve_reranked()`, `retrieve_ensemble()` (lines 260-278)
-- `generate()` (line 281) - Shared answer generation function
-
-**Configuration:**
-- Qdrant: `localhost:6333`, collection `gdelt_comparative_eval`
-- Models: `gpt-4.1-mini` (temperature=0), `text-embedding-3-small`
-- Output: `deliverables/evaluation_evidence/`
-
-#### `scripts/ingest.py`
-**Purpose:** Standardized RAGAS golden testset pipeline - PDF extraction to dataset creation.
-
-**Entry Point:** Jupyter-style notebook (can be run as script or in notebook environment)
-
-**Key Responsibilities:**
-1. Extract PDFs from `data/raw/` using PyMuPDFLoader
-2. Sanitize metadata for Arrow/JSON compatibility
-3. Generate RAGAS golden testset using TestsetGenerator
-4. Persist sources and golden testset in 3 formats:
-   - JSONL (`sources.docs.jsonl`, `golden_testset.jsonl`)
-   - Parquet (`sources.docs.parquet`, `golden_testset.parquet`)
-   - HuggingFace dataset on disk (`sources.hfds`, `golden_testset.hfds`)
-5. Generate manifest.json with checksums and schema for provenance
-
-**Key Functions:**
-- `find_repo_root(start)` (line 48) - Detect repository root
-- `ensure_jsonable(obj)` (line 92) - Sanitize metadata for JSON serialization
-- `docs_to_jsonl()`, `docs_to_parquet()`, `docs_to_hfds()` (lines 106-126) - Multi-format persistence
-- `hash_file()` (line 128) - SHA256 checksum generation
-- `build_testset()` (line 202) - RAGAS testset generation with 0.3.x/0.2.x compatibility
-
-**Configuration:**
-- Paths: `data/raw/`, `data/interim/`, `data/processed/`
-- Models: `gpt-4.1-mini`, `text-embedding-3-small`
-- Testset size: 10 (configurable via `TESTSET_SIZE`)
-
-#### `scripts/upload_to_hf.py`
-**Purpose:** Upload GDELT RAG datasets to Hugging Face Hub.
-
-**Entry Point:** Line 291 (`if __name__ == "__main__"`)
-
-**Key Responsibilities:**
-1. Load source documents and golden testset from local storage
-2. Create dataset cards with metadata (README.md)
-3. Upload datasets to Hugging Face Hub
-4. Update manifest.json with dataset repo IDs
-
-**Key Functions:**
-- `create_sources_card()` (line 34) - Generate dataset card for source documents
-- `create_golden_testset_card()` (line 113) - Generate dataset card for golden testset
-- `load_manifest()` (line 194) - Load manifest.json
-- `update_manifest()` (line 200) - Update manifest with repo IDs and upload timestamp
-- `main()` (line 219) - Orchestrate upload process
-
-**Configuration:**
-- Username: `dwb2023`
-- Datasets: `gdelt-rag-sources`, `gdelt-rag-golden-testset`
-- Requires: `HF_TOKEN` environment variable
-
-#### `scripts/generate_run_manifest.py`
-**Purpose:** Generate RUN_MANIFEST.json for reproducibility.
-
-**Entry Point:** Line 173 (`if __name__ == "__main__"`)
-
-**Key Responsibilities:**
-1. Capture exact configuration of RAGAS evaluation runs
-2. Document model versions and parameters
-3. Document retriever configurations
-4. Document evaluation settings and dependencies
-5. Optionally include evaluation results summary
-
-**Key Functions:**
-- `generate_manifest(output_path, evaluation_results, retrievers_config)` (line 21) - Generate complete manifest
-
-**Manifest Structure:**
-- `ragas_version`, `python_version` - Environment info
-- `llm`, `embeddings` - Model configurations
-- `retrievers[]` - List of retriever configurations with parameters
-- `evaluation` - Golden testset info and metrics
-- `vector_store` - Qdrant configuration
-- `results_summary` - Optional evaluation results (if provided)
-
-**Output:** `data/processed/RUN_MANIFEST.json`
-
-#### `scripts/enrich_manifest.py`
-**Purpose:** Enrich manifest.json with metadata, checksums, and environment details.
-
-**Entry Point:** Line 239 (`if __name__ == "__main__"`)
-
-**Key Responsibilities:**
-1. Add environment information (Python version, OS, package versions)
-2. Add artifact metadata (file sizes, SHA256 checksums, row counts)
-3. Add metrics (document stats, page content statistics)
-4. Add lineage scaffolding (HuggingFace, LangSmith, Phoenix)
-5. Add compliance scaffolding (license, PII policy)
-6. Add run details (random seed, git commit SHA)
-7. Relativize paths for portability
-
-**Key Functions:**
-- `sha256(path)` (line 7) - Compute SHA256 hash
-- `file_bytes(path)` (line 15) - Get file size
-- `count_jsonl_rows(path)` (line 19) - Count rows in JSONL
-- `hfds_rows(path)` (line 24) - Count rows in HuggingFace dataset
-- `parquet_rows(path)` (line 37) - Count rows in Parquet file
-- `pandas_schema_from_parquet(path)` (line 51) - Extract schema
-- `char_stats_jsonl(path, field, max_scan)` (line 61) - Calculate text statistics
-- `main(manifest_path)` (line 81) - Orchestrate enrichment process
-
-**Input/Output:** `data/interim/manifest.json` (default) or path from command line
+**Output:** Prints "Hello from cert-challenge!"
 
 ---
 
-## Module Dependencies
+### Utility Scripts (scripts/)
 
-### Core RAG System Dependencies
+#### scripts/single_file.py - Comprehensive RAGAS Evaluation
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/single_file.py`
 
-```
-src/graph.py
-├─→ src/prompts.py (BASELINE_PROMPT)
-├─→ src/retrievers.py (baseline_retriever, bm25_retriever, compression_retriever, ensemble_retriever)
-├─→ src/state.py (State)
-├─→ langchain.prompts (ChatPromptTemplate)
-├─→ langchain_openai (ChatOpenAI)
-└─→ langgraph.graph (START, StateGraph)
+**Purpose:** Complete RAGAS evaluation harness in a single file (Tasks 5 & 7).
 
-src/retrievers.py
-├─→ langchain.retrievers (EnsembleRetriever)
-├─→ langchain.retrievers.contextual_compression (ContextualCompressionRetriever)
-├─→ langchain_community.retrievers (BM25Retriever)
-├─→ langchain_cohere (CohereRerank)
-├─→ langchain_qdrant (QdrantVectorStore)
-├─→ langchain_openai (OpenAIEmbeddings)
-└─→ qdrant_client (QdrantClient)
+**Entry Point:** Line 6 (shebang: `#!/usr/bin/env python3`)
 
-src/config.py
-├─→ langchain_openai (ChatOpenAI, OpenAIEmbeddings)
-└─→ [No internal dependencies]
+**What It Does:**
+1. Loads 38 source documents from HuggingFace
+2. Creates Qdrant vector store
+3. Initializes 4 retrievers (naive, BM25, ensemble, cohere_rerank)
+4. Builds LangGraph workflows for each retriever
+5. Runs 12 test questions through each retriever
+6. Evaluates with RAGAS metrics (faithfulness, answer_relevancy, context_precision, context_recall)
+7. Generates comparative analysis table
+8. Saves all results to `deliverables/evaluation_evidence/`
 
-src/state.py
-├─→ typing (List)
-├─→ typing_extensions (TypedDict)
-└─→ langchain_core.documents (Document)
+**Key Functions:**
+- `validate_and_normalize_ragas_schema()` (line 66) - Ensures DataFrame matches RAGAS 0.2.10 schema
+- `retrieve_baseline()` (line 260) - Naive dense vector search
+- `retrieve_bm25()` (line 265) - BM25 sparse keyword matching
+- `retrieve_reranked()` (line 270) - Cohere contextual compression
+- `retrieve_ensemble()` (line 275) - Ensemble hybrid search
+- `generate()` (line 281) - Shared answer generation function
 
-src/prompts.py
-└─→ [No dependencies - pure constants]
-```
+**Output Files:**
+- `{retriever}_raw_dataset.parquet` - Raw outputs before RAGAS evaluation
+- `{retriever}_evaluation_dataset.csv` - RAGAS evaluation datasets
+- `{retriever}_detailed_results.csv` - Per-question metric scores
+- `comparative_ragas_results.csv` - Summary table comparing all retrievers
+- `RUN_MANIFEST.json` - Reproducibility manifest
 
-### Script Dependencies
+**Runtime:** 20-30 minutes
+**Cost:** ~$5-6 in OpenAI API calls
 
-```
-scripts/single_file.py (Comprehensive evaluation script)
-├─→ scripts/generate_run_manifest.py (generate_manifest)
-├─→ datasets (load_dataset)
-├─→ langchain (ChatPromptTemplate, Document, retrievers)
-├─→ langchain_openai (ChatOpenAI, OpenAIEmbeddings)
-├─→ langchain_qdrant (QdrantVectorStore)
-├─→ langgraph.graph (START, StateGraph)
-├─→ qdrant_client (QdrantClient)
-└─→ ragas (EvaluationDataset, evaluate, metrics, wrappers)
+---
 
-scripts/ingest.py (Data ingestion pipeline)
-├─→ langchain_core.documents (Document)
-├─→ langchain_community.document_loaders (DirectoryLoader, PyMuPDFLoader)
-├─→ langchain_openai (ChatOpenAI, OpenAIEmbeddings)
-├─→ ragas.embeddings (LangchainEmbeddingsWrapper)
-├─→ ragas.llms (LangchainLLMWrapper)
-├─→ ragas.testset (TestsetGenerator)
-├─→ ragas (generate - optional for 0.3.x)
-├─→ datasets (Dataset)
-└─→ pandas, hashlib, json
+#### scripts/run_eval_harness.py - Modular RAGAS Evaluation
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/run_eval_harness.py`
 
-scripts/upload_to_hf.py (HuggingFace upload)
-├─→ datasets (load_from_disk)
-├─→ huggingface_hub (HfApi, login)
-└─→ json, pathlib, datetime
+**Purpose:** Same as single_file.py but uses src/ modules instead of inline code.
 
-scripts/generate_run_manifest.py (Manifest generation)
-├─→ ragas (__version__)
-└─→ json, sys, datetime, pathlib
+**Entry Point:** Line 320 (command-line argument parsing)
 
-scripts/enrich_manifest.py (Manifest enrichment)
-├─→ datasets (load_from_disk)
-├─→ pandas
-├─→ pyarrow.parquet
-└─→ json, hashlib, platform, subprocess
+**Command-Line Arguments:**
+- `--recreate` - Recreate Qdrant collection (choices: "true", "false", default: "false")
+
+**Usage:**
+```bash
+make eval
+# or
+export PYTHONPATH=.
+python scripts/run_eval_harness.py --recreate false
 ```
 
-### Dependency Graph Visualization
+**Advantages Over single_file.py:**
+- Uses factory functions from src/ (no code duplication)
+- Cleaner separation of concerns
+- Easier to maintain and extend
+- Same outputs and results
 
-**High-Level Architecture:**
+**Execution Steps:**
+1. STEP 1: Loading data (sources + golden testset)
+2. STEP 2: Building RAG stack (vector store + retrievers + graphs)
+3. STEP 3: Running inference (12 questions × 4 retrievers)
+4. STEP 4: RAGAS evaluation
+5. STEP 5: Comparative analysis
+
+---
+
+#### scripts/validate_langgraph.py - Configuration Validation
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/validate_langgraph.py`
+
+**Purpose:** Validate LangGraph implementation and demonstrate correct patterns.
+
+**Entry Point:** Line 484 (`if __name__ == "__main__":`)
+
+**What It Validates:**
+1. Environment configuration (API keys, Qdrant connectivity)
+2. Module imports (which src/ modules are broken)
+3. Retriever factory pattern (correct initialization)
+4. Graph compilation (all 4 LangGraph workflows)
+5. Functional execution (test queries through each graph)
+6. Configuration consistency
+
+**Key Validation Functions:**
+- `check_environment()` (line 74) - Validates API keys, Qdrant connection, critical imports
+- `test_module_imports()` (line 134) - Tests importing each src/ module individually
+- `demonstrate_correct_pattern()` (line 181) - Shows correct factory pattern usage
+- `validate_graph_compilation()` (line 228) - Validates LangGraph compilation
+- `run_functional_tests()` (line 268) - Runs test queries through all graphs
+- `generate_diagnostic_report()` (line 311) - Generates final diagnostic report
+
+**Exit Codes:**
+- 0: All validations passed
+- 1: One or more validations failed
+
+**Features:**
+- Color-coded terminal output
+- Detailed error messages with traceback
+- Recommendations for fixing issues
+- Comprehensive diagnostic report
+
+---
+
+#### scripts/ingest.py - Data Ingestion Pipeline
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/ingest.py`
+
+**Purpose:** Standardized RAGAS golden testset pipeline.
+
+**Entry Point:** Jupyter notebook / script execution (cell-based)
+
+**What It Does:**
+1. Extracts PDFs to LangChain Documents
+2. Sanitizes metadata for Arrow/JSON serialization
+3. Generates golden testset using RAGAS TestsetGenerator
+4. Persists SOURCES and GOLDEN TESTSET to `/data/interim` in JSONL, Parquet, HF-dataset
+5. Writes manifest with checksums & schema for provenance
+
+**Key Functions:**
+- `ensure_jsonable()` (line 92) - Makes metadata JSON-serializable
+- `docs_to_jsonl()` (line 106) - Converts docs to JSONL format
+- `docs_to_parquet()` (line 115) - Converts docs to Parquet format
+- `docs_to_hfds()` (line 121) - Converts docs to HuggingFace dataset
+- `hash_file()` (line 128) - Computes SHA256 hash for file
+- `summarize_columns_from_jsonl()` (line 138) - Extracts schema from JSONL
+- `build_testset()` (line 202) - Builds testset with RAGAS (0.3.x or 0.2.x fallback)
+
+**Configuration:**
+- `TESTSET_SIZE` (line 82) - Default: 10
+- `MAX_DOCS` (line 83) - Optional limit for prototyping
+- `RANDOM_SEED` (line 86) - Default: 42
+
+**Output Files:**
+- `data/interim/sources.docs.jsonl`
+- `data/interim/sources.docs.parquet`
+- `data/interim/sources.hfds/`
+- `data/interim/golden_testset.jsonl`
+- `data/interim/golden_testset.parquet`
+- `data/interim/golden_testset.hfds/`
+- `data/interim/manifest.json`
+
+---
+
+#### scripts/upload_to_hf.py - HuggingFace Upload
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/upload_to_hf.py`
+
+**Purpose:** Upload GDELT RAG datasets to HuggingFace Hub.
+
+**Entry Point:** Line 291 (`if __name__ == "__main__":`)
+
+**What It Does:**
+1. Loads source documents and golden testset from local storage
+2. Creates dataset cards with metadata
+3. Uploads datasets to HuggingFace Hub
+4. Updates manifest.json with dataset repo IDs
+
+**Key Functions:**
+- `create_sources_card()` (line 34) - Creates README for sources dataset
+- `create_golden_testset_card()` (line 113) - Creates README for testset
+- `load_manifest()` (line 194) - Loads manifest.json
+- `update_manifest()` (line 200) - Updates manifest with repo IDs
+- `main()` (line 219) - Main upload function
+
+**Configuration:**
+- `HF_USERNAME` (line 21) - Default: "dwb2023"
+- `SOURCES_DATASET_NAME` (line 22) - Default: "dwb2023/gdelt-rag-sources"
+- `GOLDEN_TESTSET_NAME` (line 23) - Default: "dwb2023/gdelt-rag-golden-testset"
+
+**Environment Variables:**
+- `HF_TOKEN` - Required for authentication
+
+**Datasets Published:**
+- https://huggingface.co/datasets/dwb2023/gdelt-rag-sources
+- https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset
+
+---
+
+#### scripts/generate_run_manifest.py - Manifest Generation
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/generate_run_manifest.py`
+
+**Purpose:** Generate RUN_MANIFEST.json for reproducibility.
+
+**Entry Point:** Line 173 (`if __name__ == "__main__":`)
+
+**What It Captures:**
+- Model versions and parameters
+- Retriever configurations
+- Evaluation settings
+- Dependencies (Python, RAGAS, etc.)
+- Results summary (if provided)
+
+**Key Function:**
+- `generate_manifest()` (line 21) - Main manifest generation function
+
+**Manifest Structure:**
+- `ragas_version` - RAGAS library version
+- `python_version` - Python version
+- `llm` - LLM configuration (model, temperature, provider)
+- `embeddings` - Embedding configuration
+- `retrievers` - List of retriever configurations
+- `evaluation` - Evaluation settings (datasets, metrics, timeout)
+- `vector_store` - Qdrant configuration
+- `results_summary` - Evaluation results (optional)
+- `generated_at` - Timestamp
+
+**Usage:**
+```python
+from generate_run_manifest import generate_manifest
+manifest = generate_manifest(output_path, evaluation_results, retrievers_config)
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Scripts Layer                        │
-│  (Entry points for ingestion, evaluation, upload)            │
-│                                                              │
-│  single_file.py → ingest.py → upload_to_hf.py              │
-│                   ↓                                          │
-│            generate_run_manifest.py                         │
-│            enrich_manifest.py                               │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ↓
-┌─────────────────────────────────────────────────────────────┐
-│                      Core RAG System (src/)                  │
-│                                                              │
-│  graph.py ←─┬─→ retrievers.py                              │
-│             │   (4 retrieval strategies)                    │
-│             │                                               │
-│             ├─→ prompts.py                                  │
-│             │   (QA templates)                              │
-│             │                                               │
-│             ├─→ state.py                                    │
-│             │   (TypedDict state)                           │
-│             │                                               │
-│             └─→ config.py                                   │
-│                 (Qdrant config, models)                     │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ↓
-┌─────────────────────────────────────────────────────────────┐
-│                   External Dependencies                      │
-│                                                              │
-│  LangChain → LangGraph → Qdrant → OpenAI → Cohere          │
-│  RAGAS → HuggingFace Datasets → Pandas                     │
-└─────────────────────────────────────────────────────────────┘
+
+---
+
+#### scripts/enrich_manifest.py - Manifest Enrichment
+**Location:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/enrich_manifest.py`
+
+**Purpose:** Enrich manifest.json with environment, artifacts, metrics, and lineage.
+
+**Entry Point:** Line 239 (`if __name__ == "__main__":`)
+
+**What It Adds:**
+- Environment details (Python version, OS, dependency versions)
+- Input metadata (source directory)
+- Artifact details (bytes, rows, schemas, SHA256 hashes)
+- Metrics (document counts, character statistics, avg reference contexts)
+- Lineage scaffold (HuggingFace, LangSmith, Phoenix)
+- Compliance scaffold (license, PII policy)
+- Run details (git commit SHA, random seed)
+
+**Key Functions:**
+- `sha256()` (line 7) - Computes SHA256 hash
+- `count_jsonl_rows()` (line 19) - Counts rows in JSONL file
+- `hfds_rows()` (line 24) - Counts rows in HuggingFace dataset
+- `parquet_rows()` (line 37) - Counts rows in Parquet file
+- `pandas_schema_from_parquet()` (line 51) - Extracts schema from Parquet
+- `char_stats_jsonl()` (line 61) - Computes character statistics
+- `main()` (line 81) - Main enrichment function
+
+**Usage:**
+```bash
+python scripts/enrich_manifest.py [path/to/manifest.json]
 ```
 
-### Cross-Module Import Patterns
+**Default Path:** `data/interim/manifest.json`
 
-**Pattern 1: Centralized Configuration**
-- `src/config.py` exports shared model instances
-- `src/retrievers.py` and `scripts/single_file.py` duplicate this configuration (anti-pattern)
-- **Recommendation:** All modules should import from `src/config.py`
+---
 
-**Pattern 2: Graph Composition**
-- `src/graph.py` orchestrates all components
-- Imports retrieval strategies from `src/retrievers.py`
-- Imports prompts from `src/prompts.py`
-- Imports state from `src/state.py`
-- Creates compiled LangGraph instances for each retrieval strategy
+### Programmatic Entry Points
 
-**Pattern 3: Script Independence**
-- Each script in `scripts/` is self-contained and executable
-- Scripts import from external packages (LangChain, RAGAS) directly
-- `scripts/single_file.py` reimplements functionality from `src/` rather than importing
-- **Recommendation:** Scripts should import from `src/` for consistency
+#### Public API Integration Pattern
 
-### Key Observations
+**Recommended Usage Pattern:**
+```python
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+from src.retrievers import create_retrievers
+from src.graph import build_all_graphs
 
-1. **Duplicate Code:** `scripts/single_file.py` (lines 239-312) duplicates functionality from `src/graph.py` and `src/retrievers.py`. This is likely intentional for a self-contained evaluation script but could lead to maintenance issues.
+# Load data
+documents = load_documents_from_huggingface()
 
-2. **Undefined Variable:** `src/retrievers.py` line 40 references `documents` variable which is not defined in the module scope. This would cause a runtime error unless documents are defined elsewhere.
+# Create vector store
+vector_store = create_vector_store(documents, recreate_collection=True)
 
-3. **Configuration Duplication:** Both `src/config.py` and `src/retrievers.py` define `QDRANT_HOST`, `QDRANT_PORT`, and `COLLECTION_NAME`.
+# Create retrievers
+retrievers = create_retrievers(documents, vector_store)
 
-4. **Empty Utilities:** `src/utils.py` is currently empty but included in the project structure, suggesting planned expansion.
+# Build LangGraph workflows
+graphs = build_all_graphs(retrievers)
 
-5. **Version Compatibility:** `scripts/ingest.py` includes fallback logic for RAGAS 0.3.x vs 0.2.x API changes (lines 188-229), showing thoughtful version management.
+# Query the system
+result = graphs['naive'].invoke({"question": "What is GDELT?"})
+print(result['response'])
+```
+
+**Design Philosophy:**
+- Factory pattern ensures correct initialization order
+- No module-level globals or singletons (except cached config)
+- Each step is explicit and configurable
+- Type hints guide correct usage
+- Comprehensive docstrings document patterns
+
+---
+
+## Dependencies
+
+### Core RAG Stack
+
+**LangChain Ecosystem:**
+- `langchain` - Core LangChain abstractions
+- `langchain-openai` - OpenAI LLM and embeddings integration
+- `langchain-community` - Community retrievers (BM25)
+- `langchain-cohere` - Cohere reranker integration
+- `langchain-qdrant` - Qdrant vector store integration
+- `langchain-core` - Core LangChain types (Document)
+
+**LangGraph:**
+- `langgraph` - State machine workflow orchestration
+
+**Vector Database:**
+- `qdrant-client` - Qdrant vector database client
+
+**Embeddings & LLM:**
+- `openai` - OpenAI API client (used via langchain-openai)
+
+**Retrievers:**
+- `cohere` - Cohere API for reranking (rerank-v3.5 model)
+
+---
+
+### Evaluation & Metrics
+
+**RAGAS:**
+- `ragas` - Retrieval-Augmented Generation Assessment framework
+  - Version: 0.2.10 (based on imports and usage patterns)
+  - Metrics: Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall
+
+**Retry Logic:**
+- `tenacity` - Retry logic for transient API errors
+
+---
+
+### Data Processing
+
+**HuggingFace:**
+- `datasets` - HuggingFace datasets library
+- `huggingface-hub` - HuggingFace Hub API client
+
+**Data Formats:**
+- `pandas` - DataFrame operations
+- `pyarrow` - Parquet file format support
+
+**Document Loading:**
+- `langchain-community` - DirectoryLoader, PyMuPDFLoader
+
+---
+
+### Infrastructure
+
+**Python Standard Library:**
+- `os`, `sys`, `pathlib` - File system operations
+- `json` - JSON serialization
+- `hashlib` - SHA256 hashing
+- `datetime` - Timestamps
+- `functools` - LRU cache decorators
+- `typing` - Type hints
+- `argparse` - Command-line argument parsing
+- `copy` - Deep copying
+- `traceback` - Error reporting
+
+**Type Hints:**
+- `typing` - Generic type hints (List, Dict, Any, Optional)
+- `typing_extensions` - TypedDict (for Python 3.8+ compatibility)
+
+---
+
+### Development & Testing
+
+**Environment Management:**
+- Environment variables for configuration (OPENAI_API_KEY, COHERE_API_KEY, etc.)
+- `.env` file support (implicit via os.getenv())
+
+**Validation:**
+- `scripts/validate_langgraph.py` - Comprehensive validation suite
+
+---
+
+## Architecture Patterns
+
+### Factory Pattern
+
+**Why?** Resolves circular dependency issues and enables dynamic configuration.
+
+**Used In:**
+- `src/config.py::create_vector_store()` - Creates and populates vector stores
+- `src/retrievers.py::create_retrievers()` - Creates retriever instances
+- `src/graph.py::build_graph()` - Builds LangGraph workflows
+- `src/graph.py::build_all_graphs()` - Batch graph creation
+
+**Benefits:**
+- Prevents import-time errors
+- Enables testing and mocking
+- Supports multiple configurations
+- Clear dependency injection
+
+---
+
+### Singleton Pattern
+
+**Implementation:** `@lru_cache(maxsize=1)` decorator
+
+**Used In:**
+- `src/config.py::get_llm()` - Single LLM instance
+- `src/config.py::get_embeddings()` - Single embeddings instance
+- `src/config.py::get_qdrant()` - Single Qdrant client
+
+**Benefits:**
+- Prevents duplicate API connections
+- Reduces memory footprint
+- Ensures configuration consistency
+
+---
+
+### State Machine Pattern
+
+**Implementation:** LangGraph StateGraph
+
+**Components:**
+- `src/state.py::State` - TypedDict schema
+- `src/graph.py::build_graph()` - Graph builder
+- Node functions return partial state updates
+- LangGraph merges updates automatically
+
+**Benefits:**
+- Predictable state transitions
+- Easy to test individual nodes
+- Clear data flow
+- Supports complex workflows
+
+---
+
+## File Organization
+
+```
+/home/donbr/don-aie-cohort8/cert-challenge/
+├── main.py                           # Simple entry point
+├── src/                              # Core RAG system (public API)
+│   ├── __init__.py                   # Package initialization
+│   ├── config.py                     # Configuration management
+│   ├── graph.py                      # LangGraph workflow factory
+│   ├── prompts.py                    # Prompt templates
+│   ├── retrievers.py                 # Retriever factory
+│   ├── state.py                      # State schema
+│   └── utils.py                      # Document loading utilities
+├── scripts/                          # Command-line tools
+│   ├── single_file.py                # Comprehensive RAGAS evaluation (inline)
+│   ├── run_eval_harness.py           # Modular RAGAS evaluation (uses src/)
+│   ├── validate_langgraph.py         # Configuration validation
+│   ├── ingest.py                     # Data ingestion pipeline
+│   ├── upload_to_hf.py               # HuggingFace upload
+│   ├── generate_run_manifest.py      # Manifest generation
+│   └── enrich_manifest.py            # Manifest enrichment
+├── deliverables/                     # Evaluation outputs
+│   └── evaluation_evidence/
+│       ├── comparative_ragas_results.csv
+│       ├── {retriever}_raw_dataset.parquet
+│       ├── {retriever}_evaluation_dataset.csv
+│       ├── {retriever}_detailed_results.csv
+│       └── RUN_MANIFEST.json
+└── data/                             # Data storage
+    ├── raw/                          # Raw PDFs
+    ├── interim/                      # Processed datasets
+    │   ├── sources.docs.jsonl
+    │   ├── sources.docs.parquet
+    │   ├── sources.hfds/
+    │   ├── golden_testset.jsonl
+    │   ├── golden_testset.parquet
+    │   ├── golden_testset.hfds/
+    │   └── manifest.json
+    └── processed/                    # Final outputs
+```
 
 ---
 
 ## Summary Statistics
 
-**Total Python Modules:** 13
-- Core RAG system (`src/`): 7 files (1 empty, 1 minimal)
-- Pipeline scripts (`scripts/`): 5 files
-- Entry point (`main.py`): 1 file
+**Core Library (src/):**
+- 6 modules
+- 1 class (State TypedDict)
+- 9 public functions
+- 416 total lines of code (including docstrings)
 
-**Public API Surface:**
-- Classes: 1 (`State`)
-- Functions: 5 (4 retrieval + 1 generation)
-- Module exports: 4 (config, graph, retrievers, prompts)
+**Scripts:**
+- 7 utility scripts
+- 3 main entry points (single_file.py, run_eval_harness.py, validate_langgraph.py)
+- 4 data pipeline scripts (ingest.py, upload_to_hf.py, generate_run_manifest.py, enrich_manifest.py)
 
-**Lines of Code (approximate):**
-- `src/`: ~120 LOC (excluding empty files)
-- `scripts/`: ~1,200 LOC
-- **Total:** ~1,320 LOC
+**Retrievers:**
+- 4 retrieval strategies (naive, BM25, ensemble, cohere_rerank)
+- All return top-k documents (default k=5)
 
-**Entry Points:**
-- Main application: 1 (placeholder)
-- Executable scripts: 5 (ingest, evaluation, upload, manifest generation, manifest enrichment)
+**Evaluation:**
+- 4 RAGAS metrics (faithfulness, answer_relevancy, context_precision, context_recall)
+- 12 test questions
+- 38 source documents
 
 **External Dependencies:**
-- LangChain ecosystem (core, openai, qdrant, cohere, community)
-- RAGAS (evaluation framework)
-- Qdrant (vector database client)
-- HuggingFace (datasets, hub)
-- Pandas, PyArrow (data processing)
-- Tenacity (retry logic)
+- 15+ external libraries
+- 2 API services (OpenAI, Cohere)
+- 1 vector database (Qdrant)
+
+---
+
+## Notes
+
+**Code Quality:**
+- Comprehensive docstrings with examples
+- Type hints throughout
+- Factory pattern for clean dependency management
+- Environment variable configuration
+- Reproducibility via manifest files
+
+**Testing Strategy:**
+- Validation script (validate_langgraph.py) provides comprehensive checks
+- Functional tests run actual queries through all graphs
+- RAGAS evaluation provides quantitative metrics
+
+**Data Lineage:**
+- All datasets published to HuggingFace Hub
+- SHA256 hashes tracked in manifest
+- Revision pinning supported via environment variables
+
+**Production Readiness:**
+- Temperature=0 for deterministic outputs
+- Retry logic for transient errors (in ingest.py)
+- Proper error handling and logging
+- Configurable via environment variables
+- No hardcoded secrets

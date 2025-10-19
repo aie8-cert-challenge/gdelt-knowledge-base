@@ -245,15 +245,16 @@ for item in dataset:
 ### Creating a RAG Chain
 
 ```python
-from langchain_community.vectorstores import Qdrant
+from langchain_qdrant import QdrantVectorStore
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from qdrant_client import QdrantClient
 
-# Create vector store
-vectorstore = Qdrant.from_documents(
-    documents=documents,
-    embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
-    location=":memory:",
+# Create Qdrant client and vector store
+client = QdrantClient(host="localhost", port=6333)
+vectorstore = QdrantVectorStore(
+    client=client,
     collection_name="gdelt_rag",
+    embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
 )
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
@@ -277,11 +278,11 @@ chain = (
 
 ```python
 from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy
+from ragas.metrics import Faithfulness, ResponseRelevancy
 
 result = evaluate(
     dataset=ragas_dataset,
-    metrics=[faithfulness, answer_relevancy],
+    metrics=[Faithfulness(), ResponseRelevancy()],
 )
 
 print(result.to_pandas())

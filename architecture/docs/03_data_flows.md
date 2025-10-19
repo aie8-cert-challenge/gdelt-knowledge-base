@@ -2,1091 +2,1051 @@
 
 ## Overview
 
-This project is a **RAG (Retrieval-Augmented Generation) Evaluation System** for GDELT knowledge graph documentation. The system implements five distinct data flows:
+This document analyzes the actual data flows implemented in the GDELT RAG system. The system is built using LangGraph for orchestration, LangChain for RAG components, Qdrant for vector storage, and RAGAS for evaluation. The architecture supports multiple retrieval strategies (naive dense vector, BM25 sparse, ensemble hybrid, and Cohere rerank) with a modular factory pattern for initialization.
 
-1. **Document Ingestion Flow** - PDF extraction and dataset preparation
-2. **Golden Testset Generation Flow** - RAGAS synthetic test data creation
-3. **Dataset Publication Flow** - HuggingFace Hub upload and versioning
-4. **RAG Query Execution Flow** - Multi-strategy retrieval and generation
-5. **RAGAS Evaluation Flow** - Comparative performance analysis
+The system implements five primary data flows:
+1. **Query Processing Flow** - End-to-end RAG pipeline execution
+2. **Document Retrieval Flows** - Four distinct retrieval strategies
+3. **LangGraph Workflow Execution** - State-based graph execution
+4. **Evaluation Harness Flow** - RAGAS evaluation pipeline
+5. **Data Ingestion Pipeline** - PDF extraction to vector store
 
-Each flow is orchestrated through Python scripts and involves multiple external services (OpenAI, Cohere, Qdrant, HuggingFace). The flows are designed to be reproducible, with comprehensive manifest tracking at each stage.
-
----
-
-## Flow 1: Document Ingestion and Dataset Preparation
-
-### Description
-Extracts text from PDF research papers, normalizes metadata for Arrow/JSON serialization, and persists source documents in multiple formats (JSONL, Parquet, HuggingFace Dataset) for downstream RAG processing.
-
-### Participants
-- **DirectoryLoader** (LangChain) - PDF discovery
-- **PyMuPDFLoader** (LangChain Community) - Text extraction
-- **Document** (LangChain Core) - Standard document format
-- **Dataset** (HuggingFace) - Dataset serialization
-- **Pandas** - Parquet conversion
-- **File System** - Local storage at `data/interim/`
+## 1. Query Processing Flow (RAG Pipeline)
 
 ### Sequence Diagram
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
 sequenceDiagram
-    autonumber
+    participant User
+    participant Graph as LangGraph<br/>(Compiled StateGraph)
+    participant RetrieveNode as retrieve()<br/>Node Function
+    participant Retriever as Retriever Instance<br/>(naive/bm25/ensemble/rerank)
+    participant VectorStore as QdrantVectorStore
+    participant GenerateNode as generate()<br/>Node Function
+    participant LLM as ChatOpenAI<br/>(gpt-4.1-mini)
 
-    participant SC as 📄 ingest.py
-    participant LD as 📂 DirectoryLoader
-    participant PDF as 📕 PyMuPDFLoader
-    participant DOC as 📑 Document[]
-    participant FS as 💾 File System
-    participant HF as 🤗 HF Dataset
-    participant MF as 📋 manifest.json
+    User->>Graph: invoke({"question": "What is GDELT?"})
+    Graph->>Graph: Initialize State<br/>{question, context, response}
 
-    rect rgb(230, 247, 255)
-        Note over SC: Phase 1: Initialization
-        Note right of SC: scripts/ingest.py:56-63
-        SC->>SC: find_repo_root()
-        SC->>+FS: mkdir data/raw,<br/>data/interim,<br/>data/processed
-        deactivate FS
+    Graph->>RetrieveNode: execute(state)
+    RetrieveNode->>Retriever: invoke(state["question"])
+
+    alt Dense Vector (naive)
+        Retriever->>VectorStore: similarity_search(query, k=5)
+        VectorStore-->>Retriever: List[Document]
+    else Sparse Keyword (bm25)
+        Retriever->>Retriever: BM25 scoring on documents
+        Retriever-->>Retriever: List[Document]
+    else Hybrid (ensemble)
+        Retriever->>VectorStore: dense search (weight=0.5)
+        Retriever->>Retriever: bm25 search (weight=0.5)
+        Retriever->>Retriever: merge & rank results
+        Retriever-->>Retriever: List[Document]
+    else Rerank (cohere_rerank)
+        Retriever->>VectorStore: similarity_search(query, k=20)
+        Retriever->>Retriever: CohereRerank.compress(docs)
+        Retriever-->>Retriever: List[Document] (top 5)
     end
 
-    rect rgb(255, 243, 224)
-        Note over SC,DOC: Phase 2: PDF Loading & Extraction
-        Note right of SC: scripts/ingest.py:157-160
-        SC->>+LD: DirectoryLoader(data/raw,<br/>glob="*.pdf")
-        LD->>+PDF: load all PDFs
-        PDF-->>-LD: LangChain Documents<br/>with metadata
-        LD-->>-SC: docs: List[Document]
-    end
+    Retriever-->>RetrieveNode: List[Document]
+    RetrieveNode-->>Graph: {"context": List[Document]}
+    Graph->>Graph: Merge state update
 
-    rect rgb(232, 245, 233)
-        Note over SC: Phase 3: Metadata Sanitization
-        Note right of SC: scripts/ingest.py:92-104
-        SC->>SC: ensure_jsonable(metadata)
-        Note right of SC: Sanitize:<br/>Path→str<br/>UUID→str<br/>datetime→str
-    end
+    Graph->>GenerateNode: execute(state)
+    GenerateNode->>GenerateNode: Extract docs content<br/>from state["context"]
+    GenerateNode->>GenerateNode: Format RAG prompt<br/>with question + context
+    GenerateNode->>LLM: invoke(messages)
+    LLM-->>GenerateNode: response.content
+    GenerateNode-->>Graph: {"response": str}
+    Graph->>Graph: Merge state update
 
-    rect rgb(252, 228, 236)
-        Note over SC,HF: Phase 4: Multi-Format Persistence
-        Note right of SC: scripts/ingest.py:106-113
-        SC->>+FS: write sources.docs.jsonl
-        loop Each document (38 docs)
-            SC->>FS: {"page_content": str,<br/>"metadata": dict}
-        end
-        deactivate FS
-
-        Note right of SC: scripts/ingest.py:115-119
-        SC->>+FS: write sources.docs.parquet
-        Note right of FS: Flatten metadata<br/>into columns
-        deactivate FS
-
-        Note right of SC: scripts/ingest.py:121-126
-        SC->>+HF: Dataset.from_list(rows)
-        HF->>FS: save_to_disk(sources.hfds/)
-        deactivate HF
-    end
-
-    rect rgb(241, 248, 233)
-        Note over SC,MF: Phase 5: Manifest Generation
-        Note right of SC: scripts/ingest.py:135-136
-        SC->>SC: write_manifest()
-        SC->>+MF: write data/interim/<br/>manifest.json
-        Note right of MF: SHA256 checksums<br/>schema<br/>metadata
-        deactivate MF
-    end
+    Graph-->>User: State{question, context, response}
 ```
 
-### Key Steps
+### Explanation
 
-1. **Repo Root Detection** (`scripts/ingest.py:47-54`) - Climb directory tree to find `pyproject.toml` or `.git`
-2. **Directory Initialization** (`scripts/ingest.py:59-63`) - Create `data/raw`, `data/interim`, `data/processed`
-3. **PDF Loading** (`scripts/ingest.py:157-160`) - DirectoryLoader with PyMuPDFLoader
-   - Pattern: `data/raw/*.pdf`
-   - Output: `List[Document]` with `page_content` and `metadata`
-4. **Metadata Sanitization** (`scripts/ingest.py:92-104`) - `ensure_jsonable()` converts:
-   - `Path` → `str`
-   - `UUID` → `str`
-   - `datetime` → `str`
-   - Nested dicts/lists preserved
-5. **JSONL Persistence** (`scripts/ingest.py:106-113`) - One JSON object per line
-6. **Parquet Persistence** (`scripts/ingest.py:115-119`) - Flattened metadata as columns
-7. **HF Dataset Persistence** (`scripts/ingest.py:121-126`) - Arrow format for fast rehydration
-8. **Manifest Generation** (`scripts/ingest.py:135-136`) - Write checksums, schema, file paths
+The query processing flow follows the LangGraph pattern with a two-node state machine:
 
-### Data Transformations
+1. **State Initialization** - Graph receives `{"question": str}` and initializes the State TypedDict
+2. **Retrieve Node** - Invokes the configured retriever to fetch relevant documents
+3. **State Update** - Returns `{"context": List[Document]}` which LangGraph merges into state
+4. **Generate Node** - Formats prompt with question + context, invokes LLM
+5. **Final State** - Returns complete state with question, context, and response
 
+**Key Design Patterns:**
+- Nodes return partial state updates (dict), not full state
+- LangGraph automatically merges updates
+- Stateless node functions enable reusability
+- Factory pattern delays retriever creation until runtime
+
+### Code References
+
+- **State Schema**: `/home/donbr/don-aie-cohort8/cert-challenge/src/state.py` (lines 7-10)
+  - `question: str` - User query
+  - `context: List[Document]` - Retrieved documents
+  - `response: str` - LLM-generated answer
+
+- **Graph Factory**: `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py` (lines 21-106)
+  - `build_graph(retriever, llm, prompt_template)` - Creates compiled StateGraph
+  - `retrieve(state)` node (lines 67-78) - Invokes retriever, returns `{"context": docs}`
+  - `generate(state)` node (lines 80-96) - Formats prompt, invokes LLM, returns `{"response": str}`
+
+- **Prompt Template**: `/home/donbr/don-aie-cohort8/cert-challenge/src/prompts.py` (lines 4-12)
+  - BASELINE_PROMPT - Instructs LLM to answer only from provided context
+
+- **Graph Compilation**: `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py` (lines 99-106)
+  - Adds retrieve and generate nodes
+  - Connects: START → retrieve → generate → END
+
+## 2. Document Retrieval Flows
+
+### 2.1 Naive Retrieval (Dense Vector)
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant NaiveRetriever as Naive Retriever<br/>(VectorStore.as_retriever)
+    participant QdrantVS as QdrantVectorStore
+    participant Embeddings as OpenAIEmbeddings<br/>(text-embedding-3-small)
+    participant QdrantDB as Qdrant Database<br/>(localhost:6333)
+
+    Caller->>NaiveRetriever: invoke(query, k=5)
+    NaiveRetriever->>Embeddings: embed_query(query)
+    Embeddings-->>NaiveRetriever: query_vector (1536-dim)
+
+    NaiveRetriever->>QdrantVS: similarity_search(query_vector, k=5)
+    QdrantVS->>QdrantDB: search(collection="gdelt_comparative_eval",<br/>vector=query_vector,<br/>limit=5,<br/>distance=COSINE)
+    QdrantDB-->>QdrantVS: top 5 scored results
+    QdrantVS->>QdrantVS: Convert to List[Document]
+    QdrantVS-->>NaiveRetriever: List[Document]
+    NaiveRetriever-->>Caller: List[Document] (5 docs)
 ```
-PDF Files (data/raw/*.pdf)
-    ↓ [PyMuPDFLoader]
-LangChain Documents (page_content + metadata)
-    ↓ [ensure_jsonable]
-Sanitized Documents (JSON-safe metadata)
-    ↓ [Parallel write]
-    ├─→ JSONL (data/interim/sources.docs.jsonl)
-    ├─→ Parquet (data/interim/sources.docs.parquet)
-    └─→ HF Dataset (data/interim/sources.hfds/)
+
+**Code**: `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py` (line 63)
+```python
+naive_retriever = vector_store.as_retriever(search_kwargs={"k": k})
 ```
 
-**Key Transformation**: Metadata flattening for Parquet vs nested preservation for JSONL/HF Dataset
+### 2.2 BM25 Retrieval (Sparse)
 
----
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant BM25Retriever as BM25Retriever<br/>(in-memory)
+    participant BM25Index as BM25 Index<br/>(term freq + inv doc freq)
 
-## Flow 2: Golden Testset Generation with RAGAS
+    Note over BM25Retriever: Initialized with all documents<br/>at creation time
 
-### Description
-Generates synthetic question-answering pairs from source documents using RAGAS framework. Handles both RAGAS 0.2.x (TestsetGenerator) and 0.3.x (generate function) APIs with automatic fallback and retry logic for OpenAI rate limits.
+    Caller->>BM25Retriever: invoke(query, k=5)
+    BM25Retriever->>BM25Retriever: tokenize(query)
+    BM25Retriever->>BM25Index: score_documents(tokens)
 
-### Participants
-- **TestsetGenerator** (RAGAS 0.2.x) - Synthetic QA generation
-- **ChatOpenAI** (LangChain) - LLM for question/answer synthesis
-- **OpenAIEmbeddings** (LangChain) - Document embedding
-- **LangchainLLMWrapper** (RAGAS) - LLM adapter
-- **LangchainEmbeddingsWrapper** (RAGAS) - Embeddings adapter
-- **tenacity** - Exponential backoff retry decorator
-- **File System** - Testset persistence
+    loop For each document
+        BM25Index->>BM25Index: Calculate BM25 score<br/>based on term frequency,<br/>inverse doc frequency,<br/>and doc length
+    end
+
+    BM25Index-->>BM25Retriever: scored documents
+    BM25Retriever->>BM25Retriever: Sort by score, take top k
+    BM25Retriever-->>Caller: List[Document] (5 docs)
+```
+
+**Code**: `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py` (line 66)
+```python
+bm25_retriever = BM25Retriever.from_documents(documents, k=k)
+```
+
+**Note**: BM25 operates on in-memory document collection, no external database.
+
+### 2.3 Ensemble Retrieval (Hybrid)
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant EnsembleRetriever
+    participant NaiveRetriever as Naive Retriever<br/>(weight=0.5)
+    participant BM25Retriever as BM25 Retriever<br/>(weight=0.5)
+    participant QdrantVS as QdrantVectorStore
+
+    Caller->>EnsembleRetriever: invoke(query, k=5)
+
+    par Parallel Retrieval
+        EnsembleRetriever->>NaiveRetriever: invoke(query)
+        NaiveRetriever->>QdrantVS: similarity_search(query, k=5)
+        QdrantVS-->>NaiveRetriever: List[Document]
+        NaiveRetriever-->>EnsembleRetriever: List[Document] + scores
+    and
+        EnsembleRetriever->>BM25Retriever: invoke(query)
+        BM25Retriever->>BM25Retriever: BM25 scoring
+        BM25Retriever-->>EnsembleRetriever: List[Document] + scores
+    end
+
+    EnsembleRetriever->>EnsembleRetriever: Merge results:<br/>weighted_score = (naive * 0.5) + (bm25 * 0.5)
+    EnsembleRetriever->>EnsembleRetriever: Deduplicate by doc ID
+    EnsembleRetriever->>EnsembleRetriever: Sort by weighted score
+    EnsembleRetriever->>EnsembleRetriever: Take top k
+
+    EnsembleRetriever-->>Caller: List[Document] (5 docs)
+```
+
+**Code**: `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py` (lines 69-72)
+```python
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[naive_retriever, bm25_retriever],
+    weights=[0.5, 0.5]
+)
+```
+
+**Algorithm**: Reciprocal Rank Fusion with weighted scoring
+
+### 2.4 Cohere Rerank Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant CompRetriever as ContextualCompressionRetriever
+    participant WideRetriever as Wide Retriever<br/>(k=20)
+    participant QdrantVS as QdrantVectorStore
+    participant CohereRerank as CohereRerank<br/>(rerank-v3.5)
+    participant CohereAPI as Cohere API
+
+    Caller->>CompRetriever: invoke(query, k=5)
+
+    Note over CompRetriever: Step 1: Cast wide net
+    CompRetriever->>WideRetriever: invoke(query)
+    WideRetriever->>QdrantVS: similarity_search(query, k=20)
+    QdrantVS-->>WideRetriever: List[Document] (20 docs)
+    WideRetriever-->>CompRetriever: List[Document] (20 docs)
+
+    Note over CompRetriever: Step 2: Rerank with Cohere
+    CompRetriever->>CohereRerank: compress_documents(docs, query)
+    CohereRerank->>CohereRerank: Extract doc contents
+    CohereRerank->>CohereAPI: rerank(query=query,<br/>documents=[doc.page_content],<br/>model="rerank-v3.5")
+
+    CohereAPI->>CohereAPI: Cross-encoder scoring<br/>(query-doc relevance)
+    CohereAPI-->>CohereRerank: ranked results with scores
+
+    CohereRerank->>CohereRerank: Sort by relevance score
+    CohereRerank->>CohereRerank: Take top documents<br/>(controlled by base_retriever k)
+    CohereRerank-->>CompRetriever: List[Document] (5 docs)
+
+    CompRetriever-->>Caller: List[Document] (5 docs)
+```
+
+**Code**: `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py` (lines 76-82)
+```python
+wide_retriever = vector_store.as_retriever(search_kwargs={"k": max(20, k)})
+reranker = CohereRerank(model="rerank-v3.5")
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=wide_retriever
+)
+```
+
+**Strategy**: Retrieve broadly (20 docs), then use cross-encoder to rerank to top 5
+
+### Comparison Summary
+
+| Strategy | Type | External Service | Performance | Use Case |
+|----------|------|------------------|-------------|----------|
+| **Naive** | Dense vector | Qdrant | Fast | Semantic similarity |
+| **BM25** | Sparse keyword | In-memory | Fastest | Exact keyword matching |
+| **Ensemble** | Hybrid | Qdrant + in-memory | Medium | Balance semantic + keyword |
+| **Cohere Rerank** | Cross-encoder | Qdrant + Cohere API | Slowest | Highest precision |
+
+**Code Reference**: All retrievers created in `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py` (lines 20-89)
+
+## 3. LangGraph Workflow Execution
 
 ### Sequence Diagram
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
 sequenceDiagram
-    autonumber
+    participant Client as Client Code
+    participant CompiledGraph as Compiled StateGraph
+    participant StateManager as State Manager
+    participant NodeExecutor as Node Executor
+    participant RetrieveNode as retrieve() Function
+    participant GenerateNode as generate() Function
 
-    participant SC as 📄 ingest.py
-    participant RT as 🔄 @retry decorator
-    participant RG as 🧪 TestsetGenerator
-    participant LLM as 🤖 ChatOpenAI
-    participant EMB as 🔢 OpenAIEmbeddings
-    participant API as ☁️ OpenAI API
-    participant FS as 💾 File System
+    Client->>CompiledGraph: invoke({"question": "What is GDELT?"})
 
-    rect rgb(230, 247, 255)
-        Note over SC: Phase 1: API Version Detection
-        Note right of SC: scripts/ingest.py:186-192
-        SC->>SC: Check if ragas.generate<br/>exists (0.3.x)
-        alt RAGAS 0.3.x Available
-            Note over SC: ✅ Prefer new API
-        else RAGAS 0.2.x Fallback
-            Note over SC: ⚠️ Use TestsetGenerator
-        end
-    end
+    CompiledGraph->>StateManager: Initialize State
+    StateManager->>StateManager: Create State TypedDict<br/>{question: str, context: [], response: ""}
 
-    rect rgb(255, 243, 224)
-        Note over SC,RG: Phase 2: LLM & Embeddings Setup
-        Note right of SC: scripts/ingest.py:222-228
-        SC->>+LLM: ChatOpenAI(<br/>model="gpt-4.1-mini"<br/>temp=0, timeout=60)
-        deactivate LLM
-        SC->>+EMB: OpenAIEmbeddings(<br/>model="text-embedding-3-small")
-        deactivate EMB
-        SC->>+RG: TestsetGenerator(<br/>llm=wrapper,<br/>embedding=wrapper)
-        deactivate RG
-    end
+    Note over CompiledGraph: Graph edges: START→retrieve→generate→END
 
-    rect rgb(232, 245, 233)
-        Note over SC,RT: Phase 3: Retry Decorator Configuration
-        Note right of SC: scripts/ingest.py:196-202
-        RT->>RT: @retry(<br/>stop_after_attempt=3,<br/>exponential_backoff)
-        SC->>+RT: build_testset(docs,<br/>TESTSET_SIZE=10)
+    CompiledGraph->>NodeExecutor: Execute node: "retrieve"
+    NodeExecutor->>RetrieveNode: retrieve(current_state)
+    RetrieveNode->>RetrieveNode: retriever.invoke(state["question"])
+    RetrieveNode-->>NodeExecutor: return {"context": List[Document]}
 
-        RT->>+RG: generate_with_langchain_docs(<br/>docs, testset_size=10)
-    end
+    NodeExecutor->>StateManager: Merge update: {"context": [...]}
+    StateManager->>StateManager: state.update({"context": [...]})
+    StateManager-->>NodeExecutor: Updated state
 
-    rect rgb(252, 228, 236)
-        Note over RG,API: Phase 4: Knowledge Graph Construction
-        loop For each document chunk
-            RG->>+EMB: embed_documents(chunks)
-            EMB->>+API: POST /v1/embeddings
-            API-->>-EMB: vectors[1536]
-            EMB-->>-RG: Embeddings
-            RG->>RG: Build semantic graph
-        end
-    end
+    CompiledGraph->>NodeExecutor: Execute node: "generate"
+    NodeExecutor->>GenerateNode: generate(current_state)
+    GenerateNode->>GenerateNode: Format prompt with<br/>state["question"] + state["context"]
+    GenerateNode->>GenerateNode: llm.invoke(messages)
+    GenerateNode-->>NodeExecutor: return {"response": str}
 
-    rect rgb(255, 245, 230)
-        Note over RG,API: Phase 5: Question & Answer Generation (12 QA pairs)
-        loop For each QA pair
-            RG->>+LLM: Generate question<br/>from context
-            LLM->>+API: POST /v1/chat/completions
-            alt 429 Rate Limit Error
-                API-->>-LLM: ❌ RateLimitError
-                LLM-->>-RT: Raise RateLimitError
-                RT->>RT: Wait 2^attempt seconds<br/>(1s, 2s, 4s...)
-                RT->>RG: 🔄 Retry request
-            else Success
-                API-->>-LLM: ✅ Generated question
-                RG->>+LLM: Generate reference answer
-                LLM->>+API: POST /v1/chat/completions
-                API-->>-LLM: ✅ Generated answer
-                deactivate LLM
-            end
-        end
+    NodeExecutor->>StateManager: Merge update: {"response": "..."}
+    StateManager->>StateManager: state.update({"response": "..."})
+    StateManager-->>NodeExecutor: Final state
 
-        RG-->>-RT: EvaluationDataset<br/>(12 QA pairs)
-        RT-->>-SC: EvaluationDataset
-    end
-
-    rect rgb(241, 248, 233)
-        Note over SC,FS: Phase 6: Multi-Format Persistence
-        Note right of SC: scripts/ingest.py:239-258
-        SC->>+FS: golden_testset.to_jsonl<br/>(GT_JSONL)
-        SC->>FS: golden_testset.to_parquet<br/>(GT_PARQUET)
-        SC->>FS: golden_testset.save_to_disk<br/>(GT_HF_DISK)
-        deactivate FS
-    end
+    CompiledGraph-->>Client: State{question, context, response}
 ```
 
-### Key Steps
+### Explanation
 
-1. **API Version Detection** (`scripts/ingest.py:186-192`) - Check for `ragas.generate` (0.3.x) vs fallback to `TestsetGenerator` (0.2.x)
-2. **LLM Wrapper Configuration** (`scripts/ingest.py:222-227`)
-   - Model: `gpt-4.1-mini` (cost-effective)
-   - Temperature: 0 (deterministic)
-   - Timeout: 60 seconds
-   - Max retries: 6
-3. **Retry Decorator Setup** (`scripts/ingest.py:196-202`)
-   - Stop after 3 attempts
-   - Exponential backoff: `wait = 2^attempt` seconds
-   - Retry on: `RateLimitError`, `APITimeoutError`, `APIStatusError`, `APIConnectionError`
-4. **Testset Generation** (`scripts/ingest.py:229`) - `generate_with_langchain_docs(docs, testset_size=10)`
-   - Creates knowledge graph from embeddings
-   - Generates single-hop and multi-hop queries
-   - Synthesizes reference answers
-5. **Multi-format Persistence** (`scripts/ingest.py:239-258`)
-   - JSONL: Native RAGAS format
-   - Parquet: Analytics/quick ingestion
-   - HF Dataset: Versioned, reproducible
+LangGraph manages the workflow execution through a state-based graph:
 
-### Data Transformations
+1. **Graph Initialization**:
+   - Graph built with `StateGraph(State)` where State is a TypedDict
+   - Nodes added: "retrieve" and "generate"
+   - Edges define flow: START → retrieve → generate → END
+   - Graph compiled for execution
 
-```
-LangChain Documents (38 pages)
-    ↓ [RAGAS Knowledge Graph]
-Embedded Document Chunks (vectors[1536])
-    ↓ [RAGAS Synthesizers]
-    ├─→ single_hop_specific_query_synthesizer (6 QA pairs)
-    └─→ multi_hop_abstract_query_synthesizer (6 QA pairs)
-    ↓ [Schema normalization]
-EvaluationDataset
-    {
-      user_input: str,
-      reference_contexts: List[str],
-      reference: str,
-      synthesizer_name: str
-    }
-    ↓ [Parallel write]
-    ├─→ JSONL (golden_testset.jsonl)
-    ├─→ Parquet (golden_testset.parquet)
-    └─→ HF Dataset (golden_testset.hfds/)
-```
+2. **State Management**:
+   - State initialized with input: `{"question": "..."}`
+   - Each node returns partial state updates (dict)
+   - LangGraph merges updates into state automatically
+   - No manual state passing between nodes
 
-**Key Transformation**: Unstructured documents → Semantic graph → Synthetic QA pairs with ground truth
+3. **Node Execution**:
+   - Nodes are pure functions: `(State) -> dict`
+   - Each node receives current state, returns updates
+   - Stateless design enables reusability
 
----
+4. **Control Flow**:
+   - Linear flow (no conditionals in this implementation)
+   - Could be extended with conditional edges based on state
+   - Error handling delegated to LangChain components
 
-## Flow 3: Dataset Publication to HuggingFace Hub
+### Code References
 
-### Description
-Uploads source documents and golden testset to HuggingFace Hub with auto-generated dataset cards, then updates local manifest with repository metadata for reproducibility tracking.
+- **Graph Construction**: `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py` (lines 98-106)
+  ```python
+  graph = StateGraph(State)
+  graph.add_node("retrieve", retrieve)
+  graph.add_node("generate", generate)
+  graph.add_edge(START, "retrieve")
+  graph.add_edge("retrieve", "generate")
+  graph.add_edge("generate", END)
+  return graph.compile()
+  ```
 
-### Participants
-- **HfApi** (HuggingFace Hub) - Repository management
-- **Dataset** (HuggingFace) - Dataset upload
-- **load_from_disk** (HuggingFace) - Local dataset loader
-- **manifest.json** - Lineage tracking
-- **File System** - Local dataset storage
+- **State Schema**: `/home/donbr/don-aie-cohort8/cert-challenge/src/state.py` (lines 7-10)
+
+- **Factory Pattern**: `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py` (lines 109-141)
+  - `build_all_graphs(retrievers, llm)` - Creates graph for each retriever
+
+## 4. Evaluation Harness Flow
 
 ### Sequence Diagram
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
 sequenceDiagram
-    autonumber
+    participant Script as run_eval_harness.py
+    participant HFDatasets as HuggingFace Datasets
+    participant ConfigModule as src.config
+    participant RetrieversModule as src.retrievers
+    participant GraphModule as src.graph
+    participant Graph as Compiled Graphs
+    participant RAGAS as RAGAS Framework
+    participant Filesystem as File System
 
-    participant SC as 📄 upload_to_hf.py
-    participant HF as 🤗 HuggingFace Hub
-    participant API as 🔑 HfApi
-    participant FS as 💾 File System
-    participant MF as 📋 manifest.json
+    Note over Script: STEP 1: Load Data
+    Script->>HFDatasets: load_documents_from_huggingface(<br/>"dwb2023/gdelt-rag-sources")
+    HFDatasets-->>Script: List[Document] (38 docs)
 
-    rect rgb(230, 247, 255)
-        Note over SC,API: Phase 1: Authentication
-        Note right of SC: scripts/upload_to_hf.py:220-228
-        SC->>SC: Check HF_TOKEN env var
-        SC->>+HF: login(token=hf_token)
-        HF-->>-SC: ✅ Authenticated
-        SC->>+API: HfApi()
-        deactivate API
+    Script->>HFDatasets: load_golden_testset_from_huggingface(<br/>"dwb2023/gdelt-rag-golden-testset")
+    HFDatasets-->>Script: Dataset (12 test examples)
+    Script->>Script: Convert to pandas DataFrame
+
+    Note over Script: STEP 2: Build RAG Stack
+    Script->>ConfigModule: create_vector_store(docs,<br/>recreate_collection=True/False)
+    ConfigModule->>ConfigModule: get_qdrant() - cached client
+    ConfigModule->>ConfigModule: get_embeddings() - cached embeddings
+
+    alt recreate_collection=True
+        ConfigModule->>ConfigModule: delete_collection()
+        ConfigModule->>ConfigModule: create_collection()
+        ConfigModule->>ConfigModule: add_documents()
+    else recreate_collection=False
+        ConfigModule->>ConfigModule: reuse existing collection
     end
 
-    rect rgb(255, 243, 224)
-        Note over SC,FS: Phase 2: Dataset Loading
-        Note right of SC: scripts/upload_to_hf.py:234-239
-        SC->>+FS: load_from_disk(<br/>"data/interim/sources.hfds")
-        FS-->>-SC: sources_dataset<br/>(38 docs)
-        SC->>+FS: load_from_disk(<br/>"data/interim/golden_testset.hfds")
-        FS-->>-SC: golden_testset_dataset<br/>(12 QA pairs)
+    ConfigModule-->>Script: QdrantVectorStore
+
+    Script->>RetrieversModule: create_retrievers(docs, vector_store, k=5)
+    RetrieversModule-->>Script: {naive, bm25, ensemble, cohere_rerank}
+
+    Script->>GraphModule: build_all_graphs(retrievers, llm)
+    loop For each retriever
+        GraphModule->>GraphModule: build_graph(retriever, llm)
+    end
+    GraphModule-->>Script: {naive_graph, bm25_graph, ...}
+
+    Note over Script: STEP 3: Run Inference (12 questions × 4 retrievers)
+    loop For each retriever
+        loop For each question in golden_df
+            Script->>Graph: invoke({"question": q})
+            Graph-->>Script: {question, context, response}
+            Script->>Script: df.at[idx, "response"] = result["response"]
+            Script->>Script: df.at[idx, "retrieved_contexts"] = [...]
+        end
+        Script->>Filesystem: save raw_dataset.parquet
     end
 
-    rect rgb(232, 245, 233)
-        Note over SC,HF: Phase 3: Sources Dataset Upload
-        Note right of SC: scripts/upload_to_hf.py:242-247
-        SC->>+HF: sources_dataset.push_to_hub(<br/>"dwb2023/gdelt-rag-sources")
-        HF->>HF: Create repository
-        HF->>HF: Upload Arrow files
-        HF-->>-SC: ✅ Upload complete
+    Note over Script: STEP 4: RAGAS Evaluation
+    loop For each retriever dataset
+        Script->>RAGAS: EvaluationDataset.from_pandas(df)
+        RAGAS-->>Script: EvaluationDataset
+        Script->>Filesystem: save evaluation_dataset.csv
+
+        Script->>RAGAS: evaluate(dataset, metrics=[<br/>Faithfulness(),<br/>ResponseRelevancy(),<br/>ContextPrecision(),<br/>LLMContextRecall()],<br/>llm=evaluator_llm)
+
+        loop For each test example
+            RAGAS->>RAGAS: Calculate faithfulness score
+            RAGAS->>RAGAS: Calculate answer_relevancy score
+            RAGAS->>RAGAS: Calculate context_precision score
+            RAGAS->>RAGAS: Calculate context_recall score
+        end
+
+        RAGAS-->>Script: EvaluationResult
+        Script->>Filesystem: save detailed_results.csv
     end
 
-    rect rgb(252, 228, 236)
-        Note over SC,HF: Phase 4: Dataset Card Generation
-        Note right of SC: scripts/upload_to_hf.py:250-257
-        SC->>SC: create_sources_card()
-        Note right of SC: Markdown with:<br/>- License<br/>- Tags<br/>- Citation
-        SC->>+API: upload_file(README.md,<br/>repo_id,<br/>repo_type="dataset")
-        API->>HF: Upload dataset card
-        HF-->>-API: ✅ Card uploaded
-        API-->>SC: Success
-    end
+    Note over Script: STEP 5: Comparative Analysis
+    Script->>Script: Aggregate metrics across retrievers
+    Script->>Script: Calculate average scores
+    Script->>Script: Sort by performance
+    Script->>Filesystem: save comparative_ragas_results.csv
 
-    rect rgb(255, 245, 230)
-        Note over SC,HF: Phase 5: Golden Testset Upload
-        Note right of SC: scripts/upload_to_hf.py:261-279
-        SC->>+HF: golden_testset_dataset.push_to_hub(<br/>"dwb2023/gdelt-rag-golden-testset")
-        HF-->>-SC: ✅ Upload complete
-        SC->>+API: upload_file(README.md, ...)
-        API-->>-SC: ✅ Card uploaded
-    end
-
-    rect rgb(241, 248, 233)
-        Note over SC,MF: Phase 6: Manifest Update (Lineage Tracking)
-        Note right of SC: scripts/upload_to_hf.py:282-283
-        SC->>SC: update_manifest()
-        SC->>+FS: Read manifest.json
-        FS-->>-SC: manifest dict
-
-        Note right of SC: scripts/upload_to_hf.py:205-214
-        SC->>SC: Add lineage.hf.dataset_repo_id
-        SC->>SC: Add lineage.hf.uploaded_at<br/>(ISO 8601)
-        SC->>SC: Set lineage.hf.pending_upload<br/>= false
-        SC->>+FS: Write updated manifest.json
-        deactivate FS
-    end
+    Script->>Script: Display results table
+    Script->>Script: Calculate improvement over baseline
 ```
 
-### Key Steps
+### Explanation
 
-1. **Authentication** (`scripts/upload_to_hf.py:220-228`)
-   - Check `HF_TOKEN` environment variable
-   - Call `login(token=hf_token)`
-   - Initialize `HfApi()` client
-2. **Dataset Loading** (`scripts/upload_to_hf.py:234-239`)
-   - `load_from_disk("data/interim/sources.hfds")` → 38 documents
-   - `load_from_disk("data/interim/golden_testset.hfds")` → 12 QA pairs
-3. **Sources Upload** (`scripts/upload_to_hf.py:242-247`)
-   - `push_to_hub("dwb2023/gdelt-rag-sources", private=False)`
-   - Creates Arrow files on HuggingFace infrastructure
-4. **Dataset Card Generation** (`scripts/upload_to_hf.py:34-110`, `113-191`)
-   - Markdown frontmatter: license, tags, task categories
-   - Dataset description, fields, citation
-   - Example: `license: apache-2.0`, `task_categories: [question-answering]`
-5. **Card Upload** (`scripts/upload_to_hf.py:250-257`)
-   - `upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md")`
-6. **Manifest Update** (`scripts/upload_to_hf.py:200-216`)
-   - Add `lineage.hf.dataset_repo_id.sources` = "dwb2023/gdelt-rag-sources"
-   - Add `lineage.hf.uploaded_at` = ISO 8601 timestamp
-   - Set `lineage.hf.pending_upload` = `false`
+The evaluation harness implements a comprehensive RAG evaluation workflow:
 
-### Data Transformations
+**Step 1: Data Loading** (lines 108-121)
+- Load source documents from HuggingFace dataset
+- Load golden testset (12 QA pairs with ground truth)
+- Convert to pandas for manipulation
 
-```
-Local HF Datasets (data/interim/*.hfds/)
-    ↓ [HfApi upload]
-HuggingFace Hub Repositories
-    ├─→ dwb2023/gdelt-rag-sources (38 docs)
-    └─→ dwb2023/gdelt-rag-golden-testset (12 QA pairs)
-    ↓ [Manifest update]
-manifest.json lineage tracking
-    {
-      "lineage": {
-        "hf": {
-          "dataset_repo_id": {
-            "sources": "dwb2023/gdelt-rag-sources",
-            "golden_testset": "dwb2023/gdelt-rag-golden-testset"
-          },
-          "uploaded_at": "2025-01-15T10:23:45Z",
-          "pending_upload": false
-        }
-      }
-    }
-```
+**Step 2: RAG Stack Construction** (lines 127-144)
+- Create/reuse Qdrant vector store collection
+- Initialize 4 retriever strategies
+- Build LangGraph workflows for each retriever
+- All use factory functions from src/ modules
 
-**Key Transformation**: Local datasets → Versioned cloud repositories with dataset cards
+**Step 3: Inference Execution** (lines 151-184)
+- Process 12 questions through 4 retrievers = 48 total runs
+- For each (question, retriever) pair:
+  - Invoke graph to get response + retrieved contexts
+  - Store results in DataFrame
+- Immediate persistence to parquet (prevents data loss)
+- Output: 4 raw dataset files (6 columns each)
 
----
+**Step 4: RAGAS Evaluation** (lines 190-231)
+- Convert each DataFrame to RAGAS EvaluationDataset
+- Run 4 RAGAS metrics per example:
+  - **Faithfulness**: Answer grounded in retrieved context
+  - **Answer Relevancy**: Answer addresses the question
+  - **Context Precision**: Relevant contexts ranked higher
+  - **Context Recall**: Ground truth coverage
+- Immediate persistence of evaluation datasets and detailed results
+- Output: 4 evaluation datasets + 4 detailed results files
 
-## Flow 4: RAG Query Execution (Multi-Strategy)
+**Step 5: Comparative Analysis** (lines 237-273)
+- Aggregate scores across all retrievers
+- Calculate average score per retriever
+- Sort by performance
+- Calculate improvement over baseline (naive)
+- Save comparative summary table
 
-### Description
-Executes a question-answering query through a LangGraph-orchestrated pipeline with pluggable retrieval strategies (naive, BM25, ensemble, Cohere rerank). Each strategy follows a retrieve → generate pattern with shared prompt and LLM.
+### Code References
 
-### Participants
-- **StateGraph** (LangGraph) - Workflow orchestration
-- **Retriever** (LangChain) - Document retrieval (4 strategies)
-- **Qdrant** - Vector database
-- **ChatOpenAI** - Answer generation
-- **Cohere API** - Reranking (cohere_rerank only)
-- **BM25Retriever** - Lexical search
-- **EnsembleRetriever** - Hybrid search
+- **Main Script**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/run_eval_harness.py`
+  - Command line args (lines 52-65): `--recreate` flag
+  - Configuration (lines 70-80): dataset names, k=5, output directory
+  - Data loading (lines 112-119): Uses `src.utils` functions
+  - RAG stack (lines 131-144): Uses `src.config`, `src.retrievers`, `src.graph`
+  - Inference loop (lines 156-183): Graph invocation pattern
+  - RAGAS evaluation (lines 200-230): Metrics configuration
+
+- **Utility Functions**: `/home/donbr/don-aie-cohort8/cert-challenge/src/utils.py`
+  - `load_documents_from_huggingface()` (lines 15-75)
+  - `load_golden_testset_from_huggingface()` (lines 78-113)
+
+- **Output Files** (in `deliverables/evaluation_evidence/`):
+  - `{retriever}_raw_dataset.parquet` - Raw inference outputs (6 columns)
+  - `{retriever}_evaluation_dataset.csv` - RAGAS format datasets
+  - `{retriever}_detailed_results.csv` - Per-question metric scores
+  - `comparative_ragas_results.csv` - Summary comparison table
+
+### Performance Characteristics
+
+- **Runtime**: 20-30 minutes for full evaluation
+- **Cost**: ~$5-6 in OpenAI API calls
+- **API Calls**:
+  - 48 inference calls (12 questions × 4 retrievers)
+  - RAGAS evaluation calls (metrics use LLM for scoring)
+  - Cohere rerank API calls (for cohere_rerank retriever)
+
+## 5. Data Ingestion Pipeline
 
 ### Sequence Diagram
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
 sequenceDiagram
-    autonumber
+    participant Script as ingest.py
+    participant FileSystem as data/raw/*.pdf
+    participant PyMuPDF as PyMuPDFLoader
+    participant Documents as List[Document]
+    participant Utils as Utility Functions
+    participant HFDatasets as HuggingFace Datasets
+    participant RAGAS as RAGAS TestsetGenerator
+    participant Filesystem as data/interim/
+    participant HFHub as HuggingFace Hub
 
-    participant U as 👤 User/Evaluator
-    participant GR as 🔄 LangGraph<br/>StateGraph
-    participant RT as 🔍 Retriever<br/>Node
-    participant QD as 📊 Qdrant<br/>Vector DB
-    participant CO as ⚡ Cohere API
-    participant GN as ✍️ Generate<br/>Node
-    participant LLM as 🤖 ChatOpenAI
-    participant ST as 📝 State Object
+    Note over Script: Step 1: Extract PDFs
+    Script->>FileSystem: DirectoryLoader(data/raw, glob="*.pdf")
+    FileSystem->>PyMuPDF: Load PDF files
+    PyMuPDF->>PyMuPDF: Extract text per page
+    PyMuPDF->>PyMuPDF: Extract metadata
+    PyMuPDF-->>Documents: List[Document]<br/>(page_content + metadata)
 
-    rect rgb(230, 247, 255)
-        Note over U,ST: Phase 1: Query Initialization
-        Note right of U: scripts/single_file.py:316-322
-        U->>+GR: invoke({"question":<br/>"What is GDELT?"})
-        GR->>+ST: Initialize State{<br/>question, context, response}
-        deactivate ST
-    end
+    Note over Script: Step 2: Persist Sources
+    Script->>Utils: ensure_jsonable(metadata)
+    Utils-->>Script: JSON-serializable metadata
 
-    rect rgb(255, 243, 224)
-        Note over GR,RT: Phase 2: Retrieval Strategy Selection
-        Note right of GR: src/graph.py:50-64
-        GR->>+RT: START → retrieve_[strategy]
-    end
+    Script->>Filesystem: Write sources.docs.jsonl
+    Script->>Filesystem: Write sources.docs.parquet
+    Script->>Filesystem: Write sources.hfds/ (HF dataset)
 
-    rect rgb(232, 245, 233)
-        Note over RT,CO: Phase 3: Document Retrieval (Strategy-Specific)
-        alt Strategy: Naive (Baseline)
-            Note right of RT: src/graph.py:20-23
-            RT->>+QD: similarity_search(question, k=5)
-            QD->>QD: Cosine similarity<br/>on embeddings[1536]
-            QD-->>-RT: List[Document] (top 5)
-        else Strategy: BM25
-            Note right of RT: src/graph.py:25-28
-            RT->>RT: BM25.invoke(question)
-            Note right of RT: Lexical matching:<br/>TF-IDF + IDF
-            RT-->>RT: List[Document] (top 5)
-        else Strategy: Ensemble
-            Note right of RT: src/graph.py:35-38
-            RT->>+QD: Naive retriever (weight=0.5)
-            QD-->>-RT: docs_dense[5]
-            RT->>RT: BM25 retriever (weight=0.5)
-            RT-->>RT: docs_sparse[5]
-            RT->>RT: Reciprocal Rank Fusion
-            Note right of RT: RRF score = Σ 1/(rank + 60)
-        else Strategy: Cohere Rerank
-            Note right of RT: src/graph.py:30-33
-            RT->>+QD: similarity_search(question, k=20)
-            QD-->>-RT: List[Document] (top 20)
-            RT->>+CO: rerank(query, documents,<br/>top_n=5)
-            CO->>CO: Cross-encoder<br/>relevance scoring
-            CO-->>-RT: Reranked List[Document]<br/>(top 5)
-        end
+    Note over Script: Step 3: Generate Golden Testset
+    Script->>RAGAS: TestsetGenerator.generate_with_langchain_docs(<br/>documents, testset_size=10)
 
-        RT->>+ST: Update state["context"]<br/>= retrieved_docs
-        deactivate ST
-        RT-->>-GR: Retrieved contexts
-        GR->>+GN: context → generate
-    end
+    RAGAS->>RAGAS: Chunk documents
+    RAGAS->>RAGAS: Build knowledge graph
+    RAGAS->>RAGAS: Generate diverse queries:<br/>- single_hop_specific<br/>- multi_hop_abstract
+    RAGAS->>RAGAS: Generate reference answers
+    RAGAS->>RAGAS: Extract reference contexts
 
-    rect rgb(252, 228, 236)
-        Note over GN,LLM: Phase 4: Answer Generation
-        Note right of GN: src/graph.py:41-46
-        GN->>GN: Join contexts:<br/>"\n\n".join(doc.page_content)
-        GN->>GN: Format prompt with<br/>question + context
-        Note right of GN: src/prompts.py:4-11<br/>(BASELINE_PROMPT)
+    RAGAS-->>Script: TestSet (10-12 examples)
 
-        GN->>+LLM: ChatOpenAI.invoke(messages)
-        LLM->>LLM: POST /v1/chat/completions
-        Note right of LLM: model="gpt-4.1-mini"<br/>temp=0
-        LLM-->>-GN: response.content
+    Note over Script: Step 4: Persist Golden Testset
+    Script->>Filesystem: Write golden_testset.jsonl
+    Script->>Filesystem: Write golden_testset.parquet
+    Script->>Filesystem: Write golden_testset.hfds/
 
-        GN->>+ST: Update state["response"]<br/>= answer
-        deactivate ST
-        GN-->>-GR: Generated response
-    end
+    Note over Script: Step 5: Generate Manifest
+    Script->>Script: Calculate SHA256 checksums
+    Script->>Script: Summarize schemas
+    Script->>Script: Capture environment versions
+    Script->>Filesystem: Write manifest.json
 
-    rect rgb(241, 248, 233)
-        Note over GR,U: Phase 5: Response Return
-        GR-->>-U: {"context": docs,<br/>"response": str}
-    end
+    Note over Script: Step 6: Upload to HuggingFace (upload_to_hf.py)
+    Script->>Filesystem: Load sources.hfds/
+    Script->>Filesystem: Load golden_testset.hfds/
+
+    Script->>HFHub: push_to_hub("dwb2023/gdelt-rag-sources")
+    Script->>HFHub: push_to_hub("dwb2023/gdelt-rag-golden-testset")
+    Script->>HFHub: Upload dataset cards (README.md)
+
+    Script->>Filesystem: Update manifest.json with repo IDs
 ```
 
-### Key Steps
+### Explanation
 
-1. **Graph Initialization** (`src/graph.py:50-64`)
-   - Create `StateGraph(State)` with typed state: `{question: str, context: List[Document], response: str}`
-   - Add sequence: `[retrieve_[strategy], generate]`
-   - Add edge: `START → retrieve_[strategy]`
-   - Compile graph
-2. **Retrieval Strategy Dispatch** (Based on graph selection)
-   - **Naive** (`src/graph.py:20-23`): `baseline_retriever.invoke(question)` → Qdrant cosine similarity
-   - **BM25** (`src/graph.py:25-28`): `bm25_retriever.invoke(question)` → Lexical TF-IDF scoring
-   - **Ensemble** (`src/graph.py:35-38`): `ensemble_retriever.invoke(question)` → RRF(dense, sparse)
-   - **Cohere Rerank** (`src/graph.py:30-33`): `compression_retriever.invoke(question)` → 20 docs → Cohere rerank → top 5
-3. **Context Aggregation** (`src/graph.py:43`)
-   - `"\n\n".join(doc.page_content for doc in state["context"])`
-4. **Prompt Formatting** (`src/graph.py:44`)
-   - Template: `src/prompts.py:4-11` (BASELINE_PROMPT)
-   - Variables: `{question}`, `{context}`
-5. **LLM Generation** (`src/graph.py:45`)
-   - `ChatOpenAI(model="gpt-4.1-mini", temperature=0).invoke(messages)`
-6. **Response Return** (`src/graph.py:46`)
-   - State updated: `{"response": response.content}`
+The data ingestion pipeline transforms raw PDF files into vector-searchable documents:
 
-### Data Transformations
+**Step 1: PDF Extraction** (`ingest.py` lines 154-162)
+- `DirectoryLoader` scans `data/raw/` for PDF files
+- `PyMuPDFLoader` extracts text and metadata per page
+- Creates LangChain `Document` objects with:
+  - `page_content`: Extracted text
+  - `metadata`: PDF metadata (title, author, page number, etc.)
 
-```
-User Question (str)
-    ↓ [Retrieval Strategy]
-    ├─ Naive: Vector similarity → top 5 docs
-    ├─ BM25: Lexical matching → top 5 docs
-    ├─ Ensemble: RRF(dense, sparse) → top 5 docs
-    └─ Cohere Rerank: Vector → 20 docs → Cross-encoder → top 5 docs
-    ↓ [Context Aggregation]
-Concatenated Context (str)
-    ↓ [Prompt Template]
-Formatted Messages (ChatPromptTemplate)
-    ↓ [ChatOpenAI]
-Generated Answer (str)
-    ↓ [State Return]
-State{question: str, context: List[Document], response: str}
-```
+**Step 2: Source Persistence** (`ingest.py` lines 166-174)
+- Sanitize metadata to JSON-serializable format
+- Write to 3 formats:
+  - **JSONL**: Line-delimited JSON for streaming
+  - **Parquet**: Columnar format for analytics
+  - **HuggingFace Dataset**: Native HF format for fast loading
 
-**Key Transformation**: Question → Retrieved Documents → Contextual Answer
+**Step 3: Golden Testset Generation** (`ingest.py` lines 202-232)
+- RAGAS `TestsetGenerator` creates synthetic test data
+- Algorithm:
+  1. Chunk documents into smaller units
+  2. Build knowledge graph of entities and relationships
+  3. Generate diverse query types (single-hop, multi-hop)
+  4. Generate reference answers using LLM
+  5. Extract reference contexts from source documents
+- Output: 10-12 QA pairs with ground truth
 
----
+**Step 4: Testset Persistence** (`ingest.py` lines 236-258)
+- Write golden testset to 3 formats (JSONL, Parquet, HF Dataset)
+- Ensures compatibility with different consumption patterns
 
-## Flow 5: RAGAS Evaluation (Comparative Analysis)
+**Step 5: Manifest Generation** (`ingest.py` lines 262-330)
+- Calculate SHA256 checksums for data integrity
+- Capture environment versions (Python, LangChain, RAGAS, etc.)
+- Document schemas and sample data
+- Enables reproducibility and provenance tracking
 
-### Description
-Runs all test questions through all retrieval strategies, then evaluates each using RAGAS metrics (Faithfulness, Answer Relevancy, Context Precision, Context Recall). Generates comparative summary table with improvement calculations.
+**Step 6: HuggingFace Upload** (`upload_to_hf.py`)
+- Authenticate with HF token
+- Push datasets to HuggingFace Hub:
+  - `dwb2023/gdelt-rag-sources` (38 documents)
+  - `dwb2023/gdelt-rag-golden-testset` (12 examples)
+- Generate dataset cards with metadata
+- Update manifest with repo IDs and upload timestamp
 
-### Participants
-- **load_dataset** (HuggingFace) - Golden testset loader
-- **StateGraph** (LangGraph) - RAG execution
-- **EvaluationDataset** (RAGAS) - Evaluation data structure
-- **evaluate** (RAGAS) - Metrics computation
-- **Qdrant** - Vector storage
-- **ChatOpenAI** - LLM for evaluation
-- **Pandas** - Results aggregation
+### Code References
 
-### Sequence Diagram
+- **Ingestion Script**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/ingest.py`
+  - PDF extraction (lines 154-162)
+  - Metadata sanitization (lines 92-104)
+  - Source persistence (lines 166-174)
+  - RAGAS generation (lines 202-232)
+  - Manifest creation (lines 262-330)
+
+- **Upload Script**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/upload_to_hf.py`
+  - Dataset card creation (lines 34-111, 113-191)
+  - HF Hub upload (lines 219-289)
+  - Manifest update (lines 200-216)
+
+- **Data Flow**:
+  ```
+  data/raw/*.pdf
+    → PyMuPDFLoader
+    → List[Document]
+    → data/interim/sources.*
+    → RAGAS TestsetGenerator
+    → data/interim/golden_testset.*
+    → HuggingFace Hub
+    → dwb2023/gdelt-rag-sources
+    → dwb2023/gdelt-rag-golden-testset
+  ```
+
+### Output Artifacts
+
+1. **Source Documents**:
+   - `data/interim/sources.docs.jsonl` - 38 documents
+   - `data/interim/sources.docs.parquet`
+   - `data/interim/sources.hfds/`
+
+2. **Golden Testset**:
+   - `data/interim/golden_testset.jsonl` - 12 examples
+   - `data/interim/golden_testset.parquet`
+   - `data/interim/golden_testset.hfds/`
+
+3. **Manifest**:
+   - `data/interim/manifest.json` - Provenance metadata
+
+4. **HuggingFace Datasets**:
+   - https://huggingface.co/datasets/dwb2023/gdelt-rag-sources
+   - https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset
+
+## Error Handling Flows
+
+### Retriever Error Handling
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
 sequenceDiagram
-    autonumber
+    participant Node as retrieve() Node
+    participant Retriever
+    participant VectorStore as Qdrant/BM25
 
-    participant SC as 📄 single_file.py
-    participant HF as 🤗 HuggingFace<br/>Hub
-    participant QD as 📊 Qdrant<br/>Client
-    participant GR as 🔄 LangGraph
-    participant RG as 📈 RAGAS<br/>Evaluator
-    participant LLM as 🤖 ChatOpenAI<br/>(Evaluator)
-    participant FS as 💾 File System
+    Node->>Retriever: invoke(query)
 
-    rect rgb(230, 247, 255)
-        Note over SC,HF: Phase 1: Dataset Loading
-        Note right of SC: scripts/single_file.py:148-154
-        SC->>+HF: load_dataset(<br/>"dwb2023/gdelt-rag-golden-testset")
-        HF-->>-SC: golden_df<br/>(12 QA pairs)
-
-        SC->>+HF: load_dataset(<br/>"dwb2023/gdelt-rag-sources")
-        HF-->>-SC: sources_dataset<br/>(38 documents)
-    end
-
-    rect rgb(255, 243, 224)
-        Note over SC: Phase 2: Document Conversion
-        Note right of SC: scripts/single_file.py:161-173
-        SC->>SC: Convert HF items to<br/>LangChain Documents
-        loop 38 documents
-            SC->>SC: Document(page_content,<br/>metadata)
-        end
-    end
-
-    rect rgb(232, 245, 233)
-        Note over SC,QD: Phase 3: Vector Store Setup
-        Note right of SC: scripts/single_file.py:177-208
-        SC->>+QD: QdrantClient(host="localhost",<br/>port=6333)
-        SC->>QD: create_collection(<br/>"gdelt_comparative_eval")
-        Note right of QD: VectorParams(size=1536,<br/>distance=COSINE)
-        SC->>QD: vector_store.add_documents(<br/>documents)
-        QD->>QD: Embed and index<br/>38 documents
-        deactivate QD
-    end
-
-    rect rgb(252, 228, 236)
-        Note over SC,GR: Phase 4: Retriever & Graph Creation
-        Note right of SC: scripts/single_file.py:212-236
-        SC->>SC: Create 4 retrievers<br/>(naive, BM25, ensemble,<br/>cohere_rerank)
-        SC->>+GR: Create 4 LangGraphs<br/>(baseline_graph, bm25_graph, etc.)
-        deactivate GR
-    end
-
-    rect rgb(255, 245, 230)
-        Note over SC,GR: Phase 5: RAG Execution (4×12=48 queries)
-        Note right of SC: scripts/single_file.py:324-348
-        loop 4 retrievers
-            loop 12 questions
-                SC->>+GR: graph.invoke({"question": question})
-                GR->>GR: retrieve → generate<br/>(Flow 4)
-                GR-->>-SC: {"response": str,<br/>"context": List[Document]}
-                SC->>SC: Store response +<br/>retrieved_contexts
-            end
-            SC->>SC: datasets[retriever_name]<br/>= DataFrame
-        end
-    end
-
-    rect rgb(241, 248, 233)
-        Note over SC: Phase 6: Schema Validation
-        Note right of SC: scripts/single_file.py:351-359
-        loop 4 retrievers
-            SC->>SC: validate_and_normalize_ragas_schema()
-            Note right of SC: Rename:<br/>question→user_input<br/>answer→response
-            SC->>SC: EvaluationDataset.from_pandas(<br/>validated_df)
-        end
-    end
-
-    rect rgb(230, 240, 255)
-        Note over SC,RG: Phase 7: RAGAS Evaluation (4 retrievers × 4 metrics)
-        Note right of SC: scripts/single_file.py:362-402
-        loop 4 retrievers
-            SC->>+RG: evaluate(dataset, metrics,<br/>llm, run_config)
-
-            loop 4 metrics × 12 questions
-                alt Faithfulness
-                    RG->>+LLM: Extract claims from answer
-                    RG->>LLM: Verify claims against context
-                    LLM-->>-RG: faithfulness_score
-                else Answer Relevancy
-                    RG->>+LLM: Generate questions from answer
-                    RG->>LLM: Compare to original question
-                    LLM-->>-RG: answer_relevancy_score
-                else Context Precision
-                    RG->>+LLM: Check if context supports reference
-                    RG->>RG: Rank-weighted scoring
-                    LLM-->>-RG: context_precision_score
-                else Context Recall
-                    RG->>+LLM: Check reference coverage in context
-                    LLM-->>-RG: context_recall_score
-                end
-            end
-
-            RG-->>-SC: evaluation_result<br/>(DataFrame with metrics)
-            SC->>+FS: Save {retriever}_evaluation_dataset.csv
-            SC->>FS: Save {retriever}_detailed_results.csv
-            deactivate FS
-        end
-    end
-
-    rect rgb(240, 255, 240)
-        Note over SC,FS: Phase 8: Comparative Analysis
-        Note right of SC: scripts/single_file.py:405-441
-        SC->>SC: Aggregate results into<br/>comparison_df
-        loop 4 retrievers
-            SC->>SC: Calculate mean for<br/>each metric
-            SC->>SC: Calculate average<br/>across metrics
-        end
-        SC->>SC: Sort by average (descending)
-        SC->>+FS: Save comparative_ragas_results.csv
-        deactivate FS
-    end
-
-    rect rgb(255, 250, 205)
-        Note over SC: Phase 9: Improvement Calculation
-        Note right of SC: scripts/single_file.py:458-466
-        SC->>SC: Calculate improvement<br/>over baseline
-        loop Non-baseline retrievers (3x)
-            SC->>SC: improvement =<br/>(score - baseline) / baseline * 100
-            SC->>SC: Print improvement<br/>percentage
-        end
-    end
-
-    rect rgb(241, 248, 233)
-        Note over SC,FS: Phase 10: Manifest Generation
-        Note right of SC: scripts/single_file.py:499-507
-        SC->>SC: generate_run_manifest()
-        SC->>+FS: Save RUN_MANIFEST.json
-        Note right of FS: Contains:<br/>- Models<br/>- Retrievers<br/>- Metrics<br/>- Results
-        deactivate FS
+    alt Success Path
+        Retriever->>VectorStore: fetch documents
+        VectorStore-->>Retriever: List[Document]
+        Retriever-->>Node: List[Document]
+    else Qdrant Connection Error
+        Retriever->>VectorStore: fetch documents
+        VectorStore-->>Retriever: ConnectionError
+        Retriever-->>Node: Exception propagates
+        Note over Node: LangGraph bubbles exception to caller
+    else Cohere API Error
+        Retriever->>VectorStore: CohereRerank API call
+        VectorStore-->>Retriever: APIError (rate limit, timeout)
+        Retriever-->>Node: Exception propagates
+    else Empty Results
+        Retriever->>VectorStore: fetch documents
+        VectorStore-->>Retriever: []
+        Retriever-->>Node: [] (empty list)
+        Note over Node: Empty context passed to generate node
     end
 ```
 
-### Key Steps
+**Error Handling Strategy**:
+- **No try-catch in node functions** - Exceptions propagate to caller
+- **LangChain handles retries** - Configured with max_retries
+- **Empty results are valid** - System continues with empty context
+- **Caller responsible for error handling** - Scripts wrap in try-except
 
-1. **Dataset Loading** (`scripts/single_file.py:148-174`)
-   - Load `dwb2023/gdelt-rag-golden-testset` → 12 QA pairs
-   - Load `dwb2023/gdelt-rag-sources` → 38 documents
-   - Convert HF format → LangChain Documents
-2. **Vector Store Setup** (`scripts/single_file.py:177-208`)
-   - Create/recreate Qdrant collection `gdelt_comparative_eval`
-   - Embed and index all 38 documents
-3. **Retriever Initialization** (`scripts/single_file.py:212-312`)
-   - Baseline: Dense vector search (k=5)
-   - BM25: `BM25Retriever.from_documents(documents, k=5)`
-   - Ensemble: `EnsembleRetriever([baseline, bm25], weights=[0.5, 0.5])`
-   - Cohere Rerank: `ContextualCompressionRetriever(CohereRerank, base_retriever_20)`
-4. **RAG Execution Loop** (`scripts/single_file.py:324-348`)
-   - For each retriever (4):
-     - For each question (12):
-       - Execute graph: `graph.invoke({"question": question})`
-       - Store response and retrieved contexts
-     - Build DataFrame with RAGAS schema
-5. **Schema Validation** (`scripts/single_file.py:66-125`, `351-359`)
-   - `validate_and_normalize_ragas_schema()`:
-     - Rename `question` → `user_input`
-     - Rename `answer` → `response`
-     - Rename `contexts` → `retrieved_contexts`
-     - Validate required columns: `{user_input, response, retrieved_contexts, reference}`
-6. **RAGAS Evaluation** (`scripts/single_file.py:362-402`)
-   - For each retriever (4):
-     - Create `EvaluationDataset.from_pandas()`
-     - Call `evaluate(dataset, metrics=[Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall])`
-     - Metrics use evaluator LLM to judge:
-       - **Faithfulness**: Claims extracted from answer verified against context
-       - **Answer Relevancy**: Questions generated from answer compared to original
-       - **Context Precision**: Context relevance to reference, rank-weighted
-       - **Context Recall**: Reference sentence coverage in retrieved context
-     - Save results immediately: `{retriever}_evaluation_dataset.csv`, `{retriever}_detailed_results.csv`
-7. **Comparative Analysis** (`scripts/single_file.py:405-441`)
-   - Calculate mean for each metric per retriever
-   - Calculate average across 4 metrics
-   - Sort by average score (descending)
-   - Save `comparative_ragas_results.csv`
-8. **Improvement Calculation** (`scripts/single_file.py:458-466`)
-   - Extract baseline (naive) average score
-   - For each non-baseline retriever: `improvement = (score - baseline) / baseline * 100`
-9. **Manifest Generation** (`scripts/single_file.py:499-507`)
-   - Call `generate_run_manifest(output_path, evaluation_results, retrievers_config)`
-   - Write `RUN_MANIFEST.json` with full reproducibility metadata
-
-### Data Transformations
-
-```
-Golden Testset (12 QA pairs)
-    ↓ [Loop: 4 retrievers × 12 questions]
-RAG Outputs (48 question-answer pairs)
-    {
-      user_input: str,
-      response: str (generated),
-      retrieved_contexts: List[str] (5 docs),
-      reference: str (ground truth)
-    }
-    ↓ [RAGAS evaluate]
-Per-Question Metrics (48 rows × 4 metrics)
-    {
-      faithfulness: float,
-      answer_relevancy: float,
-      context_precision: float,
-      context_recall: float
-    }
-    ↓ [Aggregation: mean per retriever]
-Comparative Summary (4 rows)
-    {
-      Retriever: str,
-      Faithfulness: float (mean),
-      Answer Relevancy: float (mean),
-      Context Precision: float (mean),
-      Context Recall: float (mean),
-      Average: float
-    }
-    ↓ [Sort by Average]
-Ranked Retriever Performance
-    1. Cohere Rerank: 96.47%
-    2. Ensemble: 93.96%
-    3. BM25: 94.14%
-    4. Naive: 91.60%
-```
-
-**Key Transformation**: QA pairs → RAG outputs → RAGAS metrics → Comparative rankings
-
----
-
-## Flow Comparison
-
-### End-to-End Pipeline Overview
+### LLM Generation Error Handling
 
 ```mermaid
-graph TD
-    A["📕 Flow 1:<br/>Ingest PDFs"] --> B["💾 data/interim/<br/>sources.*"]
-    B --> C["🧪 Flow 2:<br/>Generate Golden Testset"]
-    C --> D["💾 data/interim/<br/>golden_testset.*"]
-    B --> E["🤗 Flow 3:<br/>Publish to HF Hub"]
-    D --> E
-    E --> F["☁️ HuggingFace<br/>Datasets"]
-    F --> G["🔍 Flow 4:<br/>RAG Query Execution"]
-    F --> H["📈 Flow 5:<br/>RAGAS Evaluation"]
-    H --> I["📊 Comparative<br/>Results CSV"]
-    I --> J["🚀 Production<br/>Deployment Decision"]
+sequenceDiagram
+    participant Node as generate() Node
+    participant LLM as ChatOpenAI
+    participant OpenAIAPI as OpenAI API
 
-    %% High contrast WCAG AA compliant colors
-    style A fill:#0277BD,stroke:#01579B,stroke-width:3px,color:#FFFFFF
-    style C fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
-    style E fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    style G fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    style H fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-    style J fill:#C62828,stroke:#B71C1C,stroke-width:3px,color:#FFFFFF
-    style B fill:#E3F2FD,stroke:#0277BD,stroke-width:2px,color:#000000
-    style D fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#000000
-    style F fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#000000
-    style I fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#000000
+    Node->>Node: Format prompt with context
+    Node->>LLM: invoke(messages)
+
+    alt Success Path
+        LLM->>OpenAIAPI: API call
+        OpenAIAPI-->>LLM: response
+        LLM-->>Node: response.content
+    else Rate Limit Error
+        LLM->>OpenAIAPI: API call
+        OpenAIAPI-->>LLM: 429 Rate Limit
+        LLM->>LLM: Exponential backoff retry<br/>(max_retries=6)
+        LLM->>OpenAIAPI: Retry API call
+        OpenAIAPI-->>LLM: response
+        LLM-->>Node: response.content
+    else Timeout Error
+        LLM->>OpenAIAPI: API call (timeout=60s)
+        OpenAIAPI-->>LLM: Timeout
+        LLM-->>Node: Exception propagates
+    else Empty Context
+        Note over Node: context = []
+        Node->>Node: Prompt with empty context
+        Node->>LLM: invoke(messages)
+        LLM-->>Node: response (may hallucinate)
+    end
 ```
 
-### Flow Characteristics Table
+**Error Handling Configuration**:
+- **Timeouts**: 60 seconds for LLM calls (ingest.py line 223)
+- **Retries**: 6 max retries with exponential backoff (ingest.py line 223)
+- **RAGAS timeout**: 360 seconds for evaluation metrics (run_eval_harness.py line 197)
 
-| Flow | Trigger | Duration | External APIs | Idempotent | Caching |
-|------|---------|----------|---------------|------------|---------|
-| **1. Ingestion** | Manual script | ~30s | None | Yes (overwrites) | File checksums |
-| **2. Testset Gen** | Manual script | ~5-10 min | OpenAI (embeddings, chat) | No (LLM non-deterministic) | None |
-| **3. HF Publish** | Manual script | ~10s | HuggingFace Hub | Yes (versioned) | Git-based versioning |
-| **4. RAG Query** | User request | ~2-5s | OpenAI (chat), Cohere (rerank) | No (LLM non-deterministic) | Vector DB indexes |
-| **5. RAGAS Eval** | Manual script | ~20-30 min | OpenAI (evaluator LLM) | No (LLM non-deterministic) | Immediate CSV saves |
+### Evaluation Harness Error Handling
 
-### Critical Path Analysis
+The evaluation harness implements immediate persistence to prevent data loss:
 
+**Pattern** (`run_eval_harness.py` lines 177-180, 207-209, 227-229):
+```python
+# Save immediately after each retriever completes
+for name, graph in graphs.items():
+    # Run inference
+    for idx, row in df.iterrows():
+        result = graph.invoke({"question": q})
+        df.at[idx, "response"] = result["response"]
+
+    # SAVE IMMEDIATELY - don't wait until end
+    raw_file = OUT_DIR / f"{name}_raw_dataset.parquet"
+    df.to_parquet(raw_file, index=False)
 ```
-Ingestion → Testset Gen → HF Publish → RAGAS Eval
-   ↓           ↓             ↓            ↓
-  30s       5-10min        10s        20-30min
 
-Total cold-start time: ~25-40 minutes
-```
+**Benefits**:
+- If script crashes mid-evaluation, partial results are saved
+- No need to re-run expensive LLM calls
+- Can resume from last saved retriever
 
-**Bottlenecks**:
-1. **RAGAS Testset Generation** (Flow 2): 5-10 minutes
-   - LLM calls for question/answer synthesis
-   - Embedding API calls for semantic graph
-   - Rate limits and retry logic
-2. **RAGAS Evaluation** (Flow 5): 20-30 minutes
-   - 4 retrievers × 12 questions × 4 metrics = 192 LLM evaluation calls
-   - Each metric requires multiple LLM invocations (e.g., claim extraction, verification)
+## State Management
 
----
-
-## Error Handling
-
-### Flow 1: Ingestion
-- **Missing PDFs**: `DirectoryLoader` returns empty list → Script continues with warning
-- **Malformed metadata**: `ensure_jsonable()` converts all non-primitives to `str` → No crash
-- **Disk full**: Write operations fail → Exception raised, no partial writes
-
-### Flow 2: Testset Generation
-- **OpenAI rate limits**: `@retry` decorator with exponential backoff (max 3 attempts)
-  - `scripts/single_file.py:196-202`
-  - Retry on: `RateLimitError`, `APITimeoutError`, `APIStatusError`, `APIConnectionError`
-  - Wait: `2^attempt` seconds (min=1s, max=20s)
-- **RAGAS API version mismatch**: Automatic fallback from 0.3.x to 0.2.x
-  - `scripts/ingest.py:186-192`
-- **Insufficient documents**: RAGAS requires minimum document count → Early validation needed
-
-### Flow 3: HF Publish
-- **Missing HF_TOKEN**: Raises `ValueError("HF_TOKEN environment variable not set")`
-  - `scripts/upload_to_hf.py:222-224`
-- **Repository already exists**: `push_to_hub()` overwrites (versioned by HF)
-- **Network failure**: HuggingFace SDK retries with exponential backoff (built-in)
-
-### Flow 4: RAG Query
-- **Empty retrieval results**: LLM generates "No relevant context found" response
-- **Cohere API key missing**: `CohereRerank` raises authentication error → Skip rerank retriever
-- **Qdrant connection failure**: Raises connection error → User must start Qdrant service
-  - Expected at `localhost:6333`
-- **LLM timeout**: OpenAI client retries (max_retries=6 in evaluator LLM)
-
-### Flow 5: RAGAS Evaluation
-- **Schema mismatch**: `validate_and_normalize_ragas_schema()` catches missing columns
-  - `scripts/single_file.py:66-125`
-  - Raises `ValueError` with expected vs actual columns
-- **Evaluation timeout**: `RunConfig(timeout=360)` prevents indefinite hangs
-  - `scripts/single_file.py:369`
-- **Partial failure recovery**: Saves results immediately after each retriever
-  - `scripts/single_file.py:391-399`
-  - Even if comparison table fails, individual results preserved
-- **LLM evaluation failures**: RAGAS sets metric to `NaN` → Mean calculation excludes
-
----
-
-## Performance Considerations
-
-### Bottlenecks
-
-1. **Embedding API Calls** (Flow 2, Flow 5)
-   - **Volume**: 38 documents × chunks = ~100-200 embedding calls
-   - **Latency**: ~50-200ms per call
-   - **Cost**: $0.00002 per 1K tokens (text-embedding-3-small)
-   - **Mitigation**: Batch embedding requests (LangChain does this automatically)
-
-2. **RAGAS Evaluation LLM Calls** (Flow 5)
-   - **Volume**: 4 retrievers × 12 questions × 4 metrics × ~5 LLM calls per metric = ~960 calls
-   - **Latency**: ~500-2000ms per call
-   - **Cost**: $0.00015/$0.0006 per 1K tokens (gpt-4.1-mini input/output)
-   - **Mitigation**:
-     - RunConfig `max_workers=4` for parallelization
-     - Immediate CSV saves for fault tolerance
-
-3. **Cohere Reranking** (Flow 4)
-   - **Volume**: 1 call per query (20 docs → 5 docs)
-   - **Latency**: ~200-500ms
-   - **Cost**: $2 per 1K requests
-   - **Mitigation**: Only used for cohere_rerank retriever (optional)
-
-4. **Qdrant Vector Search** (Flow 4)
-   - **Volume**: 1-2 calls per query (depending on retriever)
-   - **Latency**: ~10-50ms (local), ~100-300ms (cloud)
-   - **Mitigation**: In-memory mode for testing, persistent for production
-
-### Async Operations
-
-**Current Implementation**: All flows are **synchronous**
-- `scripts/single_file.py` uses blocking loops: `for idx, row in datasets[retriever_name].iterrows()`
-- `evaluate()` RAGAS call is synchronous (internally uses async)
-
-**Potential Optimizations**:
-1. **Parallel retriever evaluation** (Flow 5)
-   ```python
-   # Current: Sequential 4 retrievers × 12 questions = 48 sequential executions
-   # Optimized: asyncio.gather() for parallel execution
-   import asyncio
-   results = await asyncio.gather(*[
-       graph.ainvoke({"question": q}) for q in questions
-   ])
-   ```
-   - **Expected speedup**: 4x (if no rate limits)
-
-2. **Batch embedding** (Flow 2)
-   - Already optimized by LangChain `OpenAIEmbeddings.embed_documents()`
-
-3. **RAGAS parallel metrics** (Flow 5)
-   - Already optimized by RAGAS `RunConfig(max_workers=4)`
-
-### API Rate Limits
-
-| Service | Rate Limit | Mitigation |
-|---------|------------|------------|
-| **OpenAI Embeddings** | 3,000 RPM (free tier) | Batch requests, exponential backoff |
-| **OpenAI Chat** | 3,500 RPM (free tier) | `@retry` decorator, `max_retries=6` |
-| **Cohere Rerank** | 10,000 requests/month (trial) | Used sparingly (1 retriever only) |
-| **HuggingFace Hub** | 500 requests/hour (uploads) | Single upload per dataset |
-
-### Caching Strategies
-
-1. **Vector Store Persistence** (Flow 4)
-   - Qdrant collection persists across sessions (Docker volume or local path)
-   - Avoids re-embedding documents on restart
-   - File: `docker-compose.yml` (inferred from Qdrant usage)
-
-2. **HuggingFace Dataset Caching** (Flow 5)
-   - `load_dataset()` caches to `~/.cache/huggingface/datasets/`
-   - Subsequent loads read from cache (no network)
-
-3. **Manifest Checksums** (Flow 1)
-   - SHA256 hashes detect data changes
-   - Enables conditional re-ingestion
-
-4. **No LLM Response Caching** (All flows)
-   - RAG answers not cached (dynamic retrieval)
-   - RAGAS evaluations not cached (re-run for reproducibility)
-
----
-
-## Data Flow Dependencies
-
-### Dependency Graph
+### LangGraph State Management
 
 ```mermaid
 graph LR
-    A["📁 PDF Files"] -->|"Flow 1<br/>Ingest"| B["💾 sources.docs.*"]
-    B -->|"Flow 2<br/>Generate"| C["🧪 golden_testset.*"]
-    B -->|"Flow 3<br/>Publish"| D["☁️ HF:<br/>gdelt-rag-sources"]
-    C -->|"Flow 3<br/>Publish"| E["☁️ HF:<br/>gdelt-rag-golden-testset"]
-    D -->|"Flow 5<br/>Evaluate"| F["📈 RAG<br/>Evaluation"]
-    E -->|"Flow 5<br/>Evaluate"| F
-    F --> G["📊 comparative_ragas<br/>_results.csv"]
-    D -->|"Flow 4<br/>Query"| H["🚀 Production<br/>RAG"]
+    A[Initial State<br/>{question: str}] --> B[After retrieve()<br/>{question: str,<br/>context: List[Document]}]
+    B --> C[After generate()<br/>{question: str,<br/>context: List[Document],<br/>response: str}]
 
-    %% High contrast WCAG AA compliant colors
-    style A fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-    style B fill:#0277BD,stroke:#01579B,stroke-width:3px,color:#FFFFFF
-    style C fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
-    style D fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    style E fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    style F fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-    style G fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    style H fill:#C62828,stroke:#B71C1C,stroke-width:3px,color:#FFFFFF
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
 ```
 
-### Critical Dependencies
+**Key Principles**:
 
-1. **PDF Files** (external input)
-   - **Location**: `data/raw/*.pdf`
-   - **Required for**: Flow 1 (Ingestion)
-   - **Failure impact**: Cannot build datasets
+1. **TypedDict State Schema** (`src/state.py`):
+   ```python
+   class State(TypedDict):
+       question: str
+       context: List[Document]
+       response: str
+   ```
+   - Provides type hints for IDE support
+   - Documents expected state shape
+   - No runtime validation (Python TypedDict limitation)
 
-2. **OpenAI API Key** (external service)
-   - **Required for**: Flow 2 (Testset Gen), Flow 4 (RAG Query), Flow 5 (Evaluation)
-   - **Failure impact**: Complete pipeline failure
+2. **Partial Updates**:
+   - Nodes return `dict` (subset of State), not full State
+   - LangGraph merges updates: `state.update(node_output)`
+   - Nodes don't need to return unchanged fields
 
-3. **Qdrant Service** (external service)
-   - **Required for**: Flow 4 (RAG Query), Flow 5 (Evaluation)
-   - **Startup**: `docker-compose up -d qdrant` (inferred)
-   - **Failure impact**: Cannot execute RAG queries
+3. **Immutability**:
+   - Each node receives current state (read-only)
+   - Returns new dict with updates
+   - LangGraph handles state mutation internally
 
-4. **HuggingFace Token** (external service)
-   - **Required for**: Flow 3 (HF Publish)
-   - **Failure impact**: Cannot publish datasets (optional for local eval)
+4. **No Side Effects**:
+   - Node functions are pure: `(State) -> dict`
+   - No global variables or shared state
+   - Enables parallel execution (not used in this implementation)
 
-5. **Cohere API Key** (external service, optional)
-   - **Required for**: Flow 4 (Cohere Rerank retriever only)
-   - **Failure impact**: Skip 1 of 4 retrievers
+### Configuration Caching
 
-### Data Lineage Tracking
+```python
+# src/config.py - LRU cache pattern
+@lru_cache(maxsize=1)
+def get_llm():
+    return ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
-**Manifest Files**:
-1. **data/interim/manifest.json** (Flow 1, Flow 2)
-   - Checksums: SHA256 for all files
-   - Schema: Column names and sample data
-   - Metrics: Document counts, character stats
-   - Lineage: HF dataset repo IDs (after Flow 3)
+@lru_cache(maxsize=1)
+def get_embeddings():
+    return OpenAIEmbeddings(model=OPENAI_EMBED_MODEL)
 
-2. **RUN_MANIFEST.json** (Flow 5)
-   - Model versions: `gpt-4.1-mini`, `text-embedding-3-small`
-   - Retriever configs: k values, weights, rerank models
-   - Evaluation settings: Metrics, timeout, dataset sizes
-   - Results summary: Mean scores per retriever
+@lru_cache(maxsize=1)
+def get_qdrant():
+    return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+```
 
-**Reproducibility Protocol**:
-1. Pin exact versions in `pyproject.toml`
-2. Record git commit SHA in manifest
-3. Use `temperature=0` for LLMs (deterministic)
-4. Version datasets on HuggingFace (Git-backed)
-5. Save all intermediate artifacts with checksums
+**Benefits**:
+- Single instance of expensive resources (LLM, embeddings, DB client)
+- Safe for multi-graph execution (all graphs share same instances)
+- No threading issues (LangChain clients are thread-safe)
 
----
+### Factory Pattern State Management
+
+**Problem**: Retrievers need documents and vector store at creation time
+
+**Solution**: Factory functions delay creation until runtime
+
+```python
+# WRONG - fails at import time
+# src/retrievers.py (if written incorrectly)
+documents = load_documents_from_huggingface()  # No docs exist yet!
+naive_retriever = vector_store.as_retriever()  # No vector_store exists!
+
+# CORRECT - factory pattern
+# src/retrievers.py (actual implementation)
+def create_retrievers(documents, vector_store, k=5):
+    naive_retriever = vector_store.as_retriever(search_kwargs={"k": k})
+    bm25_retriever = BM25Retriever.from_documents(documents, k=k)
+    # ...
+    return {"naive": naive_retriever, "bm25": bm25_retriever, ...}
+```
+
+**Usage Pattern**:
+```python
+# 1. Load data
+documents = load_documents_from_huggingface()
+
+# 2. Create vector store
+vector_store = create_vector_store(documents)
+
+# 3. Create retrievers (NOW we have docs + vector_store)
+retrievers = create_retrievers(documents, vector_store)
+
+# 4. Create graphs (NOW we have retrievers)
+graphs = build_all_graphs(retrievers)
+```
+
+**Code References**:
+- Factory validation: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/validate_langgraph.py` (lines 181-221)
+- Correct usage: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/run_eval_harness.py` (lines 112-144)
+
+## Performance Considerations
+
+### 1. Vector Store Optimization
+
+**Collection Reuse** (`src/config.py` lines 101-125):
+```python
+def create_vector_store(documents, recreate_collection=False):
+    if collection_exists and recreate_collection:
+        client.delete_collection(collection)
+
+    if collection_not_exists:
+        client.create_collection(...)
+        vector_store.add_documents(documents)  # Expensive!
+
+    return vector_store
+```
+
+**Performance Impact**:
+- **First run** (recreate=True): ~30 seconds to embed 38 documents
+- **Subsequent runs** (recreate=False): <1 second to connect
+- **Embedding cost**: 38 documents × 1536 dimensions = ~$0.01
+
+**Usage**:
+```bash
+# First time or data changed
+python scripts/run_eval_harness.py --recreate true
+
+# Reuse existing embeddings
+python scripts/run_eval_harness.py --recreate false
+```
+
+### 2. Retriever Performance Characteristics
+
+| Retriever | Latency (avg) | Cost per Query | Bottleneck |
+|-----------|---------------|----------------|------------|
+| **Naive** | ~50ms | Embedding API call | OpenAI API |
+| **BM25** | ~5ms | None (in-memory) | CPU (scoring) |
+| **Ensemble** | ~55ms | Embedding API call | OpenAI API |
+| **Cohere Rerank** | ~200ms | Embedding + Rerank API | Cohere API (20 docs) |
+
+**Optimization Opportunities**:
+- **Batch embedding**: Embed queries in batches (not implemented)
+- **Cache embeddings**: Cache query embeddings (not implemented)
+- **Async retrieval**: Parallelize retriever calls (not implemented)
+
+### 3. Evaluation Performance
+
+**Bottleneck Analysis** (run_eval_harness.py):
+```
+Total runtime: 20-30 minutes
+├── Data loading: ~10 seconds
+├── Vector store creation: ~30 seconds (if recreate=True)
+├── Inference (48 queries): ~5 minutes
+│   ├── 48 × LLM calls (generate): ~240 seconds
+│   └── 12 × Cohere rerank calls: ~60 seconds
+└── RAGAS evaluation: ~15-20 minutes
+    ├── 48 examples × 4 metrics = 192 metric calculations
+    └── Each metric makes multiple LLM calls
+```
+
+**Cost Breakdown**:
+- **Inference**: 48 LLM calls × ~$0.01 = ~$0.50
+- **RAGAS metrics**: 192 calculations × ~$0.02 = ~$3.84
+- **Cohere rerank**: 12 calls × ~$0.02 = ~$0.24
+- **Total**: ~$5-6 per full evaluation run
+
+**Optimization Strategies**:
+1. **Reduce test set size**: 12 → 6 examples (halves cost)
+2. **Reduce metrics**: Remove expensive metrics (context_recall)
+3. **Increase timeout**: Avoid retries (run_config timeout=360s)
+4. **Batch API calls**: Use batch endpoints (not implemented)
+
+### 4. Caching Strategy
+
+**Current Caching**:
+- ✅ LLM instance cached (`@lru_cache` in config.py)
+- ✅ Embeddings instance cached (`@lru_cache` in config.py)
+- ✅ Qdrant client cached (`@lru_cache` in config.py)
+- ✅ Vector store collection reused (recreate_collection flag)
+
+**Not Cached** (opportunities):
+- ❌ Query embeddings (re-computed for every query)
+- ❌ Retrieved documents (no semantic cache)
+- ❌ LLM responses (no response cache)
+- ❌ RAGAS metric scores (re-computed every run)
+
+**Potential Improvements**:
+```python
+# Example: Query embedding cache
+@lru_cache(maxsize=1000)
+def cached_embed_query(query: str) -> List[float]:
+    return embeddings.embed_query(query)
+```
+
+### 5. Memory Management
+
+**Memory Profile**:
+- **Documents in memory**: 38 docs × ~2KB = ~76KB
+- **BM25 index**: ~100KB (in-memory tokenized index)
+- **Vector store**: 38 vectors × 1536 × 4 bytes = ~234KB (in Qdrant)
+- **Evaluation DataFrames**: 4 retrievers × 12 rows × 6 cols = ~48KB
+- **Total**: <1MB for this dataset
+
+**Scalability Considerations**:
+- BM25 retriever loads all documents in memory (38 docs OK, 1M docs NOT OK)
+- Qdrant handles large vector collections efficiently
+- Evaluation harness processes one retriever at a time (sequential, memory-efficient)
+
+### 6. Parallelization Opportunities
+
+**Current Implementation**: Sequential execution
+- Retrievers run one at a time
+- Questions processed sequentially within each retriever
+- RAGAS metrics calculated sequentially
+
+**Potential Parallelization**:
+```python
+# Parallel retriever evaluation (not implemented)
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor(max_workers=4) as executor:
+    futures = {
+        executor.submit(run_retriever_evaluation, name, graph, golden_df): name
+        for name, graph in graphs.items()
+    }
+    results = {futures[f]: f.result() for f in as_completed(futures)}
+```
+
+**Benefits**: 4× speedup on inference (retriever runs independent)
+**Risks**:
+- Higher concurrent API usage (may hit rate limits)
+- Increased memory usage (4 DataFrames in memory)
+- More complex error handling
 
 ## Summary
 
-This RAG evaluation system orchestrates **5 interconnected data flows** spanning document processing, synthetic dataset generation, cloud publishing, multi-strategy retrieval, and comparative performance analysis.
+### Key Data Flows
 
-**Key Insights**:
-1. **Modular design**: Each flow is self-contained with clear inputs/outputs
-2. **Fault tolerance**: Immediate saves, retry logic, schema validation
-3. **Reproducibility**: Comprehensive manifests with checksums and version tracking
-4. **Performance optimization**: Batch embeddings, parallel RAGAS metrics, persistent vector store
-5. **Production-ready**: Error handling, API rate limit management, multiple export formats
+1. **Query → Response** (RAG Pipeline)
+   - User provides question
+   - Retriever fetches relevant documents from Qdrant/BM25
+   - LLM generates answer from context
+   - ~50-200ms latency depending on retriever
 
-**Critical Path**: Ingestion → Testset Gen → RAGAS Eval (~25-40 minutes cold start)
+2. **Documents → Vector Store** (Ingestion)
+   - PDF → PyMuPDF → LangChain Documents
+   - Documents → OpenAI embeddings → Qdrant
+   - ~30 seconds for 38 documents
 
-**Production Recommendation**: Deploy **Cohere Rerank** retriever (96.47% average score, +5.3% over baseline) based on Flow 5 comparative analysis.
+3. **Source Docs → Golden Testset** (RAGAS Generation)
+   - Documents → RAGAS knowledge graph
+   - RAGAS → LLM → Synthetic QA pairs
+   - ~5-10 minutes for 12 examples
+
+4. **Questions → Metrics** (Evaluation)
+   - 12 questions × 4 retrievers = 48 inference runs
+   - 48 results × 4 RAGAS metrics = 192 metric calculations
+   - ~20-30 minutes, ~$5-6 cost
+
+5. **Local → HuggingFace Hub** (Publishing)
+   - Local datasets → HuggingFace Hub
+   - Includes dataset cards and metadata
+   - Enables reproducible evaluation
+
+### Design Patterns
+
+1. **Factory Pattern** - Delayed retriever/graph creation
+2. **State Management** - LangGraph TypedDict state with partial updates
+3. **Caching** - LRU cache for expensive resources
+4. **Immediate Persistence** - Save results after each retriever (error resilience)
+5. **Modular Architecture** - Separate modules for config, retrievers, graphs, utils
+
+### Performance Hotspots
+
+1. **RAGAS Evaluation** - 15-20 minutes (75% of runtime)
+2. **Cohere Rerank** - 200ms per query (4× slower than naive)
+3. **Vector Store Creation** - 30 seconds (first run only)
+4. **LLM Generation** - ~5 seconds per query (gpt-4.1-mini)
+
+### Extensibility Points
+
+1. **Add new retriever** - Implement in `create_retrievers()`, auto-creates graph
+2. **Add new metric** - Add to RAGAS metrics list in eval harness
+3. **Change LLM** - Update `OPENAI_MODEL` in config.py
+4. **Add conditional routing** - Extend LangGraph with conditional edges
+5. **Add caching** - Wrap functions with `@lru_cache` or semantic cache
+
+---
+
+**Document Generated**: 2025-10-18
+**Codebase Version**: GDELT branch
+**Analysis Scope**: Main project code (excluding ra_* analysis framework)

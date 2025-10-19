@@ -15,14 +15,28 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_core.documents import Document
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
+from dotenv import load_dotenv
 
-# Configuration from environment variables
-QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+load_dotenv(override=not os.getenv("CI"))
+
+# ---------- Configuration from environment variables ----------
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")                 # prefer this if set
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")   # fallback path
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "gdelt_comparative_eval")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")  # Match existing evaluation
-OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
 
+OPENAI_API_KEY   = os.getenv("OPENAI_API_KEY")
+COHERE_API_KEY   = os.getenv("COHERE_API_KEY")
+HF_TOKEN         = os.getenv("HF_TOKEN")
+
+LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "certification-challenge")
+LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "true")
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
+
+COLLECTION_NAME= os.getenv("QDRANT_COLLECTION", "gdelt_comparative_eval")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+# ----------------------------------------
 
 @lru_cache(maxsize=1)
 def get_llm():
@@ -49,12 +63,21 @@ def get_embeddings():
 @lru_cache(maxsize=1)
 def get_qdrant():
     """
+    URL-first convention. If QDRANT_URL is set, use it.
+    Otherwise fall back to host/port. Only pass api_key if provided.
+    
     Get cached Qdrant client instance.
 
     Returns:
-        QdrantClient connected to configured host/port
+        QdrantClient connected to configured URL or host/port
     """
-    return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    kwargs = {}
+    if QDRANT_API_KEY:          # avoid passing empty key (breaks docker default)
+        kwargs["api_key"] = QDRANT_API_KEY
+
+    if QDRANT_URL:
+        return QdrantClient(url=QDRANT_URL, **kwargs)
+    return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, **kwargs)
 
 
 def get_collection_name() -> str:

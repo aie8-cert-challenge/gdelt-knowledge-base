@@ -364,7 +364,369 @@ docker-compose up -d
 # - Adminer (8080) - Database admin UI
 ```
 
-**Note**: Only Qdrant is required for baseline RAG. Other services support advanced features not currently used.
+**Note**: Only Qdrant is required for local development (running scripts directly). For LangGraph Platform deployment, see section below.
+
+## LangGraph Platform Deployment
+
+### Overview: Local vs Platform Deployment
+
+**Local Development** (Scripts):
+- Runs Python scripts directly (`python scripts/single_file.py`)
+- Only requires Qdrant
+- No API server
+
+**LangGraph Platform** (API Server):
+- Deploys graphs as REST API endpoints
+- Requires: Qdrant + Redis + Postgres
+- Containerized deployment with Docker
+
+### Prerequisites
+
+```bash
+# Install LangGraph CLI (required for building)
+pip install langgraph-cli
+
+# Verify installation
+langgraph --version
+```
+
+**Required Files**:
+- `langgraph.json` - LangGraph configuration (defines graphs, dependencies, environment)
+- `app/graph_app.py` - Graph entrypoint with `get_app()` function
+- `docker-compose.yml` - Infrastructure orchestration
+
+### Local Development (No Docker)
+
+**Modern, fully self-contained workflow** - no Redis/Postgres/Docker required.
+
+```bash
+# Install LangGraph CLI with in-memory runtime
+uv add langgraph-cli[inmem]
+
+# Launch local server with Studio UI
+uv run langgraph dev --allow-blocking
+```
+
+**What happens**:
+- Installs LangGraph CLI with `inmem` runtime backend (ephemeral, no database)
+- Launches local server at `http://localhost:2024`
+- Opens Studio UI automatically in browser
+- `--allow-blocking` enables synchronous dev runs (helpful for notebooks, VS Code)
+- Supports hot-reload on graph changes
+
+**Advantages**:
+- No Docker dependencies
+- Instant iteration
+- Ideal for bootcamp demos, notebooks, quick RAG testing
+- Same runtime semantics as production
+
+**Access**:
+- **API**: `http://localhost:2024`
+- **Studio UI**: Auto-opens or visit `http://localhost:2024`
+- **API Docs**: `http://localhost:2024/docs`
+
+**Environment variables** (same as Docker):
+```bash
+export OPENAI_API_KEY=sk-...
+export COHERE_API_KEY=...
+export LANGSMITH_API_KEY=...  # Optional
+```
+
+### Building the Docker Image
+
+```bash
+# Build the LangGraph image
+langgraph build -t gdelt-image
+
+# This creates a Docker image containing:
+# - Your application code (src/, app/)
+# - All Python dependencies from langgraph.json
+# - LangGraph runtime
+```
+
+**What happens during build**:
+1. Reads `langgraph.json` for dependencies and configuration
+2. Creates Wolfi-based container (lightweight, secure)
+3. Installs Python 3.11 and all dependencies
+4. Bundles your source code
+5. Tags image as `gdelt-image`
+
+**Common build issues**:
+- `langgraph.json not found` - Must run from project root
+- Missing dependencies - Ensure all packages listed in `langgraph.json`
+
+### Starting the Platform
+
+```bash
+# Start all required services
+docker-compose up -d
+
+# Services will start in dependency order:
+# 1. langgraph-redis (healthcheck: redis-cli ping)
+# 2. langgraph-postgres (healthcheck: pg_isready)
+# 3. qdrant (healthcheck: TCP connection)
+# 4. langgraph-api (depends on above 3 services)
+```
+
+**Service Endpoints**:
+- LangGraph API: `http://localhost:8123` (port 8000 inside container)
+- Qdrant: `http://localhost:6333`
+- Redis: `localhost:6379`
+- Postgres: `localhost:5433` (5432 inside container)
+
+### Verifying Deployment
+
+```bash
+# 1. Health check
+curl http://localhost:8123/ok
+
+# Expected response: {"ok": true}
+
+# 2. Check service status
+docker-compose ps
+# All services must show "healthy" status
+
+# 3. View logs
+docker-compose logs langgraph-api --tail 50
+docker-compose logs langgraph-redis
+docker-compose logs langgraph-postgres
+```
+
+### Accessing the Deployment
+
+**Studio UI** (Visual interface):
+```
+https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
+```
+
+**Note**: The UI is hosted on LangChain's cloud domain but connects to your local backend via the `baseUrl` parameter.
+
+**API Documentation** (Swagger):
+```
+http://localhost:8123/docs
+```
+
+This provides an interactive reference for all available API endpoints.
+
+### LangGraph Configuration (`langgraph.json`)
+
+The `langgraph.json` file defines the deployment configuration:
+
+```json
+{
+  "name": "gdelt-langgraph",
+  "python_version": "3.11",
+  "image_distro": "wolfi",
+  "dependencies": [...],  // All required packages
+  "env": {
+    "QDRANT_HOST": "qdrant",      // Container hostname
+    "QDRANT_PORT": "6333",
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+    "COHERE_API_KEY": "${COHERE_API_KEY}"
+  },
+  "graphs": {
+    "gdelt": "app.graph_app:get_app"  // Entrypoint function
+  }
+}
+```
+
+**Key Configuration Points**:
+- `graphs.gdelt` - Defines graph name and Python import path
+- `app.graph_app:get_app` - Must return a CompiledGraph
+- `env.QDRANT_HOST` - Uses container name `qdrant` (Docker networking)
+- Environment variables interpolated from `.env` file
+
+### Graph Entrypoint
+
+The `app/graph_app.py:get_app()` function is the deployment entrypoint:
+
+```python
+def get_app():
+    """LangGraph Server entrypoint - returns a CompiledGraph"""
+    docs = load_documents_from_huggingface()
+    vs = create_vector_store(docs, recreate_collection=False)
+    rets = create_retrievers(docs, vs, k=5)
+    graphs = build_all_graphs(rets)
+    return graphs["cohere_rerank"]  # Default retriever
+```
+
+**Important**:
+- Must return a `CompiledGraph` (not a dict of graphs)
+- Uses `recreate_collection=False` to preserve Qdrant data
+- Loads documents on startup (cached after first run)
+
+### Querying the Deployed API
+
+**Essential Endpoints**:
+
+```bash
+# 1. Health check
+curl http://localhost:8123/ok
+# Response: {"ok": true}
+
+# 2. View API documentation (open in browser)
+http://localhost:8123/docs
+
+# 3. List available assistants/graphs
+curl -X POST http://localhost:8123/assistants/search \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":10,"offset":0}'
+
+# Response shows assistant_id from langgraph.json (e.g., "gdelt")
+```
+
+**Stateless Run** (no thread persistence):
+
+```bash
+# Streaming response
+curl -X POST http://localhost:8123/runs/stream \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "assistant_id": "gdelt",
+    "input": {"question": "What is GDELT?"},
+    "stream_mode": "updates"
+  }'
+
+# Blocking (wait for result)
+curl -X POST http://localhost:8123/runs/wait \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "assistant_id": "gdelt",
+    "input": {"question": "What is GDELT?"}
+  }'
+```
+
+**Stateful Run** (with thread for conversation memory):
+
+```bash
+# 1. Create a thread
+THREAD_ID=$(curl -X POST http://localhost:8123/threads \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq -r '.thread_id')
+
+echo "Created thread: $THREAD_ID"
+
+# 2. Run on thread (blocking)
+curl -X POST http://localhost:8123/threads/$THREAD_ID/runs/wait \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "assistant_id": "gdelt",
+    "input": {"question": "What is GDELT GKG 2.1?"}
+  }'
+
+# 3. Run follow-up query on same thread (maintains context)
+curl -X POST http://localhost:8123/threads/$THREAD_ID/runs/wait \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "assistant_id": "gdelt",
+    "input": {"question": "Tell me more about the themes"}
+  }'
+
+# 4. Streaming on thread
+curl -X POST http://localhost:8123/threads/$THREAD_ID/runs/stream \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "assistant_id": "gdelt",
+    "input": {"question": "How does GDELT handle events?"},
+    "stream_mode": "updates"
+  }'
+```
+
+**Note**: The `assistant_id` value ("gdelt") comes from the `graphs` section in `langgraph.json`.
+
+### Troubleshooting
+
+**API won't start**:
+```bash
+# Check service dependencies
+docker-compose ps
+
+# All services must show "healthy" status
+# If redis/postgres/qdrant are unhealthy, langgraph-api won't start
+
+# View startup logs
+docker-compose logs langgraph-api --tail 100
+```
+
+**Connection refused from langgraph-api to qdrant**:
+```bash
+# Verify network connectivity
+docker-compose exec langgraph-api ping qdrant
+
+# Should resolve to container IP
+# If fails, check that all services on same network (gdelt-network)
+```
+
+**Missing environment variables**:
+```bash
+# Check that .env file exists and contains:
+# OPENAI_API_KEY=sk-...
+# COHERE_API_KEY=...
+
+# Restart services after updating .env
+docker-compose down
+docker-compose up -d
+```
+
+**Graph not found error**:
+```bash
+# Verify langgraph.json graphs configuration
+cat langgraph.json | jq '.graphs'
+
+# Should show: {"gdelt": "app.graph_app:get_app"}
+
+# Rebuild image if langgraph.json changed
+langgraph build -t gdelt-image
+docker-compose up -d --force-recreate langgraph-api
+```
+
+**404 on endpoints**:
+```bash
+# Common mistake: trying to use /invoke instead of /runs/stream
+# ❌ Wrong: POST /invoke
+# ✅ Correct: POST /runs/stream (stateless) or POST /threads/{id}/runs/wait (stateful)
+
+# Check Swagger docs for available endpoints
+# Open in browser: http://localhost:8123/docs
+```
+
+**assistant_id not found**:
+```bash
+# The assistant_id must match the graph name in langgraph.json
+# Check your configuration:
+cat langgraph.json | jq '.graphs'
+
+# Use the key name (e.g., "gdelt") as assistant_id in API calls
+
+# Verify assistants are available:
+curl -X POST http://localhost:8123/assistants/search \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":10}'
+```
+
+**Studio UI not connecting**:
+```bash
+# Ensure baseUrl parameter matches your deployment
+# For Docker: https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
+# For local dev: http://localhost:2024
+
+# Check CORS if UI can't reach backend
+docker-compose logs langgraph-api | grep -i cors
+```
+
+### Reference Documentation
+
+**Official Documentation**:
+- [Self-Hosted Docker Deployment](https://langchain-ai.github.io/langgraphjs/how-tos/deploy-self-hosted/#using-docker-compose)
+- [LangGraph Server API Reference](https://docs.langchain.com/langsmith/server-api-ref)
+- [Local Server Tutorial](https://langchain-ai.github.io/langgraph/tutorials/langgraph-platform/local-server/)
+- [Streaming API](https://docs.langchain.com/langgraph-platform/streaming)
+
+**Quick Reference**:
+- **Local dev**: `uv run langgraph dev --allow-blocking` → http://localhost:2024
+- **Docker**: `langgraph build -t gdelt-image && docker-compose up -d` → http://localhost:8123
+- **Studio UI (Docker)**: https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
+- **API Docs**: http://localhost:8123/docs (Docker) or http://localhost:2024/docs (local)
 
 ## Common Development Patterns
 
@@ -510,12 +872,82 @@ make validate
 
 ## Documentation
 
+### Project Documentation
+
 - [README.md](README.md) - Project overview and quick start (348 lines)
 - [docs/deliverables.md](docs/deliverables.md) - Complete certification answers
-- [architecture/README.md](architecture/README.md) - Comprehensive architecture documentation (1,073 lines)
-- [architecture/docs/01_component_inventory.md](architecture/docs/01_component_inventory.md) - Module catalog (521 lines)
-- [architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md) - Visual diagrams (786 lines)
-- [architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md) - Data flow analysis (947 lines)
-- [architecture/docs/04_api_reference.md](architecture/docs/04_api_reference.md) - API documentation (3,121 lines)
 
-**Total architecture documentation**: 5,375 lines across 5 files.
+### Architecture Documentation Summary
+
+**Total**: 5,375 lines across 5 comprehensive architecture documents.
+
+#### [architecture/README.md](architecture/README.md) (1,073 lines)
+**Purpose**: Complete system architecture overview and design philosophy
+
+**Key Sections**:
+- **Design Patterns**: Factory Pattern (component creation), Strategy Pattern (retrievers), Singleton Pattern (@lru_cache)
+- **Layered Architecture**: Scripts → Application (src/) → Data Layer (external services)
+- **Component Interaction**: How retrievers, graphs, and state management work together
+- **Quick Start Examples**: First query in 2 minutes, evaluation in 30 minutes
+- **Deployment Considerations**: Docker, scaling, cost ($5-6 per eval run), latency benchmarks
+
+**When to Use**: Starting point for understanding system design, deployment planning, or architectural decisions.
+
+#### [architecture/docs/01_component_inventory.md](architecture/docs/01_component_inventory.md) (521 lines)
+**Purpose**: Catalog of all system modules, scripts, and external dependencies
+
+**Key Sections**:
+- **Core Modules** (`src/`):
+  - `config.py` - Cached singletons for LLM, embeddings, Qdrant client
+  - `retrievers.py` - Factory for 4 retriever strategies (naive, BM25, ensemble, Cohere rerank)
+  - `graph.py` - LangGraph workflow builders
+  - `state.py` - TypedDict schema for graph state
+  - `utils.py` - HuggingFace dataset loaders
+  - `prompts.py` - RAG prompt templates
+- **Scripts** (`scripts/`):
+  - `single_file.py` - Standalone evaluation (508 LOC, works without src/)
+  - `run_eval_harness.py` - Modular evaluation using src/ modules
+  - `validate_langgraph.py` - Validation harness (100% pass required)
+  - `ingest.py` - PDF extraction + RAGAS testset generation
+- **External Dependencies**: OpenAI, Cohere, Qdrant, HuggingFace Hub
+
+**When to Use**: Finding specific module functionality, understanding what each file does, dependency auditing.
+
+#### [architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md) (786 lines)
+**Purpose**: Visual representation of system architecture using Mermaid diagrams
+
+**Key Diagrams**:
+- **System Architecture Diagram**: Three-layer design (Scripts → Application → Data)
+- **Component Hierarchy**: Class relationships and inheritance
+- **Data Flow Diagrams**: Document loading → Embedding → Retrieval → Generation
+- **Retriever Strategy Comparison**: Visual comparison of 4 retrieval approaches
+- **LangGraph State Machine**: Node transitions (START → retrieve → generate → END)
+- **Evaluation Pipeline Flow**: 12 questions × 4 retrievers = 48 queries → RAGAS metrics
+
+**When to Use**: Visual learners, onboarding new developers, architecture presentations, debugging flow issues.
+
+#### [architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md) (947 lines)
+**Purpose**: Detailed sequence diagrams and state management explanations
+
+**Key Sections**:
+- **Query Flow Sequence**: Step-by-step message passing from user question to generated answer
+- **State Updates**: How LangGraph merges partial state updates from each node
+- **Retriever Comparison Flow**: How 4 retrievers process the same question differently
+- **Evaluation Pipeline Sequence**: RAGAS metric calculation across all queries
+- **Data Persistence**: Multi-format saving (CSV, JSON, manifests)
+- **Error Handling**: Incremental result saving to prevent data loss
+
+**When to Use**: Understanding state management, debugging evaluation issues, optimizing data flows.
+
+#### [architecture/docs/04_api_reference.md](architecture/docs/04_api_reference.md) (3,121 lines)
+**Purpose**: Complete API documentation for all modules, functions, and classes
+
+**Coverage**:
+- **All `src/` modules**: Function signatures, parameters, return types, usage examples
+- **Factory Functions**: `create_vector_store()`, `create_retrievers()`, `build_graph()`, `build_all_graphs()`
+- **Cached Singletons**: `get_llm()`, `get_embeddings()`, `get_qdrant()`
+- **Data Loaders**: `load_documents_from_huggingface()`, `load_golden_testset_from_huggingface()`
+- **State Schema**: TypedDict field descriptions and constraints
+- **Script Entry Points**: Command-line arguments, environment variables, expected outputs
+
+**When to Use**: API integration, writing new retrievers, extending the system, code review.

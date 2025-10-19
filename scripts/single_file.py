@@ -4,9 +4,12 @@ Task 5 & 7: Comprehensive RAG Evaluation with RAGAS
 
 Evaluates multiple retrieval systems using RAGAS metrics:
 - Faithfulness: Answer groundedness in retrieved context
-- Answer Relevancy: Answer relevance to the question
+- Response Relevancy: Answer relevance to the question (class: ResponseRelevancy)
 - Context Precision: Relevant contexts ranked higher
-- Context Recall: Ground truth coverage by retrieved contexts
+- Context Recall: Ground truth coverage (class: LLMContextRecall)
+
+Note: RAGAS class names are capitalized (e.g., ResponseRelevancy), but output
+DataFrame columns are lowercase (e.g., 'answer_relevancy', 'context_recall').
 
 Retrievers:
 1. Naive (baseline) - Dense vector search
@@ -224,8 +227,7 @@ baseline_retriever_20 = vector_store.as_retriever(search_kwargs={"k": 20})
 compressor = CohereRerank(model="rerank-v3.5")
 compression_retriever = ContextualCompressionRetriever(
     base_compressor=compressor,
-    base_retriever=baseline_retriever_20,
-    search_kwargs={"k": 5}
+    base_retriever=baseline_retriever_20
 )
 
 # Ensemble: Hybrid search (dense + sparse)
@@ -367,7 +369,8 @@ for retriever_name, dataset in datasets.items():
 
 # 9. Run RAGAS Evaluation for All Retrievers
 print("\n9. Running RAGAS evaluation for all retrievers...")
-print("   Metrics: faithfulness, answer_relevancy, context_precision, context_recall")
+print("   Metrics: Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall")
+print("   (Output columns: faithfulness, answer_relevancy, context_precision, context_recall)")
 
 custom_run_config = RunConfig(timeout=360)
 evaluation_results = {}

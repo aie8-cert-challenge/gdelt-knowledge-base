@@ -2,404 +2,261 @@
 
 ## Overview
 
-This document provides comprehensive architectural diagrams for the GDELT RAG Evaluation system. The project is a RAG (Retrieval-Augmented Generation) evaluation framework that compares multiple retrieval strategies using the RAGAS evaluation methodology. The architecture follows a layered design with clear separation between the core RAG system (src/), utility scripts (scripts/), and the main entry point.
+This GDELT RAG (Retrieval-Augmented Generation) system is built on a **layered architecture** with clear separation of concerns:
 
-The system is built on LangChain, LangGraph, and RAGAS frameworks, integrating with external services (OpenAI, Cohere, Qdrant) to provide a comprehensive RAG evaluation pipeline.
+- **Presentation Layer**: Scripts and command-line tools for different workflows (ingestion, evaluation, validation)
+- **Application Layer**: Core RAG logic using LangGraph for workflow orchestration, with multiple retrieval strategies
+- **Data Layer**: Document management, vector storage (Qdrant), and dataset utilities (HuggingFace)
+
+The system follows the **Factory Pattern** throughout, where configuration and component creation are separated from usage. This enables testing, reusability, and clean dependency management.
+
+**Key Design Principles**:
+- Factory functions over module-level instantiation
+- Immutable state management (TypedDict)
+- Cached configuration with `@lru_cache`
+- Dependency injection for LLM/embeddings/retrievers
+- Separation of concerns (config, data, logic, presentation)
 
 ---
 
 ## 1. System Architecture (Layered View)
 
-This diagram shows the high-level layered architecture of the system, from the entry point through the core modules to external dependencies.
+### Diagram
 
 ```mermaid
 graph TB
-    subgraph "Entry Point Layer"
-        MAIN[main.py<br/>Simple Hello World]
-        SINGLE[scripts/single_file.py<br/>Complete RAG Evaluation]
+    subgraph "Presentation Layer"
+        A1[main.py<br/>Simple entry point]
+        A2[scripts/run_eval_harness.py<br/>RAGAS evaluation orchestrator]
+        A3[scripts/single_file.py<br/>Standalone evaluation]
+        A4[scripts/validate_langgraph.py<br/>System validation]
+        A5[scripts/ingest.py<br/>Data ingestion pipeline]
+        A6[scripts/generate_run_manifest.py<br/>Reproducibility manifest]
+        A7[scripts/upload_to_hf.py<br/>HuggingFace upload]
+        A8[scripts/enrich_manifest.py<br/>Manifest enrichment]
     end
 
-    subgraph "Scripts Layer"
-        INGEST[scripts/ingest.py<br/>Data Ingestion & RAGAS Testset Generation]
-        MANIFEST[scripts/generate_run_manifest.py<br/>Reproducibility Manifest]
-        ENRICH[scripts/enrich_manifest.py<br/>Manifest Enrichment]
-        UPLOAD[scripts/upload_to_hf.py<br/>HuggingFace Upload]
+    subgraph "Application Layer - Core Logic"
+        B1[src/graph.py<br/>LangGraph workflow factory]
+        B2[src/retrievers.py<br/>Retriever factory<br/>4 strategies]
+        B3[src/state.py<br/>State schema<br/>TypedDict]
+        B4[src/prompts.py<br/>Prompt templates]
+        B5[src/config.py<br/>Configuration factory<br/>LLM/Embeddings/Qdrant]
+        B6[src/utils.py<br/>Document loaders<br/>HuggingFace integration]
     end
 
-    subgraph "Core RAG System (src/)"
-        CONFIG[config.py<br/>LLM & Embeddings Config]
-        STATE[state.py<br/>TypedDict State Schema]
-        PROMPTS[prompts.py<br/>Prompt Templates]
-        RETRIEVERS[retrievers.py<br/>4 Retriever Implementations]
-        GRAPH[graph.py<br/>LangGraph Workflows]
-        UTILS["utils.py<br/>Utilities (empty)"]
+    subgraph "Data Layer - External Systems"
+        C1[(Qdrant<br/>Vector Store<br/>localhost:6333)]
+        C2[(HuggingFace Hub<br/>dwb2023/gdelt-rag-sources<br/>dwb2023/gdelt-rag-golden-testset)]
+        C3[Local Storage<br/>data/raw<br/>data/interim<br/>deliverables/evaluation_evidence]
     end
 
-    subgraph "External Dependencies"
-        LANGCHAIN[LangChain<br/>Prompts, Retrievers, Documents]
-        LANGGRAPH[LangGraph<br/>State Machines & Workflows]
-        RAGAS[RAGAS<br/>Evaluation Framework]
-        OPENAI[OpenAI API<br/>LLM & Embeddings]
-        COHERE[Cohere API<br/>Reranking]
-        QDRANT[Qdrant<br/>Vector Database]
-        HF[HuggingFace<br/>Dataset Hub]
+    subgraph "External APIs"
+        D1[OpenAI API<br/>gpt-4.1-mini<br/>text-embedding-3-small]
+        D2[Cohere API<br/>rerank-v3.5]
     end
 
-    subgraph "Data Layer"
-        RAW[data/raw/<br/>PDF Documents]
-        INTERIM[data/interim/<br/>Sources & Golden Testset]
-        PROCESSED[data/processed/<br/>Evaluation Results]
-    end
+    %% Presentation -> Application
+    A2 --> B5
+    A2 --> B6
+    A2 --> B2
+    A2 --> B1
+    A3 --> B5
+    A3 --> B6
+    A4 --> B5
+    A4 --> B6
+    A4 --> B2
+    A4 --> B1
+    A5 --> B6
+    A5 --> D1
 
-    %% Entry Point connections
-    SINGLE --> GRAPH
-    SINGLE --> RETRIEVERS
-    SINGLE --> STATE
-    SINGLE --> MANIFEST
+    %% Application internal dependencies
+    B1 --> B2
+    B1 --> B3
+    B1 --> B4
+    B1 --> B5
+    B2 --> B5
+    B6 --> B5
 
-    %% Scripts connections
-    INGEST --> RAW
-    INGEST --> INTERIM
-    UPLOAD --> INTERIM
-    UPLOAD --> HF
-    ENRICH --> INTERIM
+    %% Application -> Data
+    B5 --> C1
+    B5 --> D1
+    B6 --> C2
+    B2 --> D2
 
-    %% Core module dependencies
-    GRAPH --> STATE
-    GRAPH --> PROMPTS
-    GRAPH --> RETRIEVERS
-    GRAPH --> CONFIG
-    RETRIEVERS --> CONFIG
+    %% Presentation -> Data (direct access)
+    A2 --> C3
+    A3 --> C3
+    A5 --> C3
+    A6 --> C3
+    A7 --> C2
+    A7 --> C3
+    A8 --> C3
 
-    %% External dependencies
-    CONFIG --> OPENAI
-    RETRIEVERS --> QDRANT
-    RETRIEVERS --> COHERE
-    RETRIEVERS --> LANGCHAIN
-    GRAPH --> LANGGRAPH
-    GRAPH --> LANGCHAIN
-    SINGLE --> RAGAS
-    INGEST --> RAGAS
-    INGEST --> LANGCHAIN
-
-    %% Data flows
-    SINGLE --> PROCESSED
-
-    %% High contrast WCAG AA compliant colors with white text
-    classDef entryPoint fill:#0277BD,stroke:#01579B,stroke-width:3px,color:#FFFFFF
-    classDef scripts fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
-    classDef core fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    classDef external fill:#E65100,stroke:#BF360C,stroke-width:3px,color:#FFFFFF
-    classDef data fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-
-    class MAIN,SINGLE entryPoint
-    class INGEST,MANIFEST,ENRICH,UPLOAD scripts
-    class CONFIG,STATE,PROMPTS,RETRIEVERS,GRAPH,UTILS core
-    class LANGCHAIN,LANGGRAPH,RAGAS,OPENAI,COHERE,QDRANT,HF external
-    class RAW,INTERIM,PROCESSED data
+    style A1 fill:#e1f5ff
+    style A2 fill:#e1f5ff
+    style A3 fill:#e1f5ff
+    style A4 fill:#e1f5ff
+    style A5 fill:#e1f5ff
+    style A6 fill:#e1f5ff
+    style A7 fill:#e1f5ff
+    style A8 fill:#e1f5ff
+    style B1 fill:#fff4e6
+    style B2 fill:#fff4e6
+    style B3 fill:#fff4e6
+    style B4 fill:#fff4e6
+    style B5 fill:#fff4e6
+    style B6 fill:#fff4e6
+    style C1 fill:#f3e5f5
+    style C2 fill:#f3e5f5
+    style C3 fill:#f3e5f5
+    style D1 fill:#ffebee
+    style D2 fill:#ffebee
 ```
 
-**Key Observations:**
-- **Entry Point**: `single_file.py` is the main executable that orchestrates the complete RAG evaluation
-- **Core System**: Modular design with clear separation (config, state, prompts, retrievers, graphs)
-- **Scripts**: Supporting utilities for data processing and reproducibility
-- **External Services**: Heavy reliance on LangChain ecosystem and external APIs
+### Explanation
+
+**Presentation Layer** (Blue - Scripts/Entry Points):
+- Multiple specialized scripts for different workflows
+- `run_eval_harness.py` and `single_file.py`: Main evaluation orchestrators
+- `validate_langgraph.py`: System health checks and validation
+- `ingest.py`: Data ingestion from PDFs to HuggingFace
+- Utility scripts for manifest generation, enrichment, and uploads
+
+**Application Layer** (Yellow - Core Logic):
+- `config.py`: Centralized configuration with cached factory functions for LLM, embeddings, Qdrant
+- `utils.py`: Document loading from HuggingFace with reproducibility (revision pinning)
+- `retrievers.py`: Factory function creating 4 retrieval strategies (naive, BM25, ensemble, cohere_rerank)
+- `graph.py`: LangGraph workflow factory building retrieve->generate pipelines
+- `state.py`: TypedDict schema for state management
+- `prompts.py`: Shared prompt templates
+
+**Data Layer** (Purple - Storage & External Systems):
+- Qdrant vector database (Docker, localhost:6333)
+- HuggingFace Hub datasets (sources + golden testset)
+- Local filesystem (raw PDFs, interim data, evaluation results)
+
+**External APIs** (Red):
+- OpenAI (LLM + embeddings)
+- Cohere (reranking)
 
 ---
 
 ## 2. Component Relationships
 
-This diagram shows how the core modules in the `src/` directory interact with each other and their responsibilities.
+### Diagram
 
 ```mermaid
 graph LR
-    subgraph "Configuration Module"
-        CONFIG[config.py<br/>---<br/>llm: ChatOpenAI<br/>embeddings: OpenAIEmbeddings<br/>QDRANT_HOST<br/>QDRANT_PORT<br/>COLLECTION_NAME]
+    subgraph "Configuration Hub"
+        CONFIG[src/config.py<br/>@lru_cache factories]
     end
 
-    subgraph "Data Schema Module"
-        STATE["state.py<br/>---<br/>State TypedDict<br/>- question: str<br/>- context: List[Document]<br/>- response: str"]
+    subgraph "Data Loading"
+        UTILS[src/utils.py<br/>load_documents_from_huggingface<br/>load_golden_testset_from_huggingface]
     end
 
-    subgraph "Prompt Templates Module"
-        PROMPTS[prompts.py<br/>---<br/>BASELINE_PROMPT<br/>Context + Question template]
+    subgraph "RAG Components"
+        RETRIEVERS[src/retrievers.py<br/>create_retrievers<br/>4 strategies]
+        GRAPH[src/graph.py<br/>build_graph<br/>build_all_graphs]
+        STATE[src/state.py<br/>State TypedDict]
+        PROMPTS[src/prompts.py<br/>BASELINE_PROMPT]
     end
 
-    subgraph "Retriever Module"
-        RETRIEVERS[retrievers.py<br/>---<br/>baseline_retriever<br/>bm25_retriever<br/>compression_retriever<br/>ensemble_retriever<br/>---<br/>Uses: Qdrant, Cohere, BM25]
+    subgraph "Orchestration Scripts"
+        EVAL[scripts/run_eval_harness.py]
+        SINGLE[scripts/single_file.py]
+        VALIDATE[scripts/validate_langgraph.py]
     end
 
-    subgraph "Workflow Module"
-        GRAPH["graph.py<br/>---<br/>retrieve_baseline()<br/>retrieve_bm25()<br/>retrieve_reranked()<br/>retrieve_ensemble()<br/>generate()<br/>---<br/>baseline_graph<br/>bm25_graph<br/>ensemble_graph<br/>rerank_graph<br/>---<br/>retrievers_config dict"]
+    subgraph "Data Pipeline Scripts"
+        INGEST[scripts/ingest.py]
+        MANIFEST[scripts/generate_run_manifest.py]
+        UPLOAD[scripts/upload_to_hf.py]
+        ENRICH[scripts/enrich_manifest.py]
     end
 
-    CONFIG -.->|provides llm| GRAPH
-    CONFIG -.->|provides embeddings| RETRIEVERS
-    CONFIG -.->|provides Qdrant config| RETRIEVERS
+    %% Core dependencies
+    UTILS --> CONFIG
+    RETRIEVERS --> CONFIG
+    GRAPH --> RETRIEVERS
+    GRAPH --> CONFIG
+    GRAPH --> STATE
+    GRAPH --> PROMPTS
 
-    STATE -.->|defines schema| GRAPH
+    %% Orchestration dependencies
+    EVAL --> UTILS
+    EVAL --> CONFIG
+    EVAL --> RETRIEVERS
+    EVAL --> GRAPH
+    EVAL --> MANIFEST
 
-    PROMPTS -.->|provides template| GRAPH
+    SINGLE --> CONFIG
+    SINGLE --> UTILS
 
-    RETRIEVERS -.->|exports retrievers| GRAPH
+    VALIDATE --> UTILS
+    VALIDATE --> CONFIG
+    VALIDATE --> RETRIEVERS
+    VALIDATE --> GRAPH
 
-    GRAPH -->|uses| STATE
-    GRAPH -->|uses| PROMPTS
-    GRAPH -->|imports| RETRIEVERS
-    GRAPH -->|configures llm from| CONFIG
+    %% Data pipeline dependencies
+    INGEST --> UTILS
+    INGEST --> CONFIG
+    UPLOAD --> ENRICH
 
-    %% High contrast WCAG AA compliant colors
-    classDef config fill:#1565C0,stroke:#0D47A1,stroke-width:3px,color:#FFFFFF
-    classDef schema fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
-    classDef templates fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    classDef retrievers fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    classDef workflow fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-
-    class CONFIG config
-    class STATE schema
-    class PROMPTS templates
-    class RETRIEVERS retrievers
-    class GRAPH workflow
+    style CONFIG fill:#ffd700,stroke:#333,stroke-width:3px
+    style RETRIEVERS fill:#ffb366
+    style GRAPH fill:#ffb366
+    style EVAL fill:#66b3ff
+    style SINGLE fill:#66b3ff
 ```
 
-**Key Relationships:**
-- **CONFIG** is the central configuration point, providing LLM and embeddings to other modules
-- **STATE** defines the data schema used throughout the workflow
-- **RETRIEVERS** is a collection module that exports 4 different retriever instances
-- **GRAPH** orchestrates everything, creating 4 separate LangGraph workflows (one per retriever)
-- **PROMPTS** provides reusable prompt templates
+### Explanation
+
+**Dependency Flow**:
+
+1. **Configuration Hub** (`src/config.py`):
+   - Central dependency for all components
+   - Provides cached instances: `get_llm()`, `get_embeddings()`, `get_qdrant()`
+   - Factory function: `create_vector_store(documents, collection_name, recreate_collection)`
+
+2. **Data Loading** (`src/utils.py`):
+   - Depends on `config` for environment settings
+   - Loads documents from HuggingFace with revision pinning
+   - Used by all orchestration scripts
+
+3. **RAG Components**:
+   - `retrievers.py` depends on `config` (for embeddings/Qdrant)
+   - `graph.py` depends on `retrievers`, `config`, `state`, `prompts`
+   - `state.py` and `prompts.py` are independent (pure data/schemas)
+
+4. **Orchestration Scripts**:
+   - `run_eval_harness.py`: Main evaluation entry point, uses all core modules
+   - `single_file.py`: Standalone version with inline implementations
+   - `validate_langgraph.py`: Tests all core modules for correctness
+
+5. **Data Pipeline Scripts**:
+   - Independent workflows for data preparation and publishing
+   - `ingest.py` uses core utilities for RAGAS testset generation
+
+**Key Design Patterns**:
+- **Factory Pattern**: All component creation through functions, not module-level variables
+- **Dependency Injection**: LLM, embeddings, retrievers passed as arguments
+- **Caching**: `@lru_cache` for expensive objects (LLM, embeddings, Qdrant client)
+- **Immutability**: State is TypedDict, updated through return values (not mutation)
 
 ---
 
-## 3. Module Dependencies (Import Graph)
+## 3. Class Hierarchies
 
-This diagram shows the import relationships between project modules, highlighting the dependency hierarchy.
-
-```mermaid
-graph TD
-    subgraph "src/ modules"
-        CONFIG[config.py]
-        STATE[state.py]
-        PROMPTS[prompts.py]
-        RETRIEVERS[retrievers.py]
-        GRAPH[graph.py]
-        UTILS[utils.py]
-    end
-
-    subgraph "scripts/ modules"
-        INGEST[ingest.py]
-        MANIFEST[generate_run_manifest.py]
-        ENRICH[enrich_manifest.py]
-        UPLOAD[upload_to_hf.py]
-        SINGLE[single_file.py]
-    end
-
-    subgraph "External Packages"
-        LC[langchain]
-        LG[langgraph]
-        RAGAS_PKG[ragas]
-        OPENAI_PKG[langchain_openai]
-        COHERE_PKG[langchain_cohere]
-        QDRANT_PKG[qdrant_client]
-        HF_PKG[datasets, huggingface_hub]
-    end
-
-    %% src/ internal dependencies
-    GRAPH -->|from src.prompts import| PROMPTS
-    GRAPH -->|from src.retrievers import| RETRIEVERS
-    GRAPH -->|from src.state import| STATE
-    RETRIEVERS -.->|uses config from| CONFIG
-
-    %% src/ to external
-    CONFIG --> OPENAI_PKG
-    STATE --> LC
-    RETRIEVERS --> LC
-    RETRIEVERS --> COHERE_PKG
-    RETRIEVERS --> QDRANT_PKG
-    RETRIEVERS --> OPENAI_PKG
-    GRAPH --> LC
-    GRAPH --> LG
-    GRAPH --> OPENAI_PKG
-
-    %% scripts/ to src/
-    SINGLE -.->|embeds code from| GRAPH
-    SINGLE -.->|embeds code from| STATE
-    SINGLE -.->|embeds code from| RETRIEVERS
-    SINGLE -->|imports| MANIFEST
-
-    %% scripts/ to external
-    INGEST --> LC
-    INGEST --> RAGAS_PKG
-    INGEST --> OPENAI_PKG
-    INGEST --> HF_PKG
-    UPLOAD --> HF_PKG
-    SINGLE --> LC
-    SINGLE --> LG
-    SINGLE --> RAGAS_PKG
-    SINGLE --> OPENAI_PKG
-    SINGLE --> COHERE_PKG
-    SINGLE --> QDRANT_PKG
-    SINGLE --> HF_PKG
-
-    %% High contrast WCAG AA compliant colors
-    classDef srcModule fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    classDef scriptModule fill:#0277BD,stroke:#01579B,stroke-width:3px,color:#FFFFFF
-    classDef external fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#FFFFFF
-
-    class CONFIG,STATE,PROMPTS,RETRIEVERS,GRAPH,UTILS srcModule
-    class INGEST,MANIFEST,ENRICH,UPLOAD,SINGLE scriptModule
-    class LC,LG,RAGAS_PKG,OPENAI_PKG,COHERE_PKG,QDRANT_PKG,HF_PKG external
-```
-
-**Dependency Analysis:**
-- **Zero Internal Dependencies**: STATE, PROMPTS, UTILS (leaf nodes)
-- **Low Dependencies**: CONFIG (only external packages)
-- **Medium Dependencies**: RETRIEVERS (depends on CONFIG concepts)
-- **High Dependencies**: GRAPH (depends on STATE, PROMPTS, RETRIEVERS)
-- **Self-Contained**: single_file.py embeds all core logic (doesn't import from src/)
-- **Clean Separation**: Scripts don't pollute src/ modules
-
----
-
-## 4. Data Flow (RAG Evaluation Pipeline)
-
-This diagram illustrates how data flows through the system during a complete RAG evaluation run.
-
-```mermaid
-flowchart TD
-    START([Start: Run single_file.py])
-
-    subgraph "1. Data Loading"
-        LOAD_GOLDEN[Load Golden Testset<br/>from HuggingFace<br/>dwb2023/gdelt-rag-golden-testset]
-        LOAD_SOURCES[Load Source Documents<br/>from HuggingFace<br/>dwb2023/gdelt-rag-sources]
-        CONVERT[Convert to<br/>LangChain Documents]
-    end
-
-    subgraph "2. Vector Store Setup"
-        QDRANT_INIT[Initialize Qdrant Client<br/>localhost:6333]
-        CREATE_COLL[Create Collection<br/>gdelt_comparative_eval]
-        ADD_DOCS[Add Documents<br/>with Embeddings]
-    end
-
-    subgraph "3. Retriever Creation"
-        CREATE_BASELINE[Baseline Retriever<br/>Dense Vector k=5]
-        CREATE_BM25[BM25 Retriever<br/>Sparse Keyword k=5]
-        CREATE_RERANK[Cohere Rerank<br/>k=20 -> rerank to 5]
-        CREATE_ENSEMBLE[Ensemble Retriever<br/>Dense + Sparse 50/50]
-    end
-
-    subgraph "4. LangGraph Workflows"
-        BUILD_GRAPHS[Build 4 LangGraphs<br/>retrieve -> generate]
-        RETRIEVERS_CONFIG[retrievers_config dict<br/>naive, bm25, ensemble, cohere_rerank]
-    end
-
-    subgraph "5. Question Processing Loop"
-        direction TB
-        LOOP_START{For each<br/>retriever}
-        LOOP_Q{For each<br/>question}
-        INVOKE[Invoke LangGraph<br/>question -> response]
-        COLLECT[Collect:<br/>- response<br/>- retrieved_contexts]
-        LOOP_Q_END{More<br/>questions?}
-        LOOP_END{More<br/>retrievers?}
-    end
-
-    subgraph "6. RAGAS Evaluation"
-        VALIDATE[Validate Schema<br/>normalize columns]
-        CREATE_EVAL[Create EvaluationDatasets]
-        RUN_RAGAS[Run RAGAS evaluate()<br/>Faithfulness, Answer Relevancy<br/>Context Precision, Context Recall]
-        SAVE_RESULTS[Save Individual Results<br/>CSV files]
-    end
-
-    subgraph "7. Comparison & Output"
-        COMPARE[Generate Comparison Table<br/>Average scores]
-        CALC_IMPROVE[Calculate Improvement<br/>over baseline]
-        SAVE_SUMMARY[Save Summary CSV]
-        GEN_MANIFEST[Generate RUN_MANIFEST.json]
-    end
-
-    END([End: Results in deliverables/])
-
-    START --> LOAD_GOLDEN
-    LOAD_GOLDEN --> LOAD_SOURCES
-    LOAD_SOURCES --> CONVERT
-
-    CONVERT --> QDRANT_INIT
-    QDRANT_INIT --> CREATE_COLL
-    CREATE_COLL --> ADD_DOCS
-
-    ADD_DOCS --> CREATE_BASELINE
-    ADD_DOCS --> CREATE_BM25
-    ADD_DOCS --> CREATE_RERANK
-    ADD_DOCS --> CREATE_ENSEMBLE
-
-    CREATE_BASELINE --> BUILD_GRAPHS
-    CREATE_BM25 --> BUILD_GRAPHS
-    CREATE_RERANK --> BUILD_GRAPHS
-    CREATE_ENSEMBLE --> BUILD_GRAPHS
-    BUILD_GRAPHS --> RETRIEVERS_CONFIG
-
-    RETRIEVERS_CONFIG --> LOOP_START
-    LOOP_START --> LOOP_Q
-    LOOP_Q --> INVOKE
-    INVOKE --> COLLECT
-    COLLECT --> LOOP_Q_END
-    LOOP_Q_END -->|Yes| LOOP_Q
-    LOOP_Q_END -->|No| LOOP_END
-    LOOP_END -->|Yes| LOOP_START
-    LOOP_END -->|No| VALIDATE
-
-    VALIDATE --> CREATE_EVAL
-    CREATE_EVAL --> RUN_RAGAS
-    RUN_RAGAS --> SAVE_RESULTS
-
-    SAVE_RESULTS --> COMPARE
-    COMPARE --> CALC_IMPROVE
-    CALC_IMPROVE --> SAVE_SUMMARY
-    SAVE_SUMMARY --> GEN_MANIFEST
-
-    GEN_MANIFEST --> END
-
-    %% High contrast WCAG AA compliant colors with white text
-    classDef loading fill:#1565C0,stroke:#0D47A1,stroke-width:3px,color:#FFFFFF
-    classDef setup fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
-    classDef creation fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    classDef workflow fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    classDef processing fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-    classDef evaluation fill:#00838F,stroke:#006064,stroke-width:3px,color:#FFFFFF
-    classDef output fill:#F57F17,stroke:#F57C00,stroke-width:3px,color:#FFFFFF
-    classDef terminal fill:#455A64,stroke:#263238,stroke-width:4px,color:#FFFFFF
-
-    class LOAD_GOLDEN,LOAD_SOURCES,CONVERT loading
-    class QDRANT_INIT,CREATE_COLL,ADD_DOCS setup
-    class CREATE_BASELINE,CREATE_BM25,CREATE_RERANK,CREATE_ENSEMBLE creation
-    class BUILD_GRAPHS,RETRIEVERS_CONFIG workflow
-    class LOOP_START,LOOP_Q,INVOKE,COLLECT,LOOP_Q_END,LOOP_END processing
-    class VALIDATE,CREATE_EVAL,RUN_RAGAS,SAVE_RESULTS evaluation
-    class COMPARE,CALC_IMPROVE,SAVE_SUMMARY,GEN_MANIFEST output
-    class START,END terminal
-```
-
-**Data Flow Highlights:**
-1. **Data Loading**: Pull datasets from HuggingFace Hub
-2. **Vector Store Setup**: Initialize Qdrant and embed all documents
-3. **Retriever Creation**: Build 4 different retrieval strategies
-4. **Workflow Creation**: Wrap each retriever in a LangGraph state machine
-5. **Question Processing**: Run all questions through all retrievers (4×12=48 total invocations)
-6. **RAGAS Evaluation**: Compute metrics for each retriever
-7. **Comparison**: Generate comparative analysis and manifest
-
----
-
-## 5. Class Hierarchies
-
-This diagram shows the class structures and their relationships. The system uses primarily TypedDict classes for state management rather than traditional OOP hierarchies.
+### Diagram
 
 ```mermaid
 classDiagram
     class State {
         <<TypedDict>>
         +str question
-        +List[Document] context
+        +List~Document~ context
         +str response
     }
 
@@ -409,377 +266,742 @@ classDiagram
         +dict metadata
     }
 
-    class ChatPromptTemplate {
-        <<LangChain>>
-        +from_template(template: str)
-        +format_messages(**kwargs)
-    }
-
-    class StateGraph {
-        <<LangGraph>>
-        +add_sequence(nodes: List)
-        +add_edge(from, to)
-        +compile()
-    }
-
-    class QdrantVectorStore {
-        <<LangChain-Qdrant>>
-        +client: QdrantClient
-        +collection_name: str
-        +embedding: Embeddings
-        +add_documents(docs)
-        +as_retriever(search_kwargs)
-    }
-
-    class BaseRetriever {
-        <<LangChain ABC>>
-        +invoke(query: str)
-    }
-
-    class BM25Retriever {
-        +from_documents(docs, k)
-        +invoke(query: str)
-    }
-
-    class EnsembleRetriever {
-        +retrievers: List[BaseRetriever]
-        +weights: List[float]
-        +invoke(query: str)
-    }
-
-    class ContextualCompressionRetriever {
-        +base_compressor: Compressor
-        +base_retriever: BaseRetriever
-        +invoke(query: str)
-    }
-
-    class CohereRerank {
-        +model: str
-        +compress_documents(docs, query)
-    }
-
     class ChatOpenAI {
-        +model: str
-        +temperature: float
-        +invoke(messages)
+        <<LangChain>>
+        +str model
+        +int temperature
+        +invoke(messages) str
     }
 
     class OpenAIEmbeddings {
-        +model: str
-        +embed_documents(texts)
-        +embed_query(text)
+        <<LangChain>>
+        +str model
+        +embed_documents(texts) List~float~
+        +embed_query(text) List~float~
     }
 
-    State o-- Document : contains list of
+    class QdrantClient {
+        <<Qdrant>>
+        +str host
+        +int port
+        +get_collections()
+        +create_collection(name, vectors_config)
+        +delete_collection(name)
+    }
 
-    BaseRetriever <|-- BM25Retriever : inherits
-    BaseRetriever <|-- EnsembleRetriever : inherits
-    BaseRetriever <|-- ContextualCompressionRetriever : inherits
+    class QdrantVectorStore {
+        <<LangChain>>
+        +QdrantClient client
+        +OpenAIEmbeddings embedding
+        +str collection_name
+        +add_documents(documents)
+        +as_retriever(search_kwargs) Retriever
+    }
 
-    EnsembleRetriever o-- BaseRetriever : aggregates
-    ContextualCompressionRetriever o-- BaseRetriever : wraps
-    ContextualCompressionRetriever o-- CohereRerank : uses
+    class VectorStoreRetriever {
+        <<LangChain>>
+        +invoke(query) List~Document~
+    }
 
-    QdrantVectorStore o-- OpenAIEmbeddings : uses
+    class BM25Retriever {
+        <<LangChain>>
+        +from_documents(docs, k) BM25Retriever
+        +invoke(query) List~Document~
+    }
 
-    StateGraph o-- State : manages
+    class EnsembleRetriever {
+        <<LangChain>>
+        +List~Retriever~ retrievers
+        +List~float~ weights
+        +invoke(query) List~Document~
+    }
 
-    note for State "Used in all LangGraph workflows\nDefines input/output schema"
-    note for BaseRetriever "All retrievers implement\nthe same invoke() interface"
-    note for StateGraph "Creates compiled workflows\nfor each retriever strategy"
+    class ContextualCompressionRetriever {
+        <<LangChain>>
+        +CohereRerank base_compressor
+        +Retriever base_retriever
+        +invoke(query) List~Document~
+    }
+
+    class CohereRerank {
+        <<LangChain>>
+        +str model
+        +compress_documents(documents, query) List~Document~
+    }
+
+    class CompiledGraph {
+        <<LangGraph>>
+        +invoke(input) State
+        +stream(input) Iterator~State~
+    }
+
+    class ChatPromptTemplate {
+        <<LangChain>>
+        +from_template(template) ChatPromptTemplate
+        +format_messages(kwargs) List~Message~
+    }
+
+    %% Relationships
+    State *-- Document : contains
+    QdrantVectorStore --> QdrantClient : uses
+    QdrantVectorStore --> OpenAIEmbeddings : uses
+    QdrantVectorStore --> VectorStoreRetriever : creates
+    EnsembleRetriever o-- VectorStoreRetriever : combines
+    EnsembleRetriever o-- BM25Retriever : combines
+    ContextualCompressionRetriever --> VectorStoreRetriever : wraps
+    ContextualCompressionRetriever --> CohereRerank : uses
+    CompiledGraph --> VectorStoreRetriever : uses
+    CompiledGraph --> BM25Retriever : uses
+    CompiledGraph --> EnsembleRetriever : uses
+    CompiledGraph --> ContextualCompressionRetriever : uses
+    CompiledGraph --> ChatOpenAI : uses
+    CompiledGraph --> ChatPromptTemplate : uses
+    CompiledGraph --> State : manages
 ```
 
-**Class Design Observations:**
-- **Minimal Custom Classes**: Project uses TypedDict (State) instead of custom classes
-- **Composition over Inheritance**: Uses LangChain's retriever abstractions
-- **Interface Uniformity**: All retrievers expose the same `invoke()` interface
-- **Framework Integration**: Heavy reliance on LangChain/LangGraph abstractions
+### Explanation
+
+**State Management**:
+- `State` (TypedDict): Immutable state schema with three fields (question, context, response)
+- LangGraph nodes return partial state updates (dicts) that are automatically merged
+
+**LLM & Embeddings**:
+- `ChatOpenAI`: OpenAI LLM wrapper (gpt-4.1-mini, temperature=0 for determinism)
+- `OpenAIEmbeddings`: OpenAI embeddings (text-embedding-3-small, 1536 dimensions)
+
+**Vector Store**:
+- `QdrantClient`: Low-level Qdrant client (host:port, collection management)
+- `QdrantVectorStore`: LangChain wrapper providing high-level interface
+- Creates `VectorStoreRetriever` instances via `as_retriever()`
+
+**Retriever Strategies** (4 types):
+1. `VectorStoreRetriever`: Dense vector search (naive baseline)
+2. `BM25Retriever`: Sparse keyword matching (lexical)
+3. `EnsembleRetriever`: Hybrid combining dense + sparse (50/50 weights)
+4. `ContextualCompressionRetriever`: Dense retrieval + Cohere reranking
+
+**Workflow Orchestration**:
+- `CompiledGraph`: LangGraph compiled state machine
+- Executes retrieve -> generate pipeline
+- Uses `ChatPromptTemplate` for prompt formatting
+
+**Design Patterns**:
+- **Composition over Inheritance**: Retrievers composed (EnsembleRetriever, ContextualCompressionRetriever)
+- **Strategy Pattern**: 4 interchangeable retrieval strategies
+- **Template Method**: Shared prompt templates
+- **Dependency Injection**: All components passed to graph factory
 
 ---
 
-## 6. Execution Flow (Sequence Diagram)
+## 4. Module Dependencies
 
-This sequence diagram shows the detailed execution flow for a single question through a single retriever.
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
-sequenceDiagram
-    autonumber
-
-    actor U as 👤 User
-    participant SC as 📄 single_file.py
-    participant GR as 🔄 LangGraph<br/>Workflow
-    participant RT as 🔍 Retriever<br/>Module
-    participant QD as 📊 Qdrant<br/>Vector DB
-    participant LLM as 🤖 GPT-4.1-mini
-    participant CO as ⚡ Cohere<br/>Rerank
-    participant RG as 📈 RAGAS<br/>Evaluator
-
-    U->>+SC: python scripts/single_file.py
-
-    rect rgb(230, 240, 255)
-        Note over SC: Phase 1: Initialization
-        SC->>SC: Load golden testset from HF
-        SC->>SC: Load source documents from HF
-        SC->>+QD: Initialize client (localhost:6333)
-        SC->>QD: Create collection<br/>"gdelt_comparative_eval"
-        SC->>QD: Add 38 documents<br/>with embeddings
-        deactivate QD
-        SC->>SC: Create 4 retrievers
-        SC->>GR: Build 4 LangGraph workflows
-    end
-
-    rect rgb(240, 255, 240)
-        Note over SC,LLM: Phase 2: Question Processing (4×12=48 runs)
-        loop For each retriever (4x)
-            loop For each question (12x)
-                SC->>+GR: invoke({"question": question})
-
-                alt Baseline Retriever
-                    GR->>+RT: retrieve_baseline(state)
-                    RT->>+QD: similarity_search(query, k=5)
-                    QD-->>-RT: 5 documents
-                    RT-->>-GR: context=[doc1..doc5]
-                else BM25 Retriever
-                    GR->>+RT: retrieve_bm25(state)
-                    RT->>RT: BM25 keyword matching (local)
-                    RT-->>-GR: context=[doc1..doc5]
-                else Cohere Rerank
-                    GR->>+RT: retrieve_reranked(state)
-                    RT->>+QD: similarity_search(query, k=20)
-                    QD-->>-RT: 20 candidate documents
-                    RT->>+CO: rerank(docs, query, top_n=5)
-                    CO-->>-RT: Top 5 reranked documents
-                    RT-->>-GR: context=[doc1..doc5]
-                else Ensemble Retriever
-                    GR->>+RT: retrieve_ensemble(state)
-                    par Dense + Sparse in parallel
-                        RT->>QD: similarity_search(query, k=5)
-                        RT->>RT: BM25 search (k=5)
-                    end
-                    RT->>RT: Merge with weights [0.5, 0.5]
-                    RT-->>-GR: context=[merged docs]
-                end
-
-                GR->>GR: generate(state)
-                GR->>GR: Format prompt with context
-                GR->>+LLM: invoke(prompt)
-                LLM-->>-GR: Generated response text
-                GR-->>-SC: {"response": answer,<br/>"context": docs}
-
-                SC->>SC: Store response & contexts
-            end
-        end
-    end
-
-    rect rgb(255, 245, 230)
-        Note over SC,RG: Phase 3: RAGAS Evaluation (4 metrics × 12 questions)
-        loop For each retriever (4x)
-            SC->>SC: Validate schema
-            SC->>SC: Create EvaluationDataset
-            SC->>+RG: evaluate(dataset, metrics, llm)
-
-            loop For each question (12x)
-                RG->>+LLM: Calculate Faithfulness
-                LLM-->>-RG: Faithfulness score
-                RG->>+LLM: Calculate Answer Relevancy
-                LLM-->>-RG: Relevancy score
-                RG->>+LLM: Calculate Context Precision
-                LLM-->>-RG: Precision score
-                RG->>+LLM: Calculate Context Recall
-                LLM-->>-RG: Recall score
-            end
-
-            RG-->>-SC: EvaluationResult<br/>(DataFrame with metrics)
-            SC->>SC: Save individual results CSV
-        end
-    end
-
-    rect rgb(255, 250, 205)
-        Note over SC: Phase 4: Final Output & Manifest
-        SC->>SC: Generate comparison table
-        SC->>SC: Calculate % improvements<br/>over baseline
-        SC->>SC: Save comparative_ragas_results.csv
-        SC->>SC: Generate RUN_MANIFEST.json<br/>(reproducibility metadata)
-        SC-->>-U: ✅ Print results & file paths
-    end
-```
-
-**Execution Highlights:**
-- **Sequential Processing**: Questions processed one at a time per retriever
-- **Parallel Retrieval**: Ensemble retriever runs dense + sparse in parallel
-- **External API Calls**: Multiple calls to OpenAI (embeddings, LLM) and Cohere (reranking)
-- **Immediate Persistence**: Results saved after each retriever to prevent data loss
-- **Total LLM Calls**: ~240+ calls (48 for generation + ~192 for RAGAS metrics)
-
----
-
-## 7. Retriever Strategy Comparison
-
-This diagram compares the different retrieval strategies implemented in the system.
-
-```mermaid
-graph TB
-    QUESTION[Question: User Input]
-
-    subgraph "Strategy 1: Naive Baseline"
-        N1[Embed Query<br/>OpenAI text-embedding-3-small]
-        N2[Vector Search<br/>Qdrant cosine similarity]
-        N3[Return Top 5]
-    end
-
-    subgraph "Strategy 2: BM25 Sparse"
-        B1[Tokenize Query<br/>Keyword extraction]
-        B2[BM25 Scoring<br/>Term frequency analysis]
-        B3[Return Top 5]
-    end
-
-    subgraph "Strategy 3: Cohere Rerank"
-        C1[Embed Query<br/>OpenAI text-embedding-3-small]
-        C2[Vector Search<br/>Qdrant k=20]
-        C3[Rerank with Cohere<br/>rerank-v3.5 model]
-        C4[Return Top 5]
-    end
-
-    subgraph "Strategy 4: Ensemble Hybrid"
-        E1A[Dense Path<br/>Vector k=5]
-        E1B[Sparse Path<br/>BM25 k=5]
-        E2[Merge Results<br/>50% dense + 50% sparse]
-        E3[Return Merged Set]
-    end
-
-    ANSWER[Answer Generation<br/>GPT-4.1-mini with context]
-
-    QUESTION --> N1
-    N1 --> N2
-    N2 --> N3
-    N3 --> ANSWER
-
-    QUESTION --> B1
-    B1 --> B2
-    B2 --> B3
-    B3 --> ANSWER
-
-    QUESTION --> C1
-    C1 --> C2
-    C2 --> C3
-    C3 --> C4
-    C4 --> ANSWER
-
-    QUESTION --> E1A
-    QUESTION --> E1B
-    E1A --> E2
-    E1B --> E2
-    E2 --> E3
-    E3 --> ANSWER
-
-    %% High contrast WCAG AA compliant colors
-    classDef naive fill:#1565C0,stroke:#0D47A1,stroke-width:3px,color:#FFFFFF
-    classDef bm25 fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
-    classDef rerank fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    classDef ensemble fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    classDef common fill:#455A64,stroke:#263238,stroke-width:4px,color:#FFFFFF
-
-    class N1,N2,N3 naive
-    class B1,B2,B3 bm25
-    class C1,C2,C3,C4 rerank
-    class E1A,E1B,E2,E3 ensemble
-    class QUESTION,ANSWER common
-```
-
-**Strategy Characteristics:**
-
-| Strategy | Type | Strengths | Weaknesses | Complexity |
-|----------|------|-----------|------------|------------|
-| **Naive** | Dense Vector | Fast, semantic understanding | Miss exact keywords | Low |
-| **BM25** | Sparse Keyword | Exact term matching | No semantic understanding | Low |
-| **Cohere Rerank** | Contextual Compression | Best of both worlds | Slower, API cost | High |
-| **Ensemble** | Hybrid | Balanced approach | Tuning weights needed | Medium |
-
----
-
-## 8. File Organization Map
-
-This diagram shows the physical file structure of the project (main code only, excluding framework directories).
+### Diagram
 
 ```mermaid
 graph TD
-    ROOT[cert-challenge/]
+    %% External dependencies
+    EXT_LC[langchain_core<br/>langchain_openai<br/>langchain_community]
+    EXT_LG[langgraph]
+    EXT_QD[qdrant_client<br/>langchain_qdrant]
+    EXT_HF[datasets<br/>huggingface_hub]
+    EXT_RAGAS[ragas]
+    EXT_COHERE[langchain_cohere]
 
-    ROOT --> MAIN[main.py]
-    ROOT --> SRC[src/]
-    ROOT --> SCRIPTS[scripts/]
-    ROOT --> DATA[data/]
-    ROOT --> DELIVERABLES[deliverables/]
+    %% src/ modules
+    CONFIG[src/config.py]
+    UTILS[src/utils.py]
+    STATE[src/state.py]
+    PROMPTS[src/prompts.py]
+    RETRIEVERS[src/retrievers.py]
+    GRAPH[src/graph.py]
 
-    SRC --> SRC_INIT[__init__.py]
-    SRC --> SRC_CONFIG[config.py<br/>146 loc]
-    SRC --> SRC_STATE[state.py<br/>10 loc]
-    SRC --> SRC_PROMPTS[prompts.py<br/>12 loc]
-    SRC --> SRC_RETRIEVERS[retrievers.py<br/>58 loc]
-    SRC --> SRC_GRAPH[graph.py<br/>72 loc]
-    SRC --> SRC_UTILS[utils.py<br/>2 loc, empty]
+    %% scripts/ modules
+    EVAL[scripts/run_eval_harness.py]
+    SINGLE[scripts/single_file.py]
+    VALIDATE[scripts/validate_langgraph.py]
+    INGEST[scripts/ingest.py]
+    MANIFEST[scripts/generate_run_manifest.py]
+    UPLOAD[scripts/upload_to_hf.py]
+    ENRICH[scripts/enrich_manifest.py]
 
-    SCRIPTS --> SC_INGEST[ingest.py<br/>336 loc<br/>PDF->RAGAS pipeline]
-    SCRIPTS --> SC_MANIFEST[generate_run_manifest.py<br/>188 loc<br/>Reproducibility manifest]
-    SCRIPTS --> SC_ENRICH[enrich_manifest.py<br/>244 loc<br/>Manifest enrichment]
-    SCRIPTS --> SC_UPLOAD[upload_to_hf.py<br/>293 loc<br/>HuggingFace upload]
-    SCRIPTS --> SC_SINGLE[single_file.py<br/>508 loc<br/>Main evaluation script]
+    %% External -> src/
+    EXT_LC --> CONFIG
+    EXT_LC --> UTILS
+    EXT_LC --> STATE
+    EXT_LC --> PROMPTS
+    EXT_LC --> RETRIEVERS
+    EXT_LC --> GRAPH
+    EXT_QD --> CONFIG
+    EXT_QD --> RETRIEVERS
+    EXT_HF --> UTILS
+    EXT_COHERE --> RETRIEVERS
+    EXT_LG --> GRAPH
 
-    DATA --> DATA_RAW[raw/<br/>PDF documents]
-    DATA --> DATA_INTERIM[interim/<br/>Sources, testset, manifest]
-    DATA --> DATA_PROCESSED[processed/<br/>Evaluation results]
+    %% src/ internal
+    CONFIG --> EXT_LC
+    CONFIG --> EXT_QD
+    UTILS --> EXT_HF
+    STATE --> EXT_LC
+    RETRIEVERS --> CONFIG
+    RETRIEVERS --> EXT_LC
+    RETRIEVERS --> EXT_COHERE
+    GRAPH --> RETRIEVERS
+    GRAPH --> CONFIG
+    GRAPH --> STATE
+    GRAPH --> PROMPTS
+    GRAPH --> EXT_LG
 
-    DELIVERABLES --> DEL_EVIDENCE[evaluation_evidence/<br/>CSV results]
-    DELIVERABLES --> DEL_MANIFEST[RUN_MANIFEST.json]
+    %% scripts/ -> src/
+    EVAL --> CONFIG
+    EVAL --> UTILS
+    EVAL --> RETRIEVERS
+    EVAL --> GRAPH
+    EVAL --> EXT_RAGAS
+    EVAL --> MANIFEST
 
-    %% High contrast WCAG AA compliant colors with white text
-    classDef root fill:#455A64,stroke:#263238,stroke-width:4px,color:#FFFFFF
-    classDef folder fill:#0277BD,stroke:#01579B,stroke-width:3px,color:#FFFFFF
-    classDef srcFile fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
-    classDef scriptFile fill:#EF6C00,stroke:#E65100,stroke-width:3px,color:#FFFFFF
-    classDef dataFolder fill:#C2185B,stroke:#880E4F,stroke-width:3px,color:#FFFFFF
-    classDef output fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
+    SINGLE --> EXT_LC
+    SINGLE --> EXT_LG
+    SINGLE --> EXT_QD
+    SINGLE --> EXT_RAGAS
 
-    class ROOT root
-    class SRC,SCRIPTS,DATA,DELIVERABLES folder
-    class SRC_INIT,SRC_CONFIG,SRC_STATE,SRC_PROMPTS,SRC_RETRIEVERS,SRC_GRAPH,SRC_UTILS srcFile
-    class SC_INGEST,SC_MANIFEST,SC_ENRICH,SC_UPLOAD,SC_SINGLE scriptFile
-    class DATA_RAW,DATA_INTERIM,DATA_PROCESSED dataFolder
-    class DEL_EVIDENCE,DEL_MANIFEST output
+    VALIDATE --> CONFIG
+    VALIDATE --> UTILS
+    VALIDATE --> RETRIEVERS
+    VALIDATE --> GRAPH
+
+    INGEST --> EXT_LC
+    INGEST --> EXT_RAGAS
+    INGEST --> EXT_HF
+
+    MANIFEST --> EXT_RAGAS
+
+    UPLOAD --> EXT_HF
+    UPLOAD --> ENRICH
+
+    ENRICH --> EXT_HF
+
+    style CONFIG fill:#ffd700
+    style EXT_LC fill:#e8e8e8
+    style EXT_LG fill:#e8e8e8
+    style EXT_QD fill:#e8e8e8
+    style EXT_HF fill:#e8e8e8
+    style EXT_RAGAS fill:#e8e8e8
+    style EXT_COHERE fill:#e8e8e8
 ```
 
-**Code Metrics:**
-- **Total Project LOC**: ~1,700 lines (excluding framework directories)
-- **Core System (src/)**: ~300 lines
-- **Scripts**: ~1,400 lines
-- **Largest Module**: single_file.py (508 lines) - complete evaluation pipeline
-- **Most Complex**: ingest.py (336 lines) - RAGAS testset generation
-- **Smallest**: utils.py (2 lines, empty placeholder)
+### Explanation
+
+**External Dependencies** (Gray boxes):
+- `langchain_core`, `langchain_openai`, `langchain_community`: LangChain framework
+- `langgraph`: State machine workflow orchestration
+- `qdrant_client`, `langchain_qdrant`: Vector database integration
+- `datasets`, `huggingface_hub`: Dataset management and hub integration
+- `ragas`: RAG evaluation framework
+- `langchain_cohere`: Cohere reranking integration
+
+**Core Module Dependencies** (`src/`):
+
+1. **`config.py`** (Gold - Central Hub):
+   - Depends on: `langchain_openai`, `langchain_qdrant`, `qdrant_client`
+   - Provides: Cached LLM, embeddings, Qdrant client, vector store factory
+   - No internal dependencies
+
+2. **`utils.py`**:
+   - Depends on: `datasets` (HuggingFace), `langchain_core.documents`
+   - Provides: Document loading with revision pinning
+   - No internal dependencies
+
+3. **`state.py`**:
+   - Depends on: `typing_extensions.TypedDict`, `langchain_core.documents`
+   - Pure schema definition
+   - No internal dependencies
+
+4. **`prompts.py`**:
+   - No dependencies
+   - Pure constants (prompt templates)
+
+5. **`retrievers.py`**:
+   - Depends on: `config`, `langchain_community`, `langchain_cohere`, `langchain_qdrant`
+   - Factory function creating 4 retrieval strategies
+
+6. **`graph.py`**:
+   - Depends on: `retrievers`, `config`, `state`, `prompts`, `langgraph`
+   - Factory functions building LangGraph workflows
+
+**Script Dependencies** (`scripts/`):
+
+1. **`run_eval_harness.py`** (Main Evaluation):
+   - Uses ALL core modules (`config`, `utils`, `retrievers`, `graph`)
+   - Depends on `ragas` for evaluation
+   - Calls `generate_run_manifest.py`
+
+2. **`single_file.py`** (Standalone):
+   - Direct external dependencies (no `src/` imports)
+   - Inline implementations of retriever/graph logic
+
+3. **`validate_langgraph.py`**:
+   - Tests all core modules
+   - Validates factory patterns
+
+4. **`ingest.py`** (Data Pipeline):
+   - Uses external APIs directly
+   - Generates RAGAS testsets
+
+5. **Utility Scripts**:
+   - `generate_run_manifest.py`: Reproducibility metadata
+   - `upload_to_hf.py`: HuggingFace upload workflow
+   - `enrich_manifest.py`: Manifest enrichment
+
+**Dependency Principles**:
+- **Acyclic**: No circular dependencies
+- **Layered**: Scripts depend on `src/`, `src/` depends on externals
+- **Minimal Coupling**: Each module has focused responsibilities
+- **Factory Pattern**: Configuration separated from instantiation
+
+---
+
+## 5. Data Flow (LangGraph Workflow)
+
+### Diagram
+
+```mermaid
+graph LR
+    subgraph "Input"
+        Q[User Question<br/>str]
+    end
+
+    subgraph "State Initialization"
+        S0[Initial State<br/>question: str<br/>context: None<br/>response: None]
+    end
+
+    subgraph "Retrieval Node"
+        R1{Retriever<br/>Strategy}
+        R1A[Naive<br/>Dense Vector Search<br/>k=5]
+        R1B[BM25<br/>Sparse Keyword<br/>k=5]
+        R1C[Ensemble<br/>Dense + Sparse<br/>50/50 weights]
+        R1D[Cohere Rerank<br/>Retrieve 20<br/>Rerank to top-5]
+    end
+
+    subgraph "State Update 1"
+        S1[Updated State<br/>question: str<br/>context: List~Document~<br/>response: None]
+    end
+
+    subgraph "Generation Node"
+        G1[Format Prompt<br/>BASELINE_PROMPT<br/>question + context]
+        G2[LLM Call<br/>ChatOpenAI<br/>gpt-4.1-mini<br/>temperature=0]
+    end
+
+    subgraph "State Update 2"
+        S2[Final State<br/>question: str<br/>context: List~Document~<br/>response: str]
+    end
+
+    subgraph "Output"
+        OUT[Response<br/>str]
+    end
+
+    %% Flow
+    Q --> S0
+    S0 -->|START| R1
+    R1 --> R1A
+    R1 --> R1B
+    R1 --> R1C
+    R1 --> R1D
+    R1A --> S1
+    R1B --> S1
+    R1C --> S1
+    R1D --> S1
+    S1 --> G1
+    G1 --> G2
+    G2 --> S2
+    S2 -->|END| OUT
+
+    %% Data annotations
+    R1A -.->|5 Documents| S1
+    R1B -.->|5 Documents| S1
+    R1C -.->|5 Documents| S1
+    R1D -.->|5 Documents| S1
+    G2 -.->|Answer String| S2
+
+    style Q fill:#e3f2fd
+    style S0 fill:#fff9c4
+    style S1 fill:#fff9c4
+    style S2 fill:#fff9c4
+    style OUT fill:#c8e6c9
+    style R1 fill:#ffe0b2
+    style R1A fill:#ffccbc
+    style R1B fill:#ffccbc
+    style R1C fill:#ffccbc
+    style R1D fill:#ffccbc
+    style G1 fill:#f3e5f5
+    style G2 fill:#f3e5f5
+```
+
+### Explanation
+
+**LangGraph State Machine Flow**:
+
+1. **Input**: User provides a question (string)
+
+2. **State Initialization**:
+   - Creates initial State with: `{question: str, context: None, response: None}`
+
+3. **Retrieval Node** (retrieve function):
+   - Input: State with question
+   - Processing: One of 4 retrieval strategies:
+     - **Naive**: QdrantVectorStore dense search (cosine similarity, k=5)
+     - **BM25**: Sparse keyword matching (TF-IDF, k=5)
+     - **Ensemble**: Hybrid combining naive + BM25 (50/50 weighted)
+     - **Cohere Rerank**: Dense search (k=20) → Cohere rerank (top-5)
+   - Output: Returns `{context: List[Document]}` (partial state update)
+   - LangGraph merges: State now has question + context
+
+4. **State Update 1**:
+   - State: `{question: str, context: List[Document], response: None}`
+
+5. **Generation Node** (generate function):
+   - Input: State with question + context
+   - Processing:
+     - Formats prompt using `BASELINE_PROMPT` template
+     - Concatenates document page_content from context
+     - Invokes ChatOpenAI (gpt-4.1-mini, temperature=0)
+   - Output: Returns `{response: str}` (partial state update)
+   - LangGraph merges: State now has question + context + response
+
+6. **State Update 2**:
+   - Final State: `{question: str, context: List[Document], response: str}`
+
+7. **Output**: Returns complete state (or just response, depending on usage)
+
+**Key Characteristics**:
+
+- **Immutable State**: Nodes never mutate state directly, only return updates
+- **Automatic Merging**: LangGraph handles state merging between nodes
+- **Deterministic**: temperature=0 for reproducible outputs
+- **Modular**: Same graph structure works with any retriever (Strategy Pattern)
+- **Type Safety**: State schema enforced via TypedDict
+
+**Retrieval Strategy Details**:
+
+| Strategy | Method | Initial K | Final K | Reranking |
+|----------|--------|-----------|---------|-----------|
+| Naive | Dense vector (cosine) | 5 | 5 | No |
+| BM25 | Sparse keyword (TF-IDF) | 5 | 5 | No |
+| Ensemble | Dense + Sparse (50/50) | 5+5 | 5 | No |
+| Cohere Rerank | Dense → Rerank | 20 | 5 | Yes (rerank-v3.5) |
+
+**RAGAS Evaluation Flow** (Extended):
+
+When using the evaluation harness (`run_eval_harness.py`):
+1. Load 12 test questions from golden testset
+2. Run each question through all 4 retriever graphs
+3. Collect: question, retrieved_contexts, response, reference (ground truth)
+4. Evaluate with RAGAS metrics:
+   - **Faithfulness**: Answer grounded in retrieved context?
+   - **Answer Relevancy**: Answer addresses question?
+   - **Context Precision**: Relevant contexts ranked higher?
+   - **Context Recall**: Ground truth covered by contexts?
+5. Generate comparative results table
+
+---
+
+## Architecture Patterns
+
+### 1. Factory Pattern
+
+**Used throughout the codebase for component creation:**
+
+```python
+# src/config.py
+def create_vector_store(documents, collection_name=None, recreate_collection=False):
+    client = get_qdrant()
+    embeddings = get_embeddings()
+    # ... create and return vector store
+
+# src/retrievers.py
+def create_retrievers(documents, vector_store, k=5):
+    naive_retriever = vector_store.as_retriever(search_kwargs={"k": k})
+    bm25_retriever = BM25Retriever.from_documents(documents, k=k)
+    # ... return dict of retrievers
+
+# src/graph.py
+def build_graph(retriever, llm=None, prompt_template=None):
+    # ... build and return compiled graph
+
+def build_all_graphs(retrievers, llm=None):
+    return {name: build_graph(ret, llm) for name, ret in retrievers.items()}
+```
+
+**Benefits**:
+- Separation of configuration from instantiation
+- Testability (mock dependencies)
+- Reusability across different scripts
+- Clear dependency injection points
+
+### 2. Strategy Pattern
+
+**4 interchangeable retrieval strategies:**
+
+```python
+retrievers = {
+    "naive": VectorStoreRetriever,           # Dense vector search
+    "bm25": BM25Retriever,                   # Sparse keyword
+    "ensemble": EnsembleRetriever,           # Hybrid
+    "cohere_rerank": ContextualCompressionRetriever  # Reranking
+}
+
+# All implement same interface: invoke(query) -> List[Document]
+# Can swap retriever without changing graph logic
+graph = build_graph(retrievers['naive'])
+```
+
+### 3. Singleton Pattern (via @lru_cache)
+
+**Cached expensive objects:**
+
+```python
+@lru_cache(maxsize=1)
+def get_llm():
+    return ChatOpenAI(model=OPENAI_MODEL, temperature=0)
+
+@lru_cache(maxsize=1)
+def get_embeddings():
+    return OpenAIEmbeddings(model=OPENAI_EMBED_MODEL)
+
+@lru_cache(maxsize=1)
+def get_qdrant():
+    return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+```
+
+**Benefits**:
+- Single instance shared across application
+- Lazy initialization
+- Thread-safe (functools.lru_cache)
+
+### 4. Template Method Pattern
+
+**Shared prompt templates:**
+
+```python
+# src/prompts.py
+BASELINE_PROMPT = """
+You are a helpful assistant who answers questions based on provided context.
+You must only use the provided context, and cannot use your own knowledge.
+
+### Question
+{question}
+
+### Context
+{context}
+"""
+
+# Used consistently across all retrievers
+rag_prompt = ChatPromptTemplate.from_template(BASELINE_PROMPT)
+```
+
+### 5. Composition over Inheritance
+
+**Retrievers composed, not inherited:**
+
+```python
+# EnsembleRetriever composes two retrievers
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[naive_retriever, bm25_retriever],
+    weights=[0.5, 0.5]
+)
+
+# ContextualCompressionRetriever wraps a retriever
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=wide_retriever
+)
+```
+
+### 6. Immutable State Management
+
+**LangGraph state updates via return values:**
+
+```python
+def retrieve(state: State) -> dict:
+    docs = retriever.invoke(state["question"])
+    return {"context": docs}  # Partial update, not mutation
+
+def generate(state: State) -> dict:
+    response = llm.invoke(messages)
+    return {"response": response.content}  # Partial update
+```
+
+**Benefits**:
+- No side effects
+- Easy to reason about
+- Thread-safe
+- Testable
+
+---
+
+## Design Principles
+
+### 1. Separation of Concerns
+
+**Clear module responsibilities:**
+
+| Module | Responsibility | Dependencies |
+|--------|---------------|--------------|
+| `config.py` | Configuration, caching, factories | External APIs only |
+| `utils.py` | Data loading, HuggingFace integration | `datasets`, `config` |
+| `state.py` | State schema definition | None |
+| `prompts.py` | Prompt templates | None |
+| `retrievers.py` | Retriever creation | `config` |
+| `graph.py` | Workflow orchestration | All core modules |
+
+### 2. Dependency Injection
+
+**All dependencies passed explicitly:**
+
+```python
+# Bad: Module-level instantiation
+llm = ChatOpenAI(...)  # Hard to test, hard to configure
+
+# Good: Factory with dependency injection
+def build_graph(retriever, llm=None, prompt_template=None):
+    if llm is None:
+        llm = get_llm()  # Default but overridable
+    # ...
+```
+
+### 3. Configuration Management
+
+**Centralized, environment-driven configuration:**
+
+```python
+# Environment variables with sensible defaults
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "gdelt_comparative_eval")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+```
+
+### 4. Reproducibility
+
+**Multiple mechanisms for reproducible results:**
+
+1. **Deterministic LLM**: `temperature=0` for all LLM calls
+2. **Dataset Pinning**: HuggingFace revision parameter for version control
+3. **Run Manifests**: `generate_run_manifest.py` captures exact configuration
+4. **Version Tracking**: All dependencies, models, parameters recorded
+
+```python
+def load_documents_from_huggingface(dataset_name, split="train", revision=None):
+    effective_revision = revision or os.getenv("HF_SOURCES_REV")
+    sources_dataset = load_dataset(dataset_name, split=split, revision=effective_revision)
+    # ...
+```
+
+### 5. Fail-Fast Error Handling
+
+**Pre-flight checks in scripts:**
+
+```python
+# Check for required API keys
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("OPENAI_API_KEY environment variable must be set")
+
+# Check for Qdrant connectivity
+try:
+    qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    collections = qdrant_client.get_collections()
+except Exception as e:
+    raise RuntimeError(f"Failed to connect to Qdrant: {e}")
+```
+
+### 6. Immediate Persistence
+
+**Save results incrementally to prevent data loss:**
+
+```python
+for retriever_name, graph in retrievers_config.items():
+    # Process questions
+    for idx, row in datasets[retriever_name].iterrows():
+        result = graph.invoke({"question": question})
+        # ... update dataset
+
+    # Save immediately after each retriever (not at end)
+    raw_file = output_dir / f"{retriever_name}_raw_dataset.parquet"
+    datasets[retriever_name].to_parquet(raw_file, index=False)
+    print(f"💾 Saved: {raw_file.name}")
+```
+
+### 7. Validation and Testing
+
+**Dedicated validation script for system health:**
+
+- `validate_langgraph.py`: Validates environment, imports, factory patterns, graph compilation, functional execution
+- Provides diagnostic reports and actionable fixes
+- Demonstrates correct initialization patterns
+
+### 8. Documentation as Code
+
+**Comprehensive docstrings with examples:**
+
+```python
+def create_vector_store(documents, collection_name=None, recreate_collection=False):
+    """
+    Create and populate Qdrant vector store.
+
+    This factory function handles:
+    - Creating Qdrant collection if it doesn't exist
+    - Optionally recreating collection if it does exist
+    - Populating vector store with documents
+
+    Args:
+        documents: List of Document objects to add to vector store
+        collection_name: Override default collection name (optional)
+        recreate_collection: If True, delete existing collection first (default: False)
+
+    Returns:
+        Populated QdrantVectorStore instance
+
+    Example:
+        >>> from src.utils import load_documents_from_huggingface
+        >>> from src.config import create_vector_store
+        >>> documents = load_documents_from_huggingface()
+        >>> vector_store = create_vector_store(documents, recreate_collection=True)
+    """
+    # ...
+```
 
 ---
 
 ## Summary
 
-This RAG evaluation system demonstrates a well-architected approach to comparing retrieval strategies:
+This GDELT RAG system demonstrates production-grade architecture with:
 
-### Strengths
-- **Modular Design**: Clear separation between configuration, state, retrievers, and workflows
-- **Framework Integration**: Leverages LangChain/LangGraph abstractions effectively
-- **Reproducibility**: Comprehensive manifest tracking and versioning
-- **Evaluation Rigor**: RAGAS metrics with proper schema validation
-- **Data Pipeline**: Complete flow from PDFs to HuggingFace datasets to evaluation results
+**Strengths**:
+- Clean layered architecture with separation of concerns
+- Factory pattern enabling testability and reusability
+- Multiple retrieval strategies (Strategy Pattern)
+- Immutable state management (LangGraph)
+- Comprehensive reproducibility mechanisms
+- Clear documentation and validation tools
 
-### Architecture Patterns
-- **State Machine Pattern**: LangGraph workflows for retrieval pipelines
-- **Strategy Pattern**: Multiple retriever implementations with uniform interface
-- **Repository Pattern**: Qdrant as vector store abstraction
-- **Configuration as Code**: Centralized config.py for all settings
+**File Organization**:
+- `/home/donbr/don-aie-cohort8/cert-challenge/src/`: Core application logic (6 modules)
+- `/home/donbr/don-aie-cohort8/cert-challenge/scripts/`: Entry points and workflows (8 scripts)
+- `/home/donbr/don-aie-cohort8/cert-challenge/deliverables/evaluation_evidence/`: Evaluation results
+- `/home/donbr/don-aie-cohort8/cert-challenge/data/`: Raw, interim, processed data
 
-### Evaluation Approach
-- **4 Retrieval Strategies**: Baseline, BM25, Cohere Rerank, Ensemble
-- **4 RAGAS Metrics**: Faithfulness, Answer Relevancy, Context Precision, Context Recall
-- **12 Test Questions**: Synthetic testset from research paper
-- **48 Total Evaluations**: 4 retrievers × 12 questions
+**Key Workflows**:
+1. **Data Ingestion**: `scripts/ingest.py` → PDF to HuggingFace
+2. **Evaluation**: `scripts/run_eval_harness.py` → RAGAS metrics
+3. **Validation**: `scripts/validate_langgraph.py` → System health checks
+4. **Publishing**: `scripts/upload_to_hf.py` → HuggingFace Hub
 
-The architecture prioritizes clarity, reproducibility, and extensibility - making it easy to add new retrieval strategies or evaluation metrics.
+**Technology Stack**:
+- **Orchestration**: LangGraph (state machine workflows)
+- **LLM**: OpenAI GPT-4.1-mini (temperature=0)
+- **Embeddings**: OpenAI text-embedding-3-small (1536d)
+- **Vector Store**: Qdrant (Docker, cosine similarity)
+- **Evaluation**: RAGAS (4 metrics)
+- **Data**: HuggingFace Hub (datasets)
+
+This architecture provides a solid foundation for RAG system development, evaluation, and deployment.

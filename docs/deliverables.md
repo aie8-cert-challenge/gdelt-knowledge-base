@@ -179,11 +179,11 @@ The assistant will be accessible through a simple web interface where users can 
 
 **Rationale**: RAGAS (Retrieval-Augmented Generation Assessment) is purpose-built for evaluating RAG pipelines and provides the exact metrics required by the certification rubric: faithfulness, response relevancy, context precision, and context recall. Version 0.2.10 introduces knowledge graph-based synthetic test data generation, which we've already leveraged to create our golden testset. The framework's integration with LangChain and support for custom evaluators makes it ideal for comparative analysis of different retrieval strategies.
 
-#### 7. User Interface: Streamlit
+#### 7. User Interface: Streamlit (future, currently LangGraph Studio)
 
 **Rationale**: Streamlit enables rapid development of interactive web UIs with minimal frontend code, allowing us to focus engineering effort on the RAG pipeline itself. For a local demonstration and certification deliverable, Streamlit's chat interface components provide a professional user experience without requiring React/Next.js complexity. The framework's hot-reloading and session state management simplify development iterations and demo preparation.
 
-#### 8. (Optional) Serving & Inference: Local Python Runtime
+#### 8. (Optional) Serving & Inference: Local Python Runtime / Docker
 
 **Rationale**: For this certification challenge, we're deploying locally rather than to cloud infrastructure. This approach prioritizes demonstration of RAG capabilities and evaluation methodology over production deployment concerns like scaling, auth, and infrastructure-as-code. Future production deployment could leverage Vercel (for frontend), Modal/Replicate (for inference), and managed Qdrant Cloud (for vector storage).
 
@@ -210,7 +210,7 @@ This agentic architecture allows the system to handle complex queries that requi
 
 ### Data Sources and External APIs
 
-#### Primary Data Source: GDELT Research Paper
+#### Primary Data Source: GDELT Research Paper (three in total)
 - **Source**: "Talking to GDELT Through Knowledge Graphs" (arXiv:2503.07584v3)
 - **Format**: PDF (12 pages) extracted into 38 document chunks
 - **Content**: Technical documentation covering GDELT GKG 2.0 schema, knowledge graph construction methodologies (DKG, LKG, GRKG), the Baltimore Bridge Collapse case study, and comparative analysis of RAG vs graph-based retrieval approaches

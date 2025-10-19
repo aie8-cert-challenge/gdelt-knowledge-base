@@ -10,11 +10,11 @@ This table maps the certification challenge requirements (Task 2 Deliverable #2)
 |-------------|------------------|-----------|----------------|
 | **LLM** | OpenAI GPT-4.1-mini | Industry-leading performance with cost efficiency for production RAG applications; strong reasoning capabilities for GDELT knowledge graph queries | Task 2.2.1 |
 | **Embedding Model** | OpenAI text-embedding-3-small | State-of-the-art semantic search with 1536 dimensions; excellent balance of quality and cost; proven performance on technical documentation | Task 2.2.2 |
-| **Orchestration** | LangChain LCEL + LangGraph | Production-grade framework for RAG chains and agentic workflows; extensive ecosystem for tool integration; strong observability hooks | Task 2.2.3 |
+| **Orchestration** | LangGraph | Production-grade framework for RAG chains and agentic workflows; extensive ecosystem for tool integration; strong observability hooks | Task 2.2.3 |
 | **Vector Database** | Qdrant | High-performance vector similarity search with production-grade filtering; native metadata support; excellent Docker deployment experience | Task 2.2.4 |
-| **Monitoring** | Phoenix (Arize) + LangSmith | Phoenix provides open-source observability for embeddings and LLM traces; LangSmith enables prompt engineering iteration and evaluation tracking | Task 2.2.5 |
+| **Monitoring** | LangSmith | LangSmith observability for embeddings and LLM traces | Task 2.2.5 |
 | **Evaluation** | RAGAS 0.2.10 | Research-backed RAG evaluation metrics (faithfulness, context precision/recall, response relevancy); integrates with LangChain for automated assessments | Task 2.2.6 |
-| **User Interface** | Streamlit | Rapid prototyping with built-in chat components; Python-native development; ideal for technical demos and internal tools | Task 2.2.7 |
+| **User Interface** | Streamlit (future) | Rapid prototyping with built-in chat components; Python-native development; ideal for technical demos and internal tools | Task 2.2.7 |
 | **Serving & Inference** | Docker Compose (dev) → FastAPI (prod) | Docker Compose for local development with infrastructure services; FastAPI for production API endpoints with async support and OpenAPI docs | Task 2.2.8 |
 
 ## Extended Architecture Components
@@ -193,7 +193,28 @@ graph TB
 ## Data Flow: Query Execution
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#0277BD', 'primaryTextColor':'#FFF', 'primaryBorderColor':'#01579B', 'lineColor':'#455A64', 'secondaryColor':'#E65100', 'tertiaryColor':'#2E7D32', 'fontSize':'14px'}}}%%
+%%{init: {
+  'theme':'base',
+  'themeVariables': {
+    'primaryColor':'#0277BD',
+    'primaryTextColor':'#FFFFFF',
+    'primaryBorderColor':'#01579B',
+    'lineColor':'#455A64',
+    'secondaryColor':'#E65100',
+    'tertiaryColor':'#2E7D32',
+    'fontSize':'14px',
+    'textColor':'#212121',
+    'labelTextColor':'#212121',
+    'noteTextColor':'#000000',
+    'noteBkgColor':'#E3F2FD',
+    'noteBorderColor':'#0277BD',
+    'actorBkg':'#0277BD',
+    'actorTextColor':'#FFFFFF',
+    'actorLineColor':'#01579B',
+    'signalColor':'#455A64',
+    'signalTextColor':'#212121'
+  }
+}}%%
 sequenceDiagram
     autonumber
 

@@ -12,3 +12,11 @@ wheels/
 
 .env
 !.env.example
+
+ra_output/
+ra_orchestrators/
+ra_agents/
+ra_tools/
+
+# python cache files
+*.pyc

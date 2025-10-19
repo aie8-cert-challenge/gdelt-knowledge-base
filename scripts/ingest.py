@@ -1,5 +1,4 @@
-# %%
-# %% [markdown]
+# [markdown]
 # # Standardized RAGAS Golden Testset Pipeline
 # - Extract PDFs -> LangChain `Document`s
 # - Sanitize metadata for Arrow/JSON
@@ -7,41 +6,40 @@
 # - Write a manifest with checksums & schema for provenance
 
 
-# %%
-# %% Imports & Env Hardening (safe in VS Code, Cursor, and Jupyter)
+# Imports & Env Hardening (safe in VS Code, Cursor, and Jupyter)
 from __future__ import annotations
 
-import os, json, hashlib, time
+# Standard library imports
+import hashlib
+import importlib.metadata as im
+import json
+import os
+import platform
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
-from datetime import datetime
 
-# Progress bars & flaky UIs off (even if we’re not uploading now, this keeps notebooks calm)
+# Progress bars & flaky UIs off (even if we're not uploading now, this keeps notebooks calm)
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BARS", "1")
 
-# LangChain & loaders
-from langchain_core.documents import Document
+# Third-party imports
+import pandas as pd
+from datasets import Dataset
+from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+# LangChain imports
 from langchain_community.document_loaders import DirectoryLoader, PyMuPDFLoader
+from langchain_core.documents import Document
 
-# LLM / Embeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
-# RAGAS 0.2.x API
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
 from ragas.testset import TestsetGenerator
 
-# Data tooling
-import pandas as pd
-from datasets import Dataset
-
-# Utils
-import uuid
-
-
-# %%
-# %% Config (paths, models, knobs)
+# Config (paths, models, knobs)
 
 # Project structure
 # --- 1) Repo root detection (replaces Path.cwd().parent) ---
@@ -86,8 +84,7 @@ MAX_DOCS      = None   # set to an int to limit docs during prototyping
 RANDOM_SEED   = 42
 
 
-# %%
-# %% Helpers
+# Helpers
 
 def ensure_jsonable(obj: Any) -> Any:
     """
@@ -150,8 +147,7 @@ def summarize_columns_from_jsonl(path: Path, sample_n: int = 5) -> Dict[str, Any
     return {"columns": sorted(cols), "sample": samples}
 
 
-# %%
-# %% 1) Extract PDFs -> LangChain Documents
+# 1) Extract PDFs -> LangChain Documents
 
 # IMPORTANT: keep metadata JSON-serializable
 loader = DirectoryLoader(str(raw_path), glob="*.pdf", loader_cls=PyMuPDFLoader)
@@ -162,8 +158,7 @@ if MAX_DOCS:
 print(f"Loaded {len(docs)} documents from {raw_path}")
 
 
-# %%
-# %% 2) Persist SOURCE documents to interim storage (JSONL, Parquet, HF-dataset)
+# 2) Persist SOURCE documents to interim storage (JSONL, Parquet, HF-dataset)
 
 n_jsonl   = docs_to_jsonl(docs, SRC_JSONL)
 n_parquet = docs_to_parquet(docs, SRC_PARQUET)
@@ -174,22 +169,11 @@ print(f"SOURCES -> Parquet: {n_parquet}  ({SRC_PARQUET})")
 print(f"SOURCES -> HFDS:    {n_hfds}  ({SRC_HF_DISK})")
 
 
-# %%
 # --- RAGAS testset generation: 0.3.x-first, 0.2.x fallback ---
-import os
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from openai import RateLimitError, APITimeoutError, APIStatusError, APIConnectionError
+
 
 if not os.getenv("OPENAI_API_KEY"):
     raise EnvironmentError("OPENAI_API_KEY not set")
-
-# Detect whether the new 0.3.x generate API is available
-USE_RAGAS_GENERATE = False
-try:
-    from ragas import generate as ragas_generate  # 0.3.x
-    USE_RAGAS_GENERATE = True
-except Exception:
-    USE_RAGAS_GENERATE = False
 
 TransientErr = (RateLimitError, APITimeoutError, APIStatusError, APIConnectionError)
 
@@ -200,40 +184,24 @@ TransientErr = (RateLimitError, APITimeoutError, APIStatusError, APIConnectionEr
     retry=retry_if_exception_type(TransientErr),
 )
 def build_testset(docs, size: int):
-    if USE_RAGAS_GENERATE:
-        # --- Preferred in 0.3.x ---
-        # docs: LangChain Documents are still supported as input
-        # Ragas will use your OpenAI key; configure provider-specific clients if needed
-        # See Ragas “generate” reference. :contentReference[oaicite:1]{index=1}
-        return ragas_generate(
-            documents=docs,
-            testset_size=size,
-            # You can pass native Ragas LLM wrappers here if you don’t want any LC dependency:
-            # transforms_llm=SomeBaseRagasLLMImpl(...),
-            # kg_llm=..., query_llm=..., answer_llm=..., etc.
-        )
-    else:
-        # --- Fallback for 0.2.x (your current pattern) ---
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-        from ragas.embeddings import LangchainEmbeddingsWrapper
-        from ragas.llms import LangchainLLMWrapper
-        from ragas.testset import TestsetGenerator
+    # --- Standard approach for ragas 0.2.x (current: 0.2.10) ---
+    # This is the ACTIVE code path as of ragas 0.2.10
+    # NOTE:  for 0.3.x certain approaches as use of LangChainEmbeddingsWrapper and LangchainLLMWrapper are deprecated
 
-        llm = LangchainLLMWrapper(
-            ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=60, max_retries=6)
-        )
-        emb = LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(model="text-embedding-3-small", timeout=60, max_retries=6)
-        )
-        gen = TestsetGenerator(llm=llm, embedding_model=emb)
-        return gen.generate_with_langchain_docs(docs, testset_size=size)
+    llm = LangchainLLMWrapper(
+        ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=60, max_retries=6)
+    )
+    emb = LangchainEmbeddingsWrapper(
+        OpenAIEmbeddings(model="text-embedding-3-small", timeout=60, max_retries=6)
+    )
+    gen = TestsetGenerator(llm=llm, embedding_model=emb)
+    return gen.generate_with_langchain_docs(docs, testset_size=size)
 
 golden_testset = build_testset(docs, TESTSET_SIZE)
 print("Generated golden testset:", type(golden_testset))
 
 
-# %%
-# %% 4) Persist GOLDEN TESTSET to interim storage
+# 4) Persist GOLDEN TESTSET to interim storage
 
 # A) JSONL (native for RAG eval workflows)
 golden_testset.to_jsonl(str(GT_JSONL))
@@ -258,11 +226,10 @@ print(f"GOLDEN -> Parquet: {GT_PARQUET}")
 print(f"GOLDEN -> HFDS:    {GT_HF_DISK}")
 
 
-# %%
-# %% 5) Manifest & provenance (one place to verify & rehydrate quickly)
+# 5) Manifest & provenance (one place to verify & rehydrate quickly)
 
 # --- 5) Enriched manifest (env + artifacts + basic metrics) ---
-import platform, importlib.metadata as im
+
 
 def _ver(pkg): 
     try: return im.version(pkg)
@@ -329,7 +296,6 @@ manifest = {
 write_manifest(MANIFEST_JSON, manifest)
 
 
-# %%
 
 
 

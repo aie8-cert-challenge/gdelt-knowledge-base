@@ -2,189 +2,350 @@
 
 ## Overview
 
-This API reference documents all public functions, classes, and modules in the GDELT RAG Comparative Evaluation project. The project implements a Retrieval-Augmented Generation (RAG) system with multiple retrieval strategies evaluated using the RAGAS framework.
+This API reference documents all public functions, classes, and configuration options in the GDELT RAG system. The system is organized into modular components:
 
-**Navigation:**
-- [Core Modules](#core-modules-src) - Production code in `src/`
-- [Utility Scripts](#utility-scripts-scripts) - Pipeline and deployment scripts
-- [Configuration Reference](#configuration-reference) - Environment variables and settings
-- [Type Definitions](#type-definitions) - TypedDict schemas and data structures
-- [Usage Patterns](#usage-patterns) - Common workflows and examples
-- [Best Practices](#best-practices) - Guidelines and recommendations
+- **Core Modules** (`src/`): Configuration, retrievers, graph workflows, utilities
+- **Scripts**: Data ingestion, evaluation, validation utilities
+- **Configuration**: Environment variables and system settings
 
-**Key Technologies:**
-- **LangChain**: Document loading, retrieval, prompts
-- **LangGraph**: State graph workflow orchestration
-- **RAGAS**: RAG evaluation metrics (v0.2.10)
-- **Qdrant**: Vector database for embeddings
-- **OpenAI**: LLM (gpt-4.1-mini) and embeddings (text-embedding-3-small)
-- **Cohere**: Reranking (rerank-v3.5)
+### Quick Start
+
+```python
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+from src.retrievers import create_retrievers
+from src.graph import build_all_graphs
+
+# Load data
+documents = load_documents_from_huggingface()
+
+# Create vector store
+vector_store = create_vector_store(documents, recreate_collection=True)
+
+# Create retrievers
+retrievers = create_retrievers(documents, vector_store)
+
+# Build LangGraph workflows
+graphs = build_all_graphs(retrievers)
+
+# Query the system
+result = graphs['naive'].invoke({"question": "What is GDELT?"})
+print(result['response'])
+```
 
 ---
 
 ## Core Modules (src/)
 
-### Module: config.py
+### config.py
 
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py`
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/src/config.py`
 
-Central configuration module for Qdrant connection, LLM, and embeddings.
+Configuration module providing cached getter functions for LLM, embeddings, and Qdrant client. Configuration is read from environment variables with sensible defaults.
 
-#### Constants
+#### Module Constants
 
 ##### `QDRANT_HOST`
-**Source:** `src/config.py:6`
-
-**Type:** `str`
-
-**Value:** `"localhost"`
-
-**Description:** Qdrant vector database host address.
-
----
+**Type**: `str`
+**Default**: `"localhost"`
+**Environment Variable**: `QDRANT_HOST`
+**Description**: Qdrant server hostname
 
 ##### `QDRANT_PORT`
-**Source:** `src/config.py:7`
-
-**Type:** `int`
-
-**Value:** `6333`
-
-**Description:** Qdrant vector database port number.
-
----
+**Type**: `int`
+**Default**: `6333`
+**Environment Variable**: `QDRANT_PORT`
+**Description**: Qdrant server port
 
 ##### `COLLECTION_NAME`
-**Source:** `src/config.py:8`
+**Type**: `str`
+**Default**: `"gdelt_comparative_eval"`
+**Environment Variable**: `QDRANT_COLLECTION`
+**Description**: Default Qdrant collection name
 
-**Type:** `str`
+##### `OPENAI_MODEL`
+**Type**: `str`
+**Default**: `"gpt-4.1-mini"`
+**Environment Variable**: `OPENAI_MODEL`
+**Description**: OpenAI LLM model identifier
 
-**Value:** `"gdelt_comparative_eval"`
-
-**Description:** Qdrant collection name for storing document embeddings.
+##### `OPENAI_EMBED_MODEL`
+**Type**: `str`
+**Default**: `"text-embedding-3-small"`
+**Environment Variable**: `OPENAI_EMBED_MODEL`
+**Description**: OpenAI embeddings model identifier
 
 ---
 
-#### Global Objects
+#### Functions
 
-##### `llm`
-**Source:** `src/config.py:10`
+##### `get_llm()`
 
-**Type:** `ChatOpenAI`
+**Description**: Get cached LLM instance for RAG generation.
 
-**Description:** OpenAI LLM instance configured for RAG generation.
-
-**Configuration:**
-- Model: `gpt-4.1-mini`
-- Temperature: `0` (deterministic outputs)
-
-**Example:**
+**Signature**:
 ```python
-from src.config import llm
+@lru_cache(maxsize=1)
+def get_llm() -> ChatOpenAI:
+```
 
-# Use for generation
+**Parameters**: None
+
+**Returns**:
+- `ChatOpenAI`: Configured OpenAI LLM instance with `temperature=0` for deterministic outputs
+
+**Caching**: Results are cached using `@lru_cache` - subsequent calls return the same instance
+
+**Example**:
+```python
+from src.config import get_llm
+
+llm = get_llm()
 response = llm.invoke("What is GDELT?")
 print(response.content)
 ```
 
+**Source**: `src/config.py:27-35`
+
 ---
 
-##### `embeddings`
-**Source:** `src/config.py:11`
+##### `get_embeddings()`
 
-**Type:** `OpenAIEmbeddings`
+**Description**: Get cached embeddings instance for document and query vectorization.
 
-**Description:** OpenAI embeddings instance for document and query vectorization.
-
-**Configuration:**
-- Model: `text-embedding-3-small`
-- Dimensions: 1536
-
-**Example:**
+**Signature**:
 ```python
-from src.config import embeddings
-
-# Embed a query
-query_vector = embeddings.embed_query("What are GDELT themes?")
-print(f"Vector dimensions: {len(query_vector)}")
-
-# Embed documents
-docs = ["Document 1", "Document 2"]
-doc_vectors = embeddings.embed_documents(docs)
+@lru_cache(maxsize=1)
+def get_embeddings() -> OpenAIEmbeddings:
 ```
 
+**Parameters**: None
+
+**Returns**:
+- `OpenAIEmbeddings`: Configured OpenAI embeddings instance (1536 dimensions)
+
+**Caching**: Results are cached using `@lru_cache`
+
+**Example**:
+```python
+from src.config import get_embeddings
+
+embeddings = get_embeddings()
+vectors = embeddings.embed_documents(["Sample text"])
+print(f"Vector dimensions: {len(vectors[0])}")  # 1536
+```
+
+**Source**: `src/config.py:38-46`
+
 ---
 
-### Module: state.py
+##### `get_qdrant()`
 
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/src/state.py`
+**Description**: Get cached Qdrant client instance.
 
-Defines the state schema for LangGraph workflows.
+**Signature**:
+```python
+@lru_cache(maxsize=1)
+def get_qdrant() -> QdrantClient:
+```
+
+**Parameters**: None
+
+**Returns**:
+- `QdrantClient`: Qdrant client connected to configured host/port
+
+**Caching**: Results are cached using `@lru_cache`
+
+**Example**:
+```python
+from src.config import get_qdrant
+
+client = get_qdrant()
+collections = client.get_collections()
+print(f"Available collections: {[c.name for c in collections.collections]}")
+```
+
+**Source**: `src/config.py:49-57`
+
+---
+
+##### `get_collection_name()`
+
+**Description**: Get configured Qdrant collection name.
+
+**Signature**:
+```python
+def get_collection_name() -> str:
+```
+
+**Parameters**: None
+
+**Returns**:
+- `str`: Collection name string (default: "gdelt_comparative_eval")
+
+**Example**:
+```python
+from src.config import get_collection_name
+
+collection = get_collection_name()
+print(f"Using collection: {collection}")
+```
+
+**Source**: `src/config.py:60-67`
+
+---
+
+##### `create_vector_store()`
+
+**Description**: Create and populate Qdrant vector store. This factory function handles creating the Qdrant collection, optionally recreating if it exists, and populating it with documents.
+
+**Signature**:
+```python
+def create_vector_store(
+    documents: List[Document],
+    collection_name: str = None,
+    recreate_collection: bool = False
+) -> QdrantVectorStore:
+```
+
+**Parameters**:
+- `documents` (List[Document]): List of LangChain Document objects to add to vector store
+- `collection_name` (str, optional): Override default collection name. Defaults to `get_collection_name()`
+- `recreate_collection` (bool, optional): If True, delete existing collection first. Default: False
+
+**Returns**:
+- `QdrantVectorStore`: Populated QdrantVectorStore instance ready for retrieval
+
+**Vector Configuration**:
+- Vector size: 1536 (matches text-embedding-3-small)
+- Distance metric: COSINE
+- Automatically creates collection if it doesn't exist
+
+**Example**:
+```python
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+
+# Load documents
+documents = load_documents_from_huggingface()
+
+# Create new vector store (recreate if exists)
+vector_store = create_vector_store(
+    documents,
+    collection_name="my_collection",
+    recreate_collection=True
+)
+
+# Use as retriever
+retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+results = retriever.invoke("What is GDELT?")
+```
+
+**Important Notes**:
+- Set `recreate_collection=True` to force fresh ingestion
+- Reuses existing collection if `recreate_collection=False` and collection exists
+- Documents are only added if collection is new or recreated
+
+**Source**: `src/config.py:70-127`
+
+---
+
+### state.py
+
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/src/state.py`
+
+Defines the LangGraph state schema using TypedDict.
 
 #### Classes
 
 ##### `State`
-**Source:** `src/state.py:7-10`
 
-**Type:** `TypedDict`
+**Description**: TypedDict defining the state schema for LangGraph workflows. Represents the data flow through retrieval and generation nodes.
 
-**Description:** State container for LangGraph RAG workflow. Tracks question, retrieved context, and generated response across graph nodes.
+**Signature**:
+```python
+class State(TypedDict):
+    question: str
+    context: List[Document]
+    response: str
+```
 
-**Fields:**
-- `question` (str): User input question
-- `context` (List[Document]): Retrieved LangChain documents
+**Fields**:
+- `question` (str): User's input question
+- `context` (List[Document]): Retrieved documents from vector store
 - `response` (str): Generated answer from LLM
 
-**Example:**
+**Usage in LangGraph**:
 ```python
 from src.state import State
-from langchain_core.documents import Document
+from langgraph.graph import StateGraph
 
-# Initialize state
+# Nodes return partial state updates
+def retrieve(state: State) -> dict:
+    # Retrieve documents
+    return {"context": retrieved_docs}
+
+def generate(state: State) -> dict:
+    # Generate answer
+    return {"response": answer}
+
+# Build graph
+graph = StateGraph(State)
+graph.add_node("retrieve", retrieve)
+graph.add_node("generate", generate)
+```
+
+**Example**:
+```python
+from src.state import State
+
+# Initial state
 initial_state: State = {
-    "question": "What is GDELT Translingual?",
+    "question": "What is GDELT?",
     "context": [],
     "response": ""
 }
 
-# Update state with retrieved documents
-state: State = {
-    "question": "What is GDELT Translingual?",
-    "context": [
-        Document(page_content="GDELT Translingual...", metadata={"page": 5})
-    ],
-    "response": "GDELT Translingual is..."
+# After retrieval
+after_retrieval: State = {
+    "question": "What is GDELT?",
+    "context": [doc1, doc2, doc3],
+    "response": ""
+}
+
+# After generation
+final_state: State = {
+    "question": "What is GDELT?",
+    "context": [doc1, doc2, doc3],
+    "response": "GDELT is the Global Database of Events, Language, and Tone..."
 }
 ```
 
-**Notes:**
-- Used across all retriever graph workflows
-- Immutable between nodes (LangGraph creates new state copies)
-- `context` must contain LangChain `Document` objects, not raw strings
+**Source**: `src/state.py:7-10`
 
 ---
 
-### Module: prompts.py
+### prompts.py
 
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/src/prompts.py`
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/src/prompts.py`
 
 Prompt templates for RAG generation.
 
 #### Constants
 
 ##### `BASELINE_PROMPT`
-**Source:** `src/prompts.py:4-12`
 
-**Type:** `str`
+**Description**: Standard RAG prompt template that instructs the LLM to answer based only on provided context.
 
-**Description:** Template for RAG answer generation. Instructs LLM to answer based only on provided context without using external knowledge.
+**Type**: `str`
 
-**Template Variables:**
-- `{question}`: User input question
-- `{context}`: Retrieved document text (concatenated)
+**Template Variables**:
+- `{question}`: User's input question
+- `{context}`: Retrieved document content (concatenated)
 
-**Template:**
-```text
+**Value**:
+```python
+BASELINE_PROMPT = """\
 You are a helpful assistant who answers questions based on provided context. You must only use the provided context, and cannot use your own knowledge.
 
 ### Question
@@ -192,879 +353,627 @@ You are a helpful assistant who answers questions based on provided context. You
 
 ### Context
 {context}
+"""
 ```
 
-**Example:**
+**Usage**:
 ```python
 from langchain.prompts import ChatPromptTemplate
 from src.prompts import BASELINE_PROMPT
 
 # Create prompt template
-rag_prompt = ChatPromptTemplate.from_template(BASELINE_PROMPT)
+prompt = ChatPromptTemplate.from_template(BASELINE_PROMPT)
 
-# Format prompt
-messages = rag_prompt.format_messages(
+# Format with actual values
+messages = prompt.format_messages(
     question="What is GDELT?",
-    context="GDELT is a global database of events..."
+    context="GDELT is a global database..."
 )
 ```
 
-**Notes:**
-- Shared across all retriever strategies
-- Temperature=0 in LLM ensures deterministic responses given same context
-- Context grounding prevents hallucinations
+**Design Notes**:
+- Constrains LLM to use only retrieved context (reduces hallucination)
+- Clear section headers for question and context
+- Used consistently across all 4 retriever types for fair comparison
+
+**Source**: `src/prompts.py:3-12`
 
 ---
 
-### Module: retrievers.py
+### retrievers.py
 
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py`
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/src/retrievers.py`
 
-Defines all retrieval strategies for the RAG system.
+Retriever factory functions for creating different retrieval strategies.
 
-#### Configuration Constants
+#### Functions
 
-##### `QDRANT_HOST`, `QDRANT_PORT`, `COLLECTION_NAME`
-**Source:** `src/retrievers.py:17-19`
+##### `create_retrievers()`
 
-Same as in `config.py` (duplicated for module independence).
+**Description**: Create all retriever instances using factory pattern. This is the main entry point for creating retrievers - they cannot be instantiated at module level because they require documents and vector stores.
 
----
-
-##### `embeddings`
-**Source:** `src/retrievers.py:20`
-
-OpenAI embeddings instance (same configuration as `config.py`).
-
----
-
-#### Global Objects
-
-##### `qdrant_client`
-**Source:** `src/retrievers.py:23`
-
-**Type:** `QdrantClient`
-
-**Description:** Connected Qdrant client instance.
-
-**Example:**
+**Signature**:
 ```python
-from src.retrievers import qdrant_client
-
-# Check collections
-collections = qdrant_client.get_collections()
-print(f"Available collections: {[c.name for c in collections.collections]}")
+def create_retrievers(
+    documents: List[Document],
+    vector_store: QdrantVectorStore,
+    k: int = 5,
+) -> Dict[str, object]:
 ```
 
----
+**Parameters**:
+- `documents` (List[Document]): List of Document objects (required for BM25 in-memory index)
+- `vector_store` (QdrantVectorStore): Populated QdrantVectorStore instance
+- `k` (int, optional): Number of documents to retrieve. Default: 5
 
-##### `vector_store`
-**Source:** `src/retrievers.py:30-34`
+**Returns**:
+- `Dict[str, object]`: Dictionary mapping retriever names to retriever instances
+  - Keys: `'naive'`, `'bm25'`, `'ensemble'`, `'cohere_rerank'`
+  - Values: Configured retriever objects
 
-**Type:** `QdrantVectorStore`
+**Retriever Types**:
 
-**Description:** LangChain wrapper for Qdrant vector store.
+1. **Naive** (Dense Vector Search):
+   - Uses OpenAI embeddings for semantic similarity
+   - Returns top-k most similar documents by cosine distance
+   - Baseline for comparison
 
-**Configuration:**
-- Client: Connected `qdrant_client`
-- Collection: `gdelt_comparative_eval`
-- Embeddings: OpenAI text-embedding-3-small
+2. **BM25** (Sparse Keyword Matching):
+   - Traditional lexical search using TF-IDF weighting
+   - Operates on in-memory document collection
+   - Good for exact term matches
 
-**Example:**
+3. **Ensemble** (Hybrid Search):
+   - Combines dense vector + sparse keyword search
+   - 50/50 weighting between naive and BM25
+   - Balances semantic and lexical matching
+
+4. **Cohere Rerank** (Contextual Compression):
+   - First retrieves 20 documents using dense search
+   - Reranks using Cohere rerank-v3.5 model
+   - Returns top-k after reranking
+   - Best quality but highest latency/cost
+
+**Example**:
 ```python
-from src.retrievers import vector_store
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+from src.retrievers import create_retrievers
 
-# Search similar documents
-results = vector_store.similarity_search("GDELT themes", k=5)
-for doc in results:
-    print(doc.page_content[:100])
+# Setup
+documents = load_documents_from_huggingface()
+vector_store = create_vector_store(documents, recreate_collection=True)
+
+# Create all retrievers
+retrievers = create_retrievers(documents, vector_store, k=5)
+
+# Use individual retrievers
+question = "What is GDELT?"
+naive_docs = retrievers['naive'].invoke(question)
+bm25_docs = retrievers['bm25'].invoke(question)
+ensemble_docs = retrievers['ensemble'].invoke(question)
+rerank_docs = retrievers['cohere_rerank'].invoke(question)
+
+print(f"Naive retrieved: {len(naive_docs)} docs")
+print(f"BM25 retrieved: {len(bm25_docs)} docs")
 ```
+
+**Environment Requirements**:
+- `OPENAI_API_KEY`: Required for all retrievers (embeddings)
+- `COHERE_API_KEY`: Required only for `cohere_rerank`
+
+**Performance Characteristics**:
+| Retriever | Latency | Quality | Cost |
+|-----------|---------|---------|------|
+| Naive | Low | Good | Low |
+| BM25 | Very Low | Good | None |
+| Ensemble | Low | Better | Low |
+| Cohere Rerank | High | Best | High |
+
+**Source**: `src/retrievers.py:20-89`
 
 ---
 
-#### Retrievers
+### graph.py
 
-##### `baseline_retriever`
-**Source:** `src/retrievers.py:37`
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py`
 
-**Type:** `VectorStoreRetriever`
+LangGraph workflow factory functions for building RAG pipelines.
 
-**Description:** Naive dense vector search retriever (baseline strategy).
+#### Functions
 
-**Configuration:**
-- Strategy: Dense vector similarity search
-- k: 5 documents
-- Distance: Cosine similarity
+##### `build_graph()`
 
-**Example:**
+**Description**: Build a compiled LangGraph pipeline for a single retriever. Creates a simple two-node graph: `START → retrieve → generate → END`.
+
+**Signature**:
 ```python
-from src.retrievers import baseline_retriever
-
-# Retrieve documents
-docs = baseline_retriever.invoke("What is GDELT Translingual?")
-print(f"Retrieved {len(docs)} documents")
-for doc in docs:
-    print(f"- {doc.metadata.get('page', 'unknown')}: {doc.page_content[:80]}...")
+def build_graph(
+    retriever,
+    llm=None,
+    prompt_template: str = None
+) -> CompiledGraph:
 ```
 
----
+**Parameters**:
+- `retriever` (object): Retriever instance to use for document retrieval
+- `llm` (ChatOpenAI, optional): ChatOpenAI instance. Defaults to `get_llm()` if None
+- `prompt_template` (str, optional): RAG prompt template string. Defaults to `BASELINE_PROMPT`
 
-##### `bm25_retriever`
-**Source:** `src/retrievers.py:40`
+**Returns**:
+- `CompiledGraph`: Compiled StateGraph that can be invoked with `{"question": "..."}`
 
-**Type:** `BM25Retriever`
+**Graph Structure**:
+```
+START → retrieve → generate → END
+```
 
-**Description:** Sparse keyword matching retriever using BM25 algorithm.
+**Node Functions** (internal):
 
-**Configuration:**
-- Strategy: Lexical search (term frequency)
-- k: 5 documents
-- Source: Initialized from `documents` list
+- **retrieve(state: State) → dict**:
+  - Invokes retriever with `state["question"]`
+  - Returns `{"context": List[Document]}`
 
-**Example:**
+- **generate(state: State) → dict**:
+  - Formats prompt with question and context
+  - Invokes LLM to generate answer
+  - Returns `{"response": str}`
+
+**Example**:
 ```python
-from src.retrievers import bm25_retriever
-
-# Retrieve using keyword matching
-docs = bm25_retriever.invoke("JSON CSV formats GDELT")
-print(f"BM25 retrieved {len(docs)} documents")
-```
-
-**Notes:**
-- Requires `documents` variable to be in scope (loaded from vector store)
-- Good for exact keyword matches
-- Complements dense retrieval in ensemble approach
-
----
-
-##### `compression_retriever`
-**Source:** `src/retrievers.py:54-58`
-
-**Type:** `ContextualCompressionRetriever`
-
-**Description:** Cohere reranking retriever with contextual compression.
-
-**Configuration:**
-- Base retriever: Dense vector search (k=20)
-- Compressor: Cohere rerank-v3.5
-- Final k: 5 documents (top 5 after reranking)
-
-**Pipeline:**
-1. Retrieve 20 candidates using dense search
-2. Rerank using Cohere's semantic reranking
-3. Return top 5 most relevant
-
-**Example:**
-```python
-from src.retrievers import compression_retriever
-
-# Retrieve with reranking
-docs = compression_retriever.invoke("Explain GDELT proximity context")
-print(f"Reranked top {len(docs)} documents")
-```
-
-**Notes:**
-- Requires `COHERE_API_KEY` environment variable
-- More expensive (20 initial retrievals + reranking)
-- Best semantic relevance among all strategies
-
----
-
-##### `ensemble_retriever`
-**Source:** `src/retrievers.py:46-49`
-
-**Type:** `EnsembleRetriever`
-
-**Description:** Hybrid retriever combining dense and sparse search.
-
-**Configuration:**
-- Components: `baseline_retriever` (dense) + `bm25_retriever` (sparse)
-- Weights: [0.5, 0.5] (equal weighting)
-- k: 5 documents total
-
-**Example:**
-```python
-from src.retrievers import ensemble_retriever
-
-# Hybrid retrieval
-docs = ensemble_retriever.invoke("GDELT themes emotions languages")
-print(f"Ensemble retrieved {len(docs)} documents")
-```
-
-**Notes:**
-- Balances semantic similarity (dense) with keyword matching (sparse)
-- Good general-purpose retriever
-- Results are merged and deduplicated
-
----
-
-### Module: graph.py
-
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/src/graph.py`
-
-LangGraph workflow definitions for each retrieval strategy.
-
-#### Configuration
-
-##### `llm`
-**Source:** `src/graph.py:16`
-
-LLM instance for generation (same as `config.py`).
-
----
-
-##### `rag_prompt`
-**Source:** `src/graph.py:17`
-
-**Type:** `ChatPromptTemplate`
-
-ChatPromptTemplate created from `BASELINE_PROMPT`.
-
----
-
-#### Retrieval Functions
-
-##### `retrieve_baseline(state)`
-**Source:** `src/graph.py:20-23`
-
-**Description:** Naive dense vector search retrieval node.
-
-**Parameters:**
-- `state` (State): LangGraph state containing `question`
-
-**Returns:**
-- `dict`: Updated state with `context` field containing retrieved documents
-
-**Example:**
-```python
-from src.graph import retrieve_baseline
-
-state = {"question": "What is GDELT?"}
-result = retrieve_baseline(state)
-print(f"Retrieved {len(result['context'])} documents")
-```
-
----
-
-##### `retrieve_bm25(state)`
-**Source:** `src/graph.py:25-28`
-
-**Description:** BM25 sparse keyword matching retrieval node.
-
-**Parameters:**
-- `state` (State): LangGraph state containing `question`
-
-**Returns:**
-- `dict`: Updated state with `context` field
-
-**Example:**
-```python
-from src.graph import retrieve_bm25
-
-state = {"question": "GDELT JSON CSV"}
-result = retrieve_bm25(state)
-print(f"BM25 retrieved {len(result['context'])} documents")
-```
-
----
-
-##### `retrieve_reranked(state)`
-**Source:** `src/graph.py:30-33`
-
-**Description:** Cohere contextual compression with reranking retrieval node.
-
-**Parameters:**
-- `state` (State): LangGraph state containing `question`
-
-**Returns:**
-- `dict`: Updated state with `context` field
-
-**Example:**
-```python
-from src.graph import retrieve_reranked
-
-state = {"question": "Explain GDELT proximity"}
-result = retrieve_reranked(state)
-print(f"Reranked {len(result['context'])} documents")
-```
-
----
-
-##### `retrieve_ensemble(state)`
-**Source:** `src/graph.py:35-38`
-
-**Description:** Ensemble hybrid search retrieval node.
-
-**Parameters:**
-- `state` (State): LangGraph state containing `question`
-
-**Returns:**
-- `dict`: Updated state with `context` field
-
-**Example:**
-```python
-from src.graph import retrieve_ensemble
-
-state = {"question": "GDELT themes and emotions"}
-result = retrieve_ensemble(state)
-print(f"Ensemble retrieved {len(result['context'])} documents")
-```
-
----
-
-#### Generation Function
-
-##### `generate(state)`
-**Source:** `src/graph.py:41-46`
-
-**Description:** Generate answer from retrieved context using LLM.
-
-**Parameters:**
-- `state` (State): LangGraph state containing `question` and `context`
-
-**Returns:**
-- `dict`: Updated state with `response` field containing generated answer
-
-**Implementation:**
-1. Concatenates `page_content` from all context documents
-2. Formats prompt with question and concatenated context
-3. Invokes LLM with formatted prompt
-4. Returns LLM response content
-
-**Example:**
-```python
-from src.graph import generate
-from langchain_core.documents import Document
-
-state = {
-    "question": "What is GDELT?",
-    "context": [
-        Document(page_content="GDELT is a global database...", metadata={})
-    ]
-}
-result = generate(state)
-print(f"Generated answer: {result['response']}")
-```
-
-**Notes:**
-- Context documents are joined with double newlines
-- Uses `BASELINE_PROMPT` template
-- Temperature=0 ensures deterministic generation
-
----
-
-#### Compiled Graphs
-
-##### `baseline_graph`
-**Source:** `src/graph.py:50-52`
-
-**Type:** `CompiledGraph`
-
-**Description:** LangGraph workflow for baseline retrieval strategy.
-
-**Workflow:**
-```
-START -> retrieve_baseline -> generate -> END
-```
-
-**Example:**
-```python
-from src.graph import baseline_graph
-
-# Run complete RAG workflow
-result = baseline_graph.invoke({"question": "What is GDELT?"})
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+from src.retrievers import create_retrievers
+from src.graph import build_graph
+
+# Setup
+documents = load_documents_from_huggingface()
+vector_store = create_vector_store(documents)
+retrievers = create_retrievers(documents, vector_store)
+
+# Build graph for naive retriever
+graph = build_graph(retrievers['naive'])
+
+# Execute query
+result = graph.invoke({"question": "What is GDELT?"})
+
+# Access results
 print(f"Question: {result['question']}")
 print(f"Retrieved {len(result['context'])} documents")
-print(f"Answer: {result['response']}")
+print(f"Response: {result['response']}")
 ```
 
----
-
-##### `bm25_graph`
-**Source:** `src/graph.py:54-56`
-
-**Type:** `CompiledGraph`
-
-**Description:** LangGraph workflow for BM25 retrieval strategy.
-
-**Workflow:**
-```
-START -> retrieve_bm25 -> generate -> END
-```
-
----
-
-##### `ensemble_graph`
-**Source:** `src/graph.py:58-60`
-
-**Type:** `CompiledGraph`
-
-**Description:** LangGraph workflow for ensemble retrieval strategy.
-
-**Workflow:**
-```
-START -> retrieve_ensemble -> generate -> END
-```
-
----
-
-##### `rerank_graph`
-**Source:** `src/graph.py:62-64`
-
-**Type:** `CompiledGraph`
-
-**Description:** LangGraph workflow for reranked retrieval strategy.
-
-**Workflow:**
-```
-START -> retrieve_reranked -> generate -> END
-```
-
----
-
-##### `retrievers_config`
-**Source:** `src/graph.py:66-71`
-
-**Type:** `dict[str, CompiledGraph]`
-
-**Description:** Dictionary mapping retriever names to compiled LangGraph workflows.
-
-**Keys:**
-- `"naive"`: baseline_graph
-- `"bm25"`: bm25_graph
-- `"ensemble"`: ensemble_graph
-- `"cohere_rerank"`: rerank_graph
-
-**Example:**
+**Custom Prompt Example**:
 ```python
-from src.graph import retrievers_config
+custom_prompt = """
+Answer the question based on the context below.
+Be concise and factual.
 
-# Iterate through all retrievers
-for name, graph in retrievers_config.items():
+Question: {question}
+
+Context: {context}
+"""
+
+graph = build_graph(
+    retrievers['naive'],
+    prompt_template=custom_prompt
+)
+```
+
+**State Management**:
+- Node functions return partial state updates (dict)
+- LangGraph automatically merges updates into state
+- Follows LangGraph best practices for state management
+
+**Source**: `src/graph.py:21-106`
+
+---
+
+##### `build_all_graphs()`
+
+**Description**: Build compiled graphs for all retrievers. Convenience function to create a graph for each retriever in one call.
+
+**Signature**:
+```python
+def build_all_graphs(
+    retrievers: Dict[str, object],
+    llm=None
+) -> Dict[str, object]:
+```
+
+**Parameters**:
+- `retrievers` (Dict[str, object]): Dictionary of retriever instances from `create_retrievers()`
+- `llm` (ChatOpenAI, optional): Optional ChatOpenAI instance (shared across all graphs)
+
+**Returns**:
+- `Dict[str, object]`: Dictionary mapping retriever names to compiled graphs
+  - Same keys as input retrievers dict
+  - Values: Compiled LangGraph workflows
+
+**Example**:
+```python
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store, get_llm
+from src.retrievers import create_retrievers
+from src.graph import build_all_graphs
+
+# Setup
+documents = load_documents_from_huggingface()
+vector_store = create_vector_store(documents)
+retrievers = create_retrievers(documents, vector_store)
+
+# Build all graphs at once
+graphs = build_all_graphs(retrievers, llm=get_llm())
+
+# All graphs ready to use
+result_naive = graphs['naive'].invoke({"question": "What is GDELT?"})
+result_bm25 = graphs['bm25'].invoke({"question": "What is GDELT?"})
+result_ensemble = graphs['ensemble'].invoke({"question": "What is GDELT?"})
+result_rerank = graphs['cohere_rerank'].invoke({"question": "What is GDELT?"})
+
+# Compare responses
+for name, graph in graphs.items():
     result = graph.invoke({"question": "What is GDELT?"})
-    print(f"{name}: {result['response'][:100]}...")
+    print(f"\n{name}: {result['response'][:100]}...")
 ```
 
-**Notes:**
-- Used by evaluation scripts to test all retrieval strategies
-- All graphs share same generation function
-- Names match RAGAS evaluation output
-
----
-
-### Module: utils.py
-
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/src/utils.py`
-
-Currently empty utility module for future helper functions.
-
----
-
-## Utility Scripts (scripts/)
-
-### Script: ingest.py
-
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/ingest.py`
-
-**Purpose:** Complete data ingestion pipeline - extracts PDFs, generates RAGAS golden testset, persists to multiple formats.
-
-**Entry Point:** Can be run as Jupyter notebook or Python script
-
-**Key Features:**
-- PDF extraction to LangChain Documents
-- RAGAS testset generation (RAGAS 0.2.x and 0.3.x compatible)
-- Multi-format persistence (JSONL, Parquet, HuggingFace datasets)
-- Manifest generation with checksums and provenance
-- Retries with exponential backoff for API calls
-
-#### Configuration Constants
-
-##### `QDRANT_HOST`, `QDRANT_PORT`, `COLLECTION_NAME`
-**Source:** `scripts/ingest.py:17-19`
-
-Same as core modules.
-
----
-
-##### `OPENAI_MODEL`
-**Source:** `scripts/ingest.py:78`
-
-**Value:** `"gpt-4.1-mini"`
-
-LLM for RAGAS testset generation.
-
----
-
-##### `OPENAI_EMBED_MODEL`
-**Source:** `scripts/ingest.py:79`
-
-**Value:** `"text-embedding-3-small"`
-
-Embeddings for RAGAS testset generation.
-
----
-
-##### `TESTSET_SIZE`
-**Source:** `scripts/ingest.py:82`
-
-**Value:** `10`
-
-Number of synthetic test cases to generate.
-
----
-
-##### `MAX_DOCS`
-**Source:** `scripts/ingest.py:83`
-
-**Value:** `None`
-
-Optional limit for document processing (for prototyping).
-
----
-
-##### `RANDOM_SEED`
-**Source:** `scripts/ingest.py:86`
-
-**Value:** `42`
-
-Random seed for reproducibility.
-
----
-
-#### Main Functions
-
-##### `find_repo_root(start: Path) -> Path`
-**Source:** `scripts/ingest.py:48-54`
-
-**Description:** Finds repository root by looking for `pyproject.toml` or `.git` directory.
-
-**Parameters:**
-- `start` (Path): Starting directory path
-
-**Returns:**
-- `Path`: Repository root path
-
-**Example:**
+**Batch Processing Example**:
 ```python
-from pathlib import Path
-from scripts.ingest import find_repo_root
-
-repo_root = find_repo_root(Path.cwd())
-print(f"Repository root: {repo_root}")
-```
-
----
-
-##### `ensure_jsonable(obj: Any) -> Any`
-**Source:** `scripts/ingest.py:92-104`
-
-**Description:** Makes metadata JSON-serializable without losing information.
-
-**Parameters:**
-- `obj` (Any): Object to convert (dict, list, primitive, or custom type)
-
-**Returns:**
-- `Any`: JSON-serializable version of input
-
-**Example:**
-```python
-from pathlib import Path
-from datetime import datetime
-from scripts.ingest import ensure_jsonable
-
-metadata = {
-    "path": Path("/data/file.pdf"),
-    "created": datetime.now(),
-    "page": 5,
-    "nested": {"key": "value"}
-}
-
-json_safe = ensure_jsonable(metadata)
-# All Path and datetime objects converted to strings
-```
-
-**Notes:**
-- Preserves nested structures (dicts, lists)
-- Converts Path, UUID, datetime to strings
-- Prevents Arrow/Parquet serialization errors
-
----
-
-##### `docs_to_jsonl(docs: Iterable[Document], path: Path) -> int`
-**Source:** `scripts/ingest.py:106-113`
-
-**Description:** Persists LangChain documents to JSONL format.
-
-**Parameters:**
-- `docs` (Iterable[Document]): Documents to persist
-- `path` (Path): Output JSONL file path
-
-**Returns:**
-- `int`: Number of documents written
-
-**Example:**
-```python
-from pathlib import Path
-from langchain_core.documents import Document
-from scripts.ingest import docs_to_jsonl
-
-docs = [
-    Document(page_content="Text 1", metadata={"page": 1}),
-    Document(page_content="Text 2", metadata={"page": 2})
+questions = [
+    "What is GDELT?",
+    "How does GDELT measure tone?",
+    "What languages does GDELT support?"
 ]
 
-count = docs_to_jsonl(docs, Path("data/output.jsonl"))
-print(f"Wrote {count} documents")
+results = {}
+for name, graph in graphs.items():
+    results[name] = []
+    for question in questions:
+        result = graph.invoke({"question": question})
+        results[name].append(result['response'])
 ```
+
+**Source**: `src/graph.py:109-141`
 
 ---
 
-##### `docs_to_parquet(docs: Iterable[Document], path: Path) -> int`
-**Source:** `scripts/ingest.py:115-119`
+### utils.py
 
-**Description:** Persists LangChain documents to Parquet format.
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/src/utils.py`
 
-**Parameters:**
-- `docs` (Iterable[Document]): Documents to persist
-- `path` (Path): Output Parquet file path
+Utility functions for loading and processing documents from HuggingFace datasets.
 
-**Returns:**
-- `int`: Number of documents written
+#### Functions
 
-**Example:**
+##### `load_documents_from_huggingface()`
+
+**Description**: Load documents from HuggingFace dataset and convert to LangChain Documents. Handles conversion from HuggingFace dataset format to LangChain Document objects, properly extracting page_content and metadata.
+
+**Signature**:
 ```python
-from pathlib import Path
-from scripts.ingest import docs_to_parquet
-
-count = docs_to_parquet(docs, Path("data/output.parquet"))
-print(f"Wrote {count} documents to Parquet")
+def load_documents_from_huggingface(
+    dataset_name: str = "dwb2023/gdelt-rag-sources",
+    split: str = "train",
+    revision: str = None
+) -> List[Document]:
 ```
 
-**Notes:**
-- Flattens metadata into columns
-- Uses pandas DataFrame intermediate format
+**Parameters**:
+- `dataset_name` (str, optional): HuggingFace dataset identifier. Default: `"dwb2023/gdelt-rag-sources"`
+- `split` (str, optional): Dataset split to load. Default: `"train"`
+- `revision` (str, optional): Dataset revision/commit SHA to pin. Default: None (uses `HF_SOURCES_REV` env var if set, otherwise latest)
 
----
+**Returns**:
+- `List[Document]`: List of LangChain Document objects with page_content and metadata
 
-##### `docs_to_hfds(docs: Iterable[Document], path: Path) -> int`
-**Source:** `scripts/ingest.py:121-126`
+**Environment Variables**:
+- `HF_SOURCES_REV`: Optional dataset revision to pin for reproducibility
 
-**Description:** Persists LangChain documents to HuggingFace dataset on disk.
-
-**Parameters:**
-- `docs` (Iterable[Document]): Documents to persist
-- `path` (Path): Output directory path
-
-**Returns:**
-- `int`: Number of documents written
-
-**Example:**
+**Example**:
 ```python
-from pathlib import Path
-from scripts.ingest import docs_to_hfds
+from src.utils import load_documents_from_huggingface
 
-count = docs_to_hfds(docs, Path("data/output.hfds"))
-print(f"Wrote {count} documents to HF dataset")
+# Load latest version
+documents = load_documents_from_huggingface()
+print(f"Loaded {len(documents)} documents")
 
-# Later: reload
-from datasets import load_from_disk
-dataset = load_from_disk("data/output.hfds")
+# Pin to specific revision for reproducibility
+documents = load_documents_from_huggingface(
+    revision="abc123def456"
+)
+
+# Or use environment variable
+import os
+os.environ["HF_SOURCES_REV"] = "abc123def456"
+documents = load_documents_from_huggingface()
+
+# Load from different dataset
+documents = load_documents_from_huggingface(
+    dataset_name="my-org/my-dataset",
+    split="test"
+)
+
+# Inspect documents
+doc = documents[0]
+print(f"Content: {doc.page_content[:100]}...")
+print(f"Metadata: {doc.metadata}")
 ```
 
----
-
-##### `hash_file(path: Path, algo: str = "sha256") -> str`
-**Source:** `scripts/ingest.py:128-133`
-
-**Description:** Computes file hash for integrity verification.
-
-**Parameters:**
-- `path` (Path): File to hash
-- `algo` (str): Hash algorithm (default: "sha256")
-
-**Returns:**
-- `str`: Hexadecimal hash digest
-
-**Example:**
+**Data Structure**:
 ```python
-from pathlib import Path
-from scripts.ingest import hash_file
-
-checksum = hash_file(Path("data/sources.jsonl"))
-print(f"SHA256: {checksum}")
+# Each Document has:
+Document(
+    page_content="The text content of the document...",
+    metadata={
+        "title": "Paper title",
+        "author": "Authors",
+        "page": 1,
+        "total_pages": 38,
+        "file_path": "/path/to/source.pdf",
+        # ... other metadata fields
+    }
+)
 ```
+
+**Important Notes**:
+- Handles nested metadata structures automatically
+- Preserves all metadata fields from HuggingFace dataset
+- Empty or missing page_content defaults to empty string
+- Revision pinning prevents dataset drift over time
+- First call downloads dataset (cached locally afterward)
+
+**Source**: `src/utils.py:15-75`
 
 ---
 
-##### `write_manifest(manifest_path: Path, payload: Dict[str, Any]) -> None`
-**Source:** `scripts/ingest.py:135-136`
+##### `load_golden_testset_from_huggingface()`
 
-**Description:** Writes manifest JSON file.
+**Description**: Load golden testset from HuggingFace dataset for evaluation purposes.
 
-**Parameters:**
-- `manifest_path` (Path): Output manifest file path
-- `payload` (Dict[str, Any]): Manifest data
-
-**Example:**
+**Signature**:
 ```python
-from pathlib import Path
-from scripts.ingest import write_manifest
-
-manifest = {
-    "id": "run_123",
-    "generated_at": "2025-01-01T00:00:00Z",
-    "paths": {...}
-}
-
-write_manifest(Path("data/manifest.json"), manifest)
+def load_golden_testset_from_huggingface(
+    dataset_name: str = "dwb2023/gdelt-rag-golden-testset",
+    split: str = "train",
+    revision: str = None
+) -> Dataset:
 ```
 
----
+**Parameters**:
+- `dataset_name` (str, optional): HuggingFace dataset identifier. Default: `"dwb2023/gdelt-rag-golden-testset"`
+- `split` (str, optional): Dataset split to load. Default: `"train"`
+- `revision` (str, optional): Dataset revision/commit SHA to pin. Default: None (uses `HF_GOLDEN_REV` env var if set, otherwise latest)
 
-##### `summarize_columns_from_jsonl(path: Path, sample_n: int = 5) -> Dict[str, Any]`
-**Source:** `scripts/ingest.py:138-150`
+**Returns**:
+- `Dataset`: HuggingFace Dataset object with evaluation examples
 
-**Description:** Extracts column schema and samples from JSONL file.
+**Environment Variables**:
+- `HF_GOLDEN_REV`: Optional dataset revision to pin for reproducibility
 
-**Parameters:**
-- `path` (Path): JSONL file path
-- `sample_n` (int): Number of sample rows to include (default: 5)
-
-**Returns:**
-- `Dict[str, Any]`: Dictionary with `columns` (list) and `sample` (list)
-
-**Example:**
+**Example**:
 ```python
-from pathlib import Path
-from scripts.ingest import summarize_columns_from_jsonl
+from src.utils import load_golden_testset_from_huggingface
+import pandas as pd
 
-schema = summarize_columns_from_jsonl(Path("data/sources.jsonl"), sample_n=3)
-print(f"Columns: {schema['columns']}")
-print(f"Sample count: {len(schema['sample'])}")
+# Load golden testset
+golden_dataset = load_golden_testset_from_huggingface()
+
+# Convert to pandas for inspection
+golden_df = golden_dataset.to_pandas()
+print(f"Loaded {len(golden_df)} test examples")
+print(f"Columns: {golden_df.columns.tolist()}")
+
+# Pin to specific revision
+golden_dataset = load_golden_testset_from_huggingface(
+    revision="abc123def456"
+)
+
+# Or use environment variable
+import os
+os.environ["HF_GOLDEN_REV"] = "abc123def456"
+golden_dataset = load_golden_testset_from_huggingface()
+
+# Inspect examples
+for example in golden_dataset:
+    print(f"Question: {example['user_input']}")
+    print(f"Reference: {example['reference']}")
+    print(f"Contexts: {len(example['reference_contexts'])}")
+    print()
 ```
+
+**Dataset Schema**:
+- `user_input` (str): Question/query
+- `reference` (str): Ground truth answer
+- `reference_contexts` (list[str]): Ground truth context passages
+- `synthesizer_name` (str): RAGAS synthesizer used
+
+**Use Cases**:
+- RAGAS evaluation (faithfulness, relevancy, precision, recall)
+- Benchmarking retriever quality
+- Regression testing for system changes
+
+**Important Notes**:
+- Revision pinning ensures test set consistency across runs
+- Prevents score drift due to dataset updates
+- Used in evaluation harness (`run_eval_harness.py`, `single_file.py`)
+
+**Source**: `src/utils.py:78-113`
 
 ---
 
-##### `build_testset(docs, size: int)`
-**Source:** `scripts/ingest.py:202-229`
+## Scripts
 
-**Description:** Generates RAGAS testset with automatic version detection (0.2.x vs 0.3.x).
+### run_eval_harness.py
 
-**Parameters:**
-- `docs` (List[Document]): Source documents for testset generation
-- `size` (int): Number of test cases to generate
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/run_eval_harness.py`
 
-**Returns:**
-- `TestSet`: RAGAS testset object
+RAGAS evaluation harness using `src/` modules. This is the production evaluation script.
 
-**Implementation:**
-- Tries RAGAS 0.3.x `generate()` API first
-- Falls back to RAGAS 0.2.x `TestsetGenerator` API
-- Includes retry logic with exponential backoff for API errors
+**Description**: Runs comprehensive RAGAS evaluation across all 4 retrievers using factory functions from `src/` modules. Evaluates 12 test questions with 4 RAGAS metrics.
 
-**Example:**
+**Usage**:
+```bash
+# Using Make
+make eval
+
+# Direct execution
+export PYTHONPATH=.
+python scripts/run_eval_harness.py
+
+# With collection recreation
+python scripts/run_eval_harness.py --recreate true
+
+# Reuse existing collection (faster)
+python scripts/run_eval_harness.py --recreate false
+```
+
+**Command Line Arguments**:
+- `--recreate` (str): Recreate Qdrant collection. Choices: `"true"`, `"false"`. Default: `"false"`
+
+**Environment Variables Required**:
+- `OPENAI_API_KEY`: For LLM and embeddings
+- `COHERE_API_KEY`: For cohere_rerank retriever (optional, that retriever will be skipped)
+
+**Output Files** (saved to `deliverables/evaluation_evidence/`):
+
+1. **Raw Datasets** (6 columns each):
+   - `{retriever}_raw_dataset.parquet`
+   - Columns: user_input, reference_contexts, reference, synthesizer_name, response, retrieved_contexts
+
+2. **Evaluation Datasets** (RAGAS format):
+   - `{retriever}_evaluation_dataset.csv`
+
+3. **Detailed Results** (per-question scores):
+   - `{retriever}_detailed_results.csv`
+   - Includes: faithfulness, answer_relevancy, context_precision, context_recall
+
+4. **Comparative Summary**:
+   - `comparative_ragas_results.csv`
+   - Aggregated scores by retriever
+
+**Evaluation Metrics**:
+- **Faithfulness**: Answer grounded in retrieved context (no hallucination)
+- **Answer Relevancy**: Answer addresses the question
+- **Context Precision**: Relevant contexts ranked higher
+- **Context Recall**: Ground truth coverage by retrieved contexts
+
+**Example Output**:
+```
+================================================================================
+COMPARATIVE RAGAS RESULTS
+================================================================================
+
+Retriever             Faithfulness  Answer Relevancy  Context Precision  Context Recall  Average
+Cohere Rerank         0.9583        0.9123           0.8750             0.9167          0.9156
+Ensemble              0.9375        0.8945           0.8542             0.8958          0.8955
+Naive                 0.9167        0.8734           0.8333             0.8750          0.8746
+Bm25                  0.8958        0.8512           0.8125             0.8542          0.8534
+
+🏆 Winner: Cohere Rerank with 91.56% average score
+   Improvement over baseline: +4.7%
+```
+
+**Performance**:
+- **Time**: 20-30 minutes
+- **Cost**: ~$5-6 in OpenAI API calls
+- **Test Set**: 12 questions × 4 retrievers = 48 total evaluations
+
+**Important Notes**:
+- Set `--recreate true` for fresh evaluation (rebuilds vector store)
+- Set `--recreate false` to reuse existing collection (faster, for re-evaluation)
+- All LLM calls use `temperature=0` for determinism
+- Results are identical to `single_file.py` but uses modular `src/` code
+
+**Source**: `scripts/run_eval_harness.py:1-323`
+
+**Key Functions**:
+
 ```python
-from scripts.ingest import build_testset
+# Main workflow (simplified)
+def main():
+    # 1. Load data
+    docs = load_documents_from_huggingface(DATASET_SOURCES, "train")
+    golden_ds = load_golden_testset_from_huggingface(DATASET_GOLDEN, "train")
+    golden_df = golden_ds.to_pandas()
 
-testset = build_testset(documents, size=12)
-print(f"Generated {len(testset)} test cases")
+    # 2. Build RAG stack
+    vs = create_vector_store(docs, recreate_collection=RECREATE_COLLECTION)
+    retrievers = create_retrievers(docs, vs, k=K)
+    graphs = build_all_graphs(retrievers, llm=get_llm())
 
-# Save to JSONL
-testset.to_jsonl("data/golden_testset.jsonl")
-```
+    # 3. Run inference
+    for name, graph in graphs.items():
+        for idx, row in df.iterrows():
+            result = graph.invoke({"question": row["user_input"]})
+            df.at[idx, "response"] = result["response"]
+            df.at[idx, "retrieved_contexts"] = [d.page_content for d in result["context"]]
 
-**Notes:**
-- Requires `OPENAI_API_KEY` environment variable
-- Retries up to 3 times on rate limits
-- Supports both LangChain Document input
+    # 4. RAGAS evaluation
+    for name, df in datasets.items():
+        eval_ds = EvaluationDataset.from_pandas(df)
+        res = evaluate(dataset=eval_ds, metrics=[...], llm=evaluator_llm)
 
----
-
-#### Workflow
-
-**Pipeline Execution:**
-
-```python
-# 1. Load PDFs
-from langchain_community.document_loaders import DirectoryLoader, PyMuPDFLoader
-
-loader = DirectoryLoader("data/raw", glob="*.pdf", loader_cls=PyMuPDFLoader)
-docs = loader.load()
-
-# 2. Persist sources
-docs_to_jsonl(docs, Path("data/interim/sources.jsonl"))
-docs_to_parquet(docs, Path("data/interim/sources.parquet"))
-docs_to_hfds(docs, Path("data/interim/sources.hfds"))
-
-# 3. Generate testset
-golden_testset = build_testset(docs, size=12)
-
-# 4. Persist testset
-golden_testset.to_jsonl("data/interim/golden_testset.jsonl")
-golden_testset.to_hf_dataset().save_to_disk("data/interim/golden_testset.hfds")
-
-# 5. Generate manifest
-manifest = {
-    "id": "pipeline_run_123",
-    "generated_at": datetime.utcnow().isoformat() + "Z",
-    "paths": {...},
-    "fingerprints": {...}
-}
-write_manifest(Path("data/interim/manifest.json"), manifest)
-```
-
-**Output Structure:**
-```
-data/interim/
-├── sources.jsonl              # Source documents (JSONL)
-├── sources.parquet            # Source documents (Parquet)
-├── sources.hfds/              # Source documents (HF dataset)
-├── golden_testset.jsonl       # Test cases (JSONL)
-├── golden_testset.parquet     # Test cases (Parquet)
-├── golden_testset.hfds/       # Test cases (HF dataset)
-└── manifest.json              # Provenance and checksums
+    # 5. Comparative analysis
+    # Aggregate and compare results
 ```
 
 ---
 
-### Script: single_file.py
+### single_file.py
 
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/single_file.py`
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/single_file.py`
 
-**Purpose:** End-to-end RAG evaluation script with RAGAS metrics for multiple retrieval strategies.
+Comprehensive RAG evaluation with RAGAS (standalone version). This is the original evaluation script with all code inline.
 
-**Entry Point:**
+**Description**: Self-contained evaluation script that implements the full RAG pipeline inline (without using `src/` modules). Evaluates 4 retrievers using RAGAS metrics. Functionally identical to `run_eval_harness.py` but with duplicated code.
+
+**Usage**:
 ```bash
 python scripts/single_file.py
 ```
 
-**Key Features:**
-- Loads golden testset from HuggingFace
-- Loads source documents from HuggingFace
-- Creates Qdrant vector store
-- Builds all 4 retrieval strategies
-- Runs RAGAS evaluation (faithfulness, answer_relevancy, context_precision, context_recall)
-- Generates comparative results table
-- Saves all results and manifests
+**Environment Variables Required**:
+- `OPENAI_API_KEY`: Required for LLM and embeddings
+- `COHERE_API_KEY`: Optional (for cohere_rerank)
 
-#### Helper Functions
+**Output Files**: Same as `run_eval_harness.py` (see above)
 
-##### `validate_and_normalize_ragas_schema(df: pd.DataFrame, retriever_name: str = "unknown") -> pd.DataFrame`
-**Source:** `scripts/single_file.py:66-125`
+**Key Differences from `run_eval_harness.py`**:
+1. All code inline (no imports from `src/`)
+2. Always recreates Qdrant collection
+3. No command-line arguments
+4. Demonstrates inline implementation pattern
 
-**Description:** Ensures DataFrame matches RAGAS 0.2.10 schema requirements.
+**Use Cases**:
+- Reference implementation for understanding the full workflow
+- Standalone execution without dependencies on `src/` modules
+- Educational purposes (all code visible in one file)
 
-**Parameters:**
-- `df` (pd.DataFrame): DataFrame to validate
-- `retriever_name` (str): Retriever name for logging (default: "unknown")
+**Important Functions**:
 
-**Returns:**
-- `pd.DataFrame`: Validated DataFrame with normalized column names
+##### `validate_and_normalize_ragas_schema()`
 
-**Raises:**
-- `ValueError`: If required columns are missing or have wrong types
+**Description**: Ensure DataFrame matches RAGAS 0.2.10 schema requirements. Handles different column naming conventions and validates required fields.
 
-**Column Mapping:**
+**Signature**:
+```python
+def validate_and_normalize_ragas_schema(
+    df: pd.DataFrame,
+    retriever_name: str = "unknown"
+) -> pd.DataFrame:
+```
+
+**Parameters**:
+- `df` (pd.DataFrame): DataFrame to validate and normalize
+- `retriever_name` (str, optional): Name of retriever for logging. Default: "unknown"
+
+**Returns**:
+- `pd.DataFrame`: DataFrame with normalized column names
+
+**Raises**:
+- `ValueError`: If required columns are missing after normalization
+
+**Column Mapping**:
 ```python
 rename_map = {
     'question': 'user_input',
@@ -1076,661 +985,512 @@ rename_map = {
 }
 ```
 
-**Expected Columns:**
-- `user_input` (str): Question
-- `response` (str): Generated answer
-- `retrieved_contexts` (list[str]): Retrieved document texts
-- `reference` (str): Ground truth answer
+**Required Columns**: `user_input`, `response`, `retrieved_contexts`, `reference`
 
-**Example:**
+**Example**:
 ```python
 import pandas as pd
 from scripts.single_file import validate_and_normalize_ragas_schema
 
-# DataFrame with alternate column names
+# DataFrame with alternative column names
 df = pd.DataFrame({
     'question': ['What is GDELT?'],
     'answer': ['GDELT is...'],
-    'contexts': [['Context 1', 'Context 2']],
+    'contexts': [['doc1', 'doc2']],
     'ground_truth': ['Ground truth answer']
 })
 
-# Normalize
-validated_df = validate_and_normalize_ragas_schema(df, 'naive')
-print(validated_df.columns)
-# Output: ['user_input', 'response', 'retrieved_contexts', 'reference']
+# Normalize to RAGAS schema
+normalized_df = validate_and_normalize_ragas_schema(df, "naive")
+
+# Now has: user_input, response, retrieved_contexts, reference
+print(normalized_df.columns.tolist())
 ```
 
-**Notes:**
-- Critical for RAGAS evaluation compatibility
-- Prevents silent failures from schema mismatches
-- Validates both column names and data types
+**Source**: `scripts/single_file.py:66-125`
 
 ---
 
-#### Workflow
+### validate_langgraph.py
 
-**Complete Evaluation Pipeline:**
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/validate_langgraph.py`
 
+LangGraph configuration validation script. Validates the LangGraph implementation and demonstrates correct initialization patterns.
+
+**Description**: Validates environment configuration, module imports, retriever factory patterns, graph compilation, and functional execution. Serves as diagnostic tool and reference implementation.
+
+**Usage**:
+```bash
+python scripts/validate_langgraph.py
+```
+
+**Exit Codes**:
+- `0`: All validations passed
+- `1`: One or more validations failed
+
+**Validation Stages**:
+
+1. **Environment Validation**:
+   - Check API keys (OPENAI_API_KEY, COHERE_API_KEY)
+   - Test Qdrant connectivity
+   - Verify critical Python imports
+
+2. **Module Import Validation**:
+   - Test importing each `src/` module individually
+   - Identify broken imports with detailed tracebacks
+
+3. **Initialization Pattern Validation**:
+   - Demonstrate correct factory pattern usage
+   - Load documents using `src.utils`
+   - Create vector store using `src.config`
+   - Create retrievers using `src.retrievers`
+
+4. **Graph Compilation Validation**:
+   - Build graphs using `src.graph`
+   - Verify all 4 retrievers compile successfully
+
+5. **Functional Testing**:
+   - Execute test query through each graph
+   - Validate result structure
+   - Check context retrieval and response generation
+
+**Example Output**:
+```
+================================================================================
+1. ENVIRONMENT VALIDATION
+================================================================================
+
+✓ OPENAI_API_KEY set                                       [PASS]
+✓ COHERE_API_KEY set                                       [PASS]
+✓ Qdrant at localhost:6333                                 [PASS]
+✓ Import langchain                                         [PASS]
+✓ Import langchain_openai                                  [PASS]
+✓ Import langgraph                                         [PASS]
+
+================================================================================
+2. MODULE IMPORT VALIDATION
+================================================================================
+
+✓ src.config         - Configuration                       [PASS]
+✓ src.state          - State schema                        [PASS]
+✓ src.prompts        - Prompt templates                    [PASS]
+✓ src.retrievers     - Retriever instances                 [PASS]
+✓ src.graph          - LangGraph workflows                 [PASS]
+✓ src.utils          - Utility functions                   [PASS]
+
+================================================================================
+3. VALIDATION OF src/ MODULE IMPLEMENTATION
+================================================================================
+
+ℹ Loading documents using src.utils...
+✓ Load documents from HuggingFace                          [PASS]
+ℹ Creating vector store using src.config...
+✓ Create vector store via factory                          [PASS]
+ℹ Creating retrievers using src.retrievers...
+✓ Create retrievers via factory                            [PASS]
+
+================================================================================
+4. GRAPH COMPILATION VALIDATION
+================================================================================
+
+✓ Compile naive graph                                      [PASS]
+✓ Compile bm25 graph                                       [PASS]
+✓ Compile ensemble graph                                   [PASS]
+✓ Compile cohere_rerank graph                              [PASS]
+
+================================================================================
+5. FUNCTIONAL TESTING
+================================================================================
+
+ℹ Test question: 'What is GDELT?'
+✓ naive              functional test                       [PASS]
+✓ bm25               functional test                       [PASS]
+✓ ensemble           functional test                       [PASS]
+✓ cohere_rerank      functional test                       [PASS]
+
+================================================================================
+6. DIAGNOSTIC REPORT
+================================================================================
+
+Overall Results:
+  Total checks: 25
+  Passed: 25
+  Failed: 0
+  Pass rate: 100.0%
+
+✅ ALL VALIDATIONS PASSED
+```
+
+**Key Functions**:
+
+##### `check_environment()`
+
+**Signature**: `def check_environment() -> Dict[str, bool]:`
+
+Validates environment configuration (API keys, Qdrant, imports).
+
+##### `test_module_imports()`
+
+**Signature**: `def test_module_imports() -> Dict[str, Dict[str, Any]]:`
+
+Tests importing each `src/` module individually.
+
+##### `demonstrate_correct_pattern()`
+
+**Signature**: `def demonstrate_correct_pattern() -> Optional[Dict[str, Any]]:`
+
+Demonstrates correct retriever factory pattern using actual `src/` modules.
+
+##### `validate_graph_compilation()`
+
+**Signature**: `def validate_graph_compilation(components: Optional[Dict[str, Any]]) -> Dict[str, bool]:`
+
+Validates LangGraph compilation for all retrievers.
+
+##### `run_functional_tests()`
+
+**Signature**: `def run_functional_tests(components: Optional[Dict[str, Any]]) -> Dict[str, bool]:`
+
+Runs functional tests with actual queries.
+
+**Source**: `scripts/validate_langgraph.py:1-486`
+
+---
+
+### Data Pipeline Scripts
+
+#### ingest.py
+
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/ingest.py`
+
+Standardized RAGAS golden testset pipeline. Extracts PDFs, generates golden testset, and persists to multiple formats.
+
+**Description**: End-to-end pipeline for creating source documents and golden testset from PDFs. Generates RAGAS synthetic test data and saves in multiple formats (JSONL, Parquet, HuggingFace Dataset).
+
+**Workflow**:
+1. Extract PDFs → LangChain Documents
+2. Sanitize metadata for Arrow/JSON
+3. Persist SOURCES to `/data/interim` (JSONL, Parquet, HF dataset)
+4. Generate RAGAS golden testset
+5. Persist GOLDEN TESTSET to `/data/interim`
+6. Write manifest with checksums & schema
+
+**Output Formats**:
+- **JSONL**: Native for RAG eval workflows
+- **Parquet**: For analytics / quick vector-store ingestion
+- **HF Dataset on disk**: Fast rehydrate into `datasets`
+
+**Configuration** (in script):
 ```python
-# Configuration
-QDRANT_HOST = "localhost"
-QDRANT_PORT = 6333
-COLLECTION_NAME = "gdelt_comparative_eval"
-
-# 1. Load golden testset
-from datasets import load_dataset
-golden_dataset = load_dataset("dwb2023/gdelt-rag-golden-testset", split="train")
-golden_df = golden_dataset.to_pandas()
-
-# 2. Load source documents
-sources_dataset = load_dataset("dwb2023/gdelt-rag-sources", split="train")
-documents = [
-    Document(page_content=item["page_content"], metadata=item.get("metadata", {}))
-    for item in sources_dataset
-]
-
-# 3. Create Qdrant vector store
-from qdrant_client import QdrantClient
-from langchain_qdrant import QdrantVectorStore
-
-qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
-vector_store = QdrantVectorStore(
-    client=qdrant_client,
-    collection_name=COLLECTION_NAME,
-    embedding=embeddings
-)
-vector_store.add_documents(documents)
-
-# 4. Create retrievers
-baseline_retriever = vector_store.as_retriever(search_kwargs={"k": 5})
-bm25_retriever = BM25Retriever.from_documents(documents, k=5)
-# ... (compression, ensemble)
-
-# 5. Build LangGraph workflows
-from langgraph.graph import START, StateGraph
-
-baseline_graph = StateGraph(State).add_sequence([retrieve_baseline, generate])
-baseline_graph.add_edge(START, "retrieve_baseline")
-baseline_graph = baseline_graph.compile()
-# ... (other graphs)
-
-# 6. Run questions through all retrievers
-for retriever_name, graph in retrievers_config.items():
-    for idx, row in datasets[retriever_name].iterrows():
-        result = graph.invoke({"question": row['user_input']})
-        datasets[retriever_name].at[idx, 'response'] = result['response']
-        datasets[retriever_name].at[idx, 'retrieved_contexts'] = [
-            doc.page_content for doc in result['context']
-        ]
-
-# 7. Create RAGAS EvaluationDatasets
-from ragas import EvaluationDataset
-
-evaluation_datasets = {}
-for retriever_name, dataset in datasets.items():
-    validated = validate_and_normalize_ragas_schema(dataset, retriever_name)
-    evaluation_datasets[retriever_name] = EvaluationDataset.from_pandas(validated)
-
-# 8. Run RAGAS evaluation
-from ragas import evaluate
-from ragas.metrics import Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall
-
-evaluation_results = {}
-for retriever_name, eval_dataset in evaluation_datasets.items():
-    result = evaluate(
-        dataset=eval_dataset,
-        metrics=[
-            Faithfulness(),
-            ResponseRelevancy(),
-            ContextPrecision(),
-            LLMContextRecall(),
-        ],
-        llm=evaluator_llm,
-        run_config=RunConfig(timeout=360)
-    )
-    evaluation_results[retriever_name] = result
-
-# 9. Generate comparative table
-comparison_data = []
-for retriever_name, result in evaluation_results.items():
-    df = result.to_pandas()
-    comparison_data.append({
-        'Retriever': retriever_name,
-        'Faithfulness': df['faithfulness'].mean(),
-        'Answer Relevancy': df['answer_relevancy'].mean(),
-        'Context Precision': df['context_precision'].mean(),
-        'Context Recall': df['context_recall'].mean(),
-    })
-
-comparison_df = pd.DataFrame(comparison_data)
-comparison_df.to_csv("comparative_ragas_results.csv", index=False)
+OPENAI_MODEL = "gpt-4.1-mini"
+OPENAI_EMBED_MODEL = "text-embedding-3-small"
+TESTSET_SIZE = 10
+MAX_DOCS = None  # Set to int to limit docs during prototyping
+RANDOM_SEED = 42
 ```
 
-**Output Files:**
-```
-deliverables/evaluation_evidence/
-├── comparative_ragas_results.csv          # Summary table
-├── naive_evaluation_dataset.csv           # Full dataset per retriever
-├── naive_detailed_results.csv             # Per-question metrics
-├── bm25_evaluation_dataset.csv
-├── bm25_detailed_results.csv
-├── ensemble_evaluation_dataset.csv
-├── ensemble_detailed_results.csv
-├── cohere_rerank_evaluation_dataset.csv
-├── cohere_rerank_detailed_results.csv
-└── RUN_MANIFEST.json                      # Reproducibility manifest
-```
+**Output Files**:
+- `data/interim/sources.docs.jsonl`
+- `data/interim/sources.docs.parquet`
+- `data/interim/sources.hfds/` (directory)
+- `data/interim/golden_testset.jsonl`
+- `data/interim/golden_testset.parquet`
+- `data/interim/golden_testset.hfds/` (directory)
+- `data/interim/manifest.json`
+
+**Key Functions**:
+
+##### `ensure_jsonable()`
+
+**Signature**: `def ensure_jsonable(obj: Any) -> Any:`
+
+Make metadata JSON-serializable without losing information.
+
+##### `docs_to_jsonl()`
+
+**Signature**: `def docs_to_jsonl(docs: Iterable[Document], path: Path) -> int:`
+
+Write documents to JSONL format.
+
+##### `docs_to_parquet()`
+
+**Signature**: `def docs_to_parquet(docs: Iterable[Document], path: Path) -> int:`
+
+Write documents to Parquet format.
+
+##### `docs_to_hfds()`
+
+**Signature**: `def docs_to_hfds(docs: Iterable[Document], path: Path) -> int:`
+
+Write documents to HuggingFace Dataset on disk.
+
+##### `build_testset()`
+
+**Signature**: `def build_testset(docs, size: int):`
+
+Generate RAGAS testset with retry logic for API failures. Supports both RAGAS 0.3.x and 0.2.x APIs.
+
+**Retry Configuration**:
+- Max attempts: 3
+- Wait strategy: Exponential backoff (1-20 seconds)
+- Retry on: RateLimitError, APITimeoutError, APIStatusError, APIConnectionError
+
+**Source**: `scripts/ingest.py:1-336`
 
 ---
 
-### Script: upload_to_hf.py
+#### upload_to_hf.py
 
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/upload_to_hf.py`
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/upload_to_hf.py`
 
-**Purpose:** Upload datasets to HuggingFace Hub with dataset cards.
+Upload GDELT RAG datasets to Hugging Face Hub.
 
-**Entry Point:**
+**Description**: Uploads source documents and golden testset to HuggingFace Hub with dataset cards. Updates manifest with dataset repo IDs.
+
+**Usage**:
 ```bash
 export HF_TOKEN=your_token_here
 python scripts/upload_to_hf.py
 ```
 
-#### Configuration
+**Environment Variables Required**:
+- `HF_TOKEN`: HuggingFace API token with write access
 
-##### `HF_USERNAME`
-**Source:** `scripts/upload_to_hf.py:21`
+**Dataset Repositories**:
+- Sources: `dwb2023/gdelt-rag-sources`
+- Golden Testset: `dwb2023/gdelt-rag-golden-testset`
 
-**Value:** `"dwb2023"`
+**Features**:
+- Automatic dataset card generation
+- Public datasets (not private)
+- Manifest update with repo IDs and upload timestamp
 
-HuggingFace username for dataset repos.
+**Key Functions**:
 
----
+##### `create_sources_card()`
 
-##### `SOURCES_DATASET_NAME`
-**Source:** `scripts/upload_to_hf.py:22`
+**Signature**: `def create_sources_card() -> str:`
 
-**Value:** `"dwb2023/gdelt-rag-sources"`
+Create dataset card for sources dataset with metadata and citation.
 
-HuggingFace dataset repo for source documents.
+##### `create_golden_testset_card()`
 
----
+**Signature**: `def create_golden_testset_card() -> str:`
 
-##### `GOLDEN_TESTSET_NAME`
-**Source:** `scripts/upload_to_hf.py:23`
+Create dataset card for golden testset with schema and usage info.
 
-**Value:** `"dwb2023/gdelt-rag-golden-testset"`
+##### `update_manifest()`
 
-HuggingFace dataset repo for golden testset.
+**Signature**: `def update_manifest(sources_repo: str, golden_testset_repo: str):`
 
----
+Update manifest.json with dataset repo IDs and upload timestamp.
 
-#### Functions
+**Example Output**:
+```
+🔐 Logging in to Hugging Face...
 
-##### `create_sources_card() -> str`
-**Source:** `scripts/upload_to_hf.py:34-110`
+📂 Loading datasets from data/interim...
+   • Sources dataset: 38 documents
+   • Golden testset: 12 examples
 
-**Description:** Generates dataset card markdown for source documents.
+📤 Uploading sources dataset to dwb2023/gdelt-rag-sources...
+   • Creating dataset card...
+   ✅ Sources dataset uploaded successfully!
+      View at: https://huggingface.co/datasets/dwb2023/gdelt-rag-sources
 
-**Returns:**
-- `str`: Dataset card markdown with metadata header and documentation
+📤 Uploading golden testset to dwb2023/gdelt-rag-golden-testset...
+   • Creating dataset card...
+   ✅ Golden testset uploaded successfully!
+      View at: https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset
 
-**Example:**
-```python
-from scripts.upload_to_hf import create_sources_card
+📝 Updating manifest...
+✅ Updated manifest.json with dataset repo IDs
 
-card = create_sources_card()
-print(card[:200])  # Preview
+🎉 All datasets uploaded successfully!
 ```
 
-**Card Contents:**
-- License: Apache 2.0
-- Task categories: text-retrieval, question-answering
-- Dataset description and summary
-- Data fields documentation
-- Source data citation
-- Usage examples
+**Source**: `scripts/upload_to_hf.py:1-292`
 
 ---
 
-##### `create_golden_testset_card() -> str`
-**Source:** `scripts/upload_to_hf.py:113-191`
+#### generate_run_manifest.py
 
-**Description:** Generates dataset card markdown for golden testset.
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/generate_run_manifest.py`
 
-**Returns:**
-- `str`: Dataset card markdown
+Generate RUN_MANIFEST.json for reproducibility.
 
-**Card Contents:**
-- License: Apache 2.0
-- Task categories: question-answering, text-generation
-- RAGAS framework description
-- Data fields documentation
-- Evaluation metrics documentation
-- Intended use cases
+**Description**: Captures exact configuration of RAGAS evaluation runs including model versions, retriever configurations, evaluation settings, and dependencies.
 
----
-
-##### `load_manifest()`
-**Source:** `scripts/upload_to_hf.py:194-197`
-
-**Description:** Loads manifest.json file.
-
-**Returns:**
-- `dict`: Manifest data
-
----
-
-##### `update_manifest(sources_repo: str, golden_testset_repo: str)`
-**Source:** `scripts/upload_to_hf.py:200-216`
-
-**Description:** Updates manifest with uploaded dataset repo IDs.
-
-**Parameters:**
-- `sources_repo` (str): Source dataset repo ID
-- `golden_testset_repo` (str): Golden testset repo ID
-
-**Updates:**
-- `lineage.hf.dataset_repo_id`
-- `lineage.hf.pending_upload` (set to False)
-- `lineage.hf.uploaded_at` (ISO timestamp)
-
----
-
-##### `main()`
-**Source:** `scripts/upload_to_hf.py:219-292`
-
-**Description:** Main upload workflow.
-
-**Workflow:**
-1. Check `HF_TOKEN` environment variable
-2. Login to HuggingFace Hub
-3. Load datasets from disk
-4. Upload sources dataset
-5. Upload sources dataset card
-6. Upload golden testset dataset
-7. Upload golden testset dataset card
-8. Update manifest.json
-9. Display success message with URLs
-
-**Example:**
+**Usage**:
 ```bash
-# Set token
-export HF_TOKEN=hf_your_token_here
-
-# Run upload
-python scripts/upload_to_hf.py
-
-# Output:
-# 🔐 Logging in to Hugging Face...
-# 📂 Loading datasets from data/interim...
-# 📤 Uploading sources dataset to dwb2023/gdelt-rag-sources...
-# ✅ Sources dataset uploaded successfully!
-# ...
-```
-
-**Notes:**
-- Requires `HF_TOKEN` environment variable
-- Datasets are public by default (`private=False`)
-- Creates comprehensive dataset cards automatically
-- Updates manifest for lineage tracking
-
----
-
-### Script: generate_run_manifest.py
-
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/generate_run_manifest.py`
-
-**Purpose:** Generate reproducibility manifest capturing exact evaluation configuration.
-
-**Entry Point:**
-```bash
+# Standalone execution
 python scripts/generate_run_manifest.py
-```
 
-Or programmatically:
-```python
+# Programmatic usage
 from scripts.generate_run_manifest import generate_manifest
 
 manifest = generate_manifest(
-    output_path=Path("RUN_MANIFEST.json"),
-    evaluation_results=evaluation_results,
-    retrievers_config=retrievers_config
+    output_path=Path("deliverables/evaluation_evidence/RUN_MANIFEST.json"),
+    evaluation_results=results,
+    retrievers_config=retrievers
 )
 ```
 
-#### Functions
+**Key Functions**:
 
-##### `generate_manifest(output_path: Path, evaluation_results: Optional[Dict[str, Any]] = None, retrievers_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]`
-**Source:** `scripts/generate_run_manifest.py:21-170`
+##### `generate_manifest()`
 
-**Description:** Generates comprehensive reproducibility manifest.
+**Description**: Generate run manifest JSON for reproducibility.
 
-**Parameters:**
+**Signature**:
+```python
+def generate_manifest(
+    output_path: Path,
+    evaluation_results: Optional[Dict[str, Any]] = None,
+    retrievers_config: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+```
+
+**Parameters**:
 - `output_path` (Path): Path to save manifest JSON
-- `evaluation_results` (Optional[Dict[str, Any]]): RAGAS evaluation results (default: None)
-- `retrievers_config` (Optional[Dict[str, Any]]): Retriever configurations (default: None)
+- `evaluation_results` (Optional[Dict[str, Any]]): RAGAS evaluation results
+- `retrievers_config` (Optional[Dict[str, Any]]): Retriever configurations
 
-**Returns:**
-- `Dict[str, Any]`: Complete manifest dictionary
+**Returns**:
+- `Dict[str, Any]`: Dictionary containing the manifest
 
-**Manifest Structure:**
-```python
-{
-    "ragas_version": "0.2.10",
-    "python_version": "3.11",
-    "llm": {
-        "model": "gpt-4.1-mini",
-        "temperature": 0,
-        "provider": "openai",
-        "purpose": "RAG generation and RAGAS evaluation"
-    },
-    "embeddings": {
-        "model": "text-embedding-3-small",
-        "dimensions": 1536,
-        "provider": "openai"
-    },
-    "retrievers": [
-        {
-            "name": "naive",
-            "type": "dense_vector_search",
-            "k": 5,
-            "distance_metric": "cosine",
-            "rerank": False
-        },
-        # ... (bm25, cohere_rerank, ensemble)
-    ],
-    "evaluation": {
-        "golden_testset": "dwb2023/gdelt-rag-golden-testset",
-        "golden_testset_size": 12,
-        "source_dataset": "dwb2023/gdelt-rag-sources",
-        "source_dataset_size": 38,
-        "metrics": ["faithfulness", "answer_relevancy", "context_precision", "context_recall"],
-        "timeout_seconds": 360
-    },
-    "vector_store": {
-        "type": "qdrant",
-        "collection_name": "gdelt_comparative_eval",
-        "host": "localhost",
-        "port": 6333,
-        "distance": "cosine",
-        "vector_size": 1536
-    },
-    "results_summary": {
-        "naive": {
-            "faithfulness": 0.95,
-            "answer_relevancy": 0.92,
-            "context_precision": 0.88,
-            "context_recall": 0.90,
-            "average": 0.9125
-        }
-        # ... (other retrievers)
-    },
-    "generated_at": "2025-01-17T12:00:00Z",
-    "generated_by": "scripts/generate_run_manifest.py"
-}
-```
-
-**Example:**
-```python
-from pathlib import Path
-from scripts.generate_run_manifest import generate_manifest
-
-# Standalone (no results)
-manifest = generate_manifest(Path("RUN_MANIFEST.json"))
-
-# With evaluation results
-manifest = generate_manifest(
-    output_path=Path("output/RUN_MANIFEST.json"),
-    evaluation_results=evaluation_results,
-    retrievers_config=retrievers_config
-)
-
-print(f"RAGAS version: {manifest['ragas_version']}")
-print(f"LLM: {manifest['llm']['model']}")
-print(f"Retrievers: {len(manifest['retrievers'])}")
-```
-
-**Notes:**
-- Captures all configuration for exact reproduction
-- Optionally includes evaluation result summaries
-- Documents all model versions and parameters
-- Includes retriever-specific configurations
-
----
-
-### Script: enrich_manifest.py
-
-**Source:** `/home/donbr/don-aie-cohort8/cert-challenge/scripts/enrich_manifest.py`
-
-**Purpose:** Enrich manifest.json with file checksums, row counts, schemas, and provenance metadata.
-
-**Entry Point:**
-```bash
-python scripts/enrich_manifest.py [manifest_path]
-
-# Default path: data/interim/manifest.json
-python scripts/enrich_manifest.py
-```
-
-#### Functions
-
-##### `sha256(path: Path) -> str`
-**Source:** `scripts/enrich_manifest.py:7-12`
-
-**Description:** Computes SHA256 hash of file.
-
-**Parameters:**
-- `path` (Path): File to hash
-
-**Returns:**
-- `str`: Hexadecimal hash digest
-
-**Example:**
-```python
-from pathlib import Path
-from scripts.enrich_manifest import sha256
-
-checksum = sha256(Path("data/sources.jsonl"))
-print(f"SHA256: {checksum}")
-```
-
----
-
-##### `file_bytes(path: Path) -> int`
-**Source:** `scripts/enrich_manifest.py:15-16`
-
-**Description:** Returns file size in bytes.
-
-**Parameters:**
-- `path` (Path): File path
-
-**Returns:**
-- `int`: File size in bytes
-
----
-
-##### `count_jsonl_rows(path: Path) -> int`
-**Source:** `scripts/enrich_manifest.py:19-21`
-
-**Description:** Counts rows in JSONL file.
-
-**Parameters:**
-- `path` (Path): JSONL file path
-
-**Returns:**
-- `int`: Number of rows
-
----
-
-##### `hfds_rows(path: Path) -> int`
-**Source:** `scripts/enrich_manifest.py:24-34`
-
-**Description:** Counts rows in HuggingFace dataset on disk.
-
-**Parameters:**
-- `path` (Path): HF dataset directory path
-
-**Returns:**
-- `int`: Number of rows (or None on error)
-
-**Example:**
-```python
-from pathlib import Path
-from scripts.enrich_manifest import hfds_rows
-
-rows = hfds_rows(Path("data/interim/sources.hfds"))
-print(f"Dataset contains {rows} rows")
-```
-
----
-
-##### `parquet_rows(path: Path) -> int`
-**Source:** `scripts/enrich_manifest.py:37-48`
-
-**Description:** Counts rows in Parquet file.
-
-**Parameters:**
-- `path` (Path): Parquet file path
-
-**Returns:**
-- `int`: Number of rows (or None on error)
-
-**Implementation:**
-- Tries PyArrow first (fast)
-- Falls back to Pandas
-
----
-
-##### `pandas_schema_from_parquet(path: Path)`
-**Source:** `scripts/enrich_manifest.py:51-58`
-
-**Description:** Extracts column schema from Parquet file.
-
-**Parameters:**
-- `path` (Path): Parquet file path
-
-**Returns:**
-- `list[dict]`: List of column definitions with name and dtype
-
-**Example:**
-```python
-from scripts.enrich_manifest import pandas_schema_from_parquet
-
-schema = pandas_schema_from_parquet(Path("data/sources.parquet"))
-for col in schema:
-    print(f"{col['name']}: {col['dtype']}")
-```
-
----
-
-##### `char_stats_jsonl(path: Path, field="page_content", max_scan=5000)`
-**Source:** `scripts/enrich_manifest.py:61-78`
-
-**Description:** Computes character statistics for JSONL field.
-
-**Parameters:**
-- `path` (Path): JSONL file path
-- `field` (str): Field name to analyze (default: "page_content")
-- `max_scan` (int): Maximum rows to scan (default: 5000)
-
-**Returns:**
-- `dict`: Statistics with `avg_chars`, `max_chars`, `scanned`
-
-**Example:**
-```python
-from scripts.enrich_manifest import char_stats_jsonl
-
-stats = char_stats_jsonl(Path("data/sources.jsonl"), "page_content")
-print(f"Average: {stats['avg_chars']} chars")
-print(f"Maximum: {stats['max_chars']} chars")
-print(f"Scanned: {stats['scanned']} documents")
-```
-
----
-
-##### `main(manifest_path: Path)`
-**Source:** `scripts/enrich_manifest.py:81-236`
-
-**Description:** Main enrichment workflow.
-
-**Parameters:**
-- `manifest_path` (Path): Path to manifest.json file
-
-**Enrichments:**
-1. **Environment**: Python, OS, package versions
-2. **Inputs**: Source directory detection
-3. **Artifacts**: File bytes, checksums, row counts, schemas
-4. **Metrics**: Document statistics, reference context stats
-5. **Lineage**: HuggingFace, LangSmith, Phoenix scaffolding
-6. **Compliance**: License, PII policy
-7. **Run details**: Random seed, git commit SHA
-8. **Path relativization**: Convert absolute paths to relative
-
-**Example:**
-```bash
-# Enrich default manifest
-python scripts/enrich_manifest.py
-
-# Enrich custom manifest
-python scripts/enrich_manifest.py data/custom/manifest.json
-```
-
-**Output:**
-```
-✅ Enriched manifest written: data/interim/manifest.json
-```
-
-**Enriched Manifest Structure:**
+**Manifest Structure**:
 ```json
 {
-  "id": "ragas_pipeline_abc123",
-  "generated_at": "2025-01-17T12:00:00Z",
-  "env": {
-    "python": "3.11.5",
-    "os": "Linux 6.6.87",
-    "langchain": "0.3.19",
-    "ragas": "0.2.10",
-    "datasets": "3.2.0"
+  "ragas_version": "0.2.10",
+  "python_version": "3.11",
+  "llm": {
+    "model": "gpt-4.1-mini",
+    "temperature": 0,
+    "provider": "openai",
+    "purpose": "RAG generation and RAGAS evaluation"
   },
-  "artifacts": {
-    "sources": {
-      "jsonl": {"path": "...", "bytes": 12345, "sha256": "abc..."},
-      "parquet": {"path": "...", "bytes": 8900, "sha256": "def...", "rows": 38},
-      "hfds": {"path": "...", "rows": 38}
+  "embeddings": {
+    "model": "text-embedding-3-small",
+    "dimensions": 1536,
+    "provider": "openai"
+  },
+  "retrievers": [
+    {
+      "name": "naive",
+      "type": "dense_vector_search",
+      "k": 5,
+      "distance_metric": "cosine"
     },
-    "golden_testset": {
-      "jsonl": {"path": "...", "bytes": 5678, "sha256": "ghi..."},
-      "parquet": {"path": "...", "bytes": 4500, "sha256": "jkl...", "rows": 12},
-      "hfds": {"path": "...", "rows": 12}
+    {
+      "name": "bm25",
+      "type": "sparse_keyword",
+      "k": 5
+    },
+    {
+      "name": "cohere_rerank",
+      "type": "contextual_compression",
+      "initial_k": 20,
+      "top_n": 3,
+      "rerank_model": "rerank-v3.5"
+    },
+    {
+      "name": "ensemble",
+      "type": "hybrid",
+      "weights": [0.5, 0.5]
+    }
+  ],
+  "evaluation": {
+    "golden_testset": "dwb2023/gdelt-rag-golden-testset",
+    "golden_testset_size": 12,
+    "metrics": ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+  },
+  "vector_store": {
+    "type": "qdrant",
+    "collection_name": "gdelt_comparative_eval",
+    "distance": "cosine"
+  },
+  "results_summary": {
+    "naive": {
+      "faithfulness": 0.9167,
+      "answer_relevancy": 0.8734,
+      "context_precision": 0.8333,
+      "context_recall": 0.8750,
+      "average": 0.8746
     }
   },
-  "metrics": {
-    "sources": {
-      "docs": 38,
-      "page_content_stats": {"avg_chars": 2500, "max_chars": 5000, "scanned": 38}
-    },
-    "golden_testset": {
-      "rows": 12,
-      "avg_reference_contexts": 1.67
-    }
-  },
-  "lineage": {
-    "hf": {"dataset_repo_id": null, "pending_upload": true},
-    "langsmith": {"project": null, "dataset_name": null},
-    "phoenix": {"workspace": null, "dataset_name": null}
-  },
-  "compliance": {
-    "license": "apache-2.0",
-    "pii_present": "unknown",
-    "pii_policy": "manual-review-before-publish"
-  },
-  "run": {
-    "random_seed": 42,
-    "git_commit_sha": "a0d4dd3"
-  }
+  "generated_at": "2025-10-18T12:05:46Z"
 }
 ```
+
+**Source**: `scripts/generate_run_manifest.py:1-187`
+
+---
+
+#### enrich_manifest.py
+
+**Source**: `/home/donbr/don-aie-cohort8/cert-challenge/scripts/enrich_manifest.py`
+
+Enrich manifest.json with environment, metrics, and compliance metadata.
+
+**Description**: Post-processes manifest.json to add checksums, row counts, schemas, package versions, and compliance scaffolding.
+
+**Usage**:
+```bash
+# Default path (data/interim/manifest.json)
+python scripts/enrich_manifest.py
+
+# Custom path
+python scripts/enrich_manifest.py data/processed/manifest.json
+```
+
+**Enrichments**:
+1. **Environment**: Python version, OS, package versions
+2. **Artifacts**: File checksums, row counts, schemas
+3. **Metrics**: Document stats, character counts, reference context averages
+4. **Lineage**: HuggingFace, LangSmith, Phoenix scaffolding
+5. **Compliance**: License, PII policy, notes
+6. **Run Details**: Git commit SHA, random seed
+
+**Key Functions**:
+
+##### `sha256()`
+
+**Signature**: `def sha256(path: Path) -> str:`
+
+Compute SHA-256 hash of file.
+
+##### `count_jsonl_rows()`
+
+**Signature**: `def count_jsonl_rows(path: Path) -> int:`
+
+Count rows in JSONL file.
+
+##### `parquet_rows()`
+
+**Signature**: `def parquet_rows(path: Path) -> int:`
+
+Count rows in Parquet file using PyArrow or Pandas.
+
+##### `hfds_rows()`
+
+**Signature**: `def hfds_rows(path: Path) -> int:`
+
+Count rows in HuggingFace Dataset on disk.
+
+##### `pandas_schema_from_parquet()`
+
+**Signature**: `def pandas_schema_from_parquet(path: Path):`
+
+Extract schema from Parquet file as list of {name, dtype} dicts.
+
+##### `char_stats_jsonl()`
+
+**Signature**: `def char_stats_jsonl(path: Path, field="page_content", max_scan=5000):`
+
+Compute character statistics for a JSONL field (avg, max).
+
+**Source**: `scripts/enrich_manifest.py:1-243`
 
 ---
 
@@ -1738,308 +1498,305 @@ python scripts/enrich_manifest.py data/custom/manifest.json
 
 ### Environment Variables
 
-All environment variables should be set in `.env` file or exported in shell.
+#### Required
 
-#### Required Variables
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `OPENAI_API_KEY` | OpenAI API key for LLM and embeddings | None | `sk-...` |
 
-##### `OPENAI_API_KEY`
-**Description:** OpenAI API key for LLM and embeddings
+#### Optional
 
-**Used By:**
-- All LLM calls (gpt-4.1-mini)
-- All embedding calls (text-embedding-3-small)
-- RAGAS evaluation
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `COHERE_API_KEY` | Cohere API key for reranking | None | `...` |
+| `QDRANT_HOST` | Qdrant server hostname | `"localhost"` | `"qdrant.example.com"` |
+| `QDRANT_PORT` | Qdrant server port | `6333` | `6333` |
+| `QDRANT_COLLECTION` | Qdrant collection name | `"gdelt_comparative_eval"` | `"my_collection"` |
+| `OPENAI_MODEL` | OpenAI LLM model | `"gpt-4.1-mini"` | `"gpt-4o"` |
+| `OPENAI_EMBED_MODEL` | OpenAI embeddings model | `"text-embedding-3-small"` | `"text-embedding-3-large"` |
+| `HF_SOURCES_REV` | HuggingFace sources dataset revision | None | `"abc123def456"` |
+| `HF_GOLDEN_REV` | HuggingFace golden testset revision | None | `"abc123def456"` |
+| `HF_TOKEN` | HuggingFace API token (for uploads) | None | `hf_...` |
 
-**Example:**
-```bash
-export OPENAI_API_KEY=sk-proj-...
-```
+#### Configuration Loading
 
----
-
-##### `COHERE_API_KEY`
-**Description:** Cohere API key for reranking
-
-**Used By:**
-- Compression retriever (rerank-v3.5)
-
-**Example:**
-```bash
-export COHERE_API_KEY=...
-```
-
----
-
-##### `HF_TOKEN`
-**Description:** HuggingFace access token
-
-**Used By:**
-- `upload_to_hf.py` script
-- Dataset uploads to HuggingFace Hub
-
-**Example:**
-```bash
-export HF_TOKEN=hf_...
-```
-
----
-
-#### Optional Variables
-
-##### `TAVILY_API_KEY`
-**Description:** Tavily API key (not currently used but in .env.example)
-
-**Example:**
-```bash
-export TAVILY_API_KEY=...
-```
-
----
-
-##### `LANGSMITH_PROJECT`
-**Description:** LangSmith project name for tracing
-
-**Default:** `"certification-challenge"`
-
-**Example:**
-```bash
-export LANGSMITH_PROJECT=certification-challenge
-```
-
----
-
-##### `LANGSMITH_TRACING`
-**Description:** Enable LangSmith tracing
-
-**Default:** `"true"`
-
-**Example:**
-```bash
-export LANGSMITH_TRACING=true
-```
-
----
-
-##### `LANGSMITH_API_KEY`
-**Description:** LangSmith API key
-
-**Example:**
-```bash
-export LANGSMITH_API_KEY=...
-```
-
----
-
-##### `OPENAI_MODEL_NAME`
-**Description:** OpenAI model name override
-
-**Default:** `"gpt-4.1-mini"`
-
-**Example:**
-```bash
-export OPENAI_MODEL_NAME=gpt-4o-mini
-```
-
----
-
-##### `EMBEDDING_MODEL_NAME`
-**Description:** OpenAI embeddings model override
-
-**Default:** `"text-embedding-3-small"`
-
-**Example:**
-```bash
-export EMBEDDING_MODEL_NAME=text-embedding-3-large
-```
-
----
-
-##### `COHERE_RERANK_MODEL`
-**Description:** Cohere rerank model name
-
-**Default:** `"rerank-english-v3.0"` (code uses `"rerank-v3.5"`)
-
-**Example:**
-```bash
-export COHERE_RERANK_MODEL=rerank-v3.5
-```
-
----
-
-##### `QDRANT_URL`
-**Description:** Qdrant connection URL
-
-**Default:** `"http://localhost:6333"`
-
-**Example:**
-```bash
-export QDRANT_URL=http://localhost:6333
-```
-
----
-
-##### `HF_HUB_DISABLE_PROGRESS_BARS`
-**Description:** Disable HuggingFace Hub progress bars
-
-**Default:** `"1"` (disabled in scripts)
-
----
-
-##### `HF_DATASETS_DISABLE_PROGRESS_BARS`
-**Description:** Disable HuggingFace datasets progress bars
-
-**Default:** `"1"` (disabled in scripts)
-
----
-
-### Model Configuration
-
-#### LLM Configuration
-
-**Model:** `gpt-4.1-mini`
-
-**Parameters:**
-- `temperature`: 0 (deterministic)
-- `timeout`: 60 seconds (in ingest.py)
-- `max_retries`: 6 (in ingest.py)
-
-**Usage:**
 ```python
-from langchain_openai import ChatOpenAI
+import os
+from src.config import QDRANT_HOST, QDRANT_PORT, COLLECTION_NAME
 
-llm = ChatOpenAI(
-    model="gpt-4.1-mini",
-    temperature=0,
-    timeout=60,
-    max_retries=6
+# Override defaults via environment
+os.environ["QDRANT_HOST"] = "my-qdrant-server"
+os.environ["QDRANT_PORT"] = "6333"
+os.environ["OPENAI_MODEL"] = "gpt-4o"
+
+# Values are loaded at module import
+from src.config import get_llm, get_embeddings, get_qdrant
+
+llm = get_llm()  # Uses gpt-4o
+embeddings = get_embeddings()  # Uses text-embedding-3-small (default)
+client = get_qdrant()  # Connects to my-qdrant-server:6333
+```
+
+---
+
+### Configuration Dictionary Schema
+
+The system doesn't use a centralized config dictionary. Instead, configuration is managed through:
+
+1. **Environment variables** (see above)
+2. **Module constants** in `src/config.py`
+3. **Function parameters** (e.g., `k` in `create_retrievers()`)
+
+**Best Practice**:
+```python
+# Centralize your config in one place
+import os
+
+class Config:
+    # Qdrant
+    QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+    QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+    COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "gdelt_eval")
+
+    # OpenAI
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+
+    # Retrieval
+    TOP_K = int(os.getenv("TOP_K", "5"))
+    RERANK_K = int(os.getenv("RERANK_K", "20"))
+
+    # Datasets
+    SOURCES_DATASET = os.getenv("SOURCES_DATASET", "dwb2023/gdelt-rag-sources")
+    GOLDEN_DATASET = os.getenv("GOLDEN_DATASET", "dwb2023/gdelt-rag-golden-testset")
+
+# Use in code
+from config import Config
+retrievers = create_retrievers(documents, vector_store, k=Config.TOP_K)
+```
+
+---
+
+### Retriever Types
+
+The system provides 4 retriever types, each with distinct characteristics:
+
+#### 1. Naive (Dense Vector Search)
+
+**Type**: Dense semantic search
+**Implementation**: `QdrantVectorStore.as_retriever()`
+**Embedding Model**: OpenAI text-embedding-3-small (1536 dimensions)
+**Distance Metric**: Cosine similarity
+
+**Configuration**:
+```python
+naive_retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+```
+
+**Characteristics**:
+- ✓ Good semantic understanding
+- ✓ Handles paraphrasing and synonyms
+- ✓ Low latency
+- ✗ May miss exact keyword matches
+- ✗ Requires quality embeddings
+
+**Best For**: General-purpose semantic search
+
+---
+
+#### 2. BM25 (Sparse Keyword Matching)
+
+**Type**: Lexical search
+**Implementation**: `BM25Retriever.from_documents()`
+**Algorithm**: Best Matching 25 (TF-IDF variant)
+**Storage**: In-memory document index
+
+**Configuration**:
+```python
+bm25_retriever = BM25Retriever.from_documents(documents, k=5)
+```
+
+**Characteristics**:
+- ✓ Excellent for exact term matches
+- ✓ No API costs (runs locally)
+- ✓ Very low latency
+- ✗ Poor with synonyms/paraphrasing
+- ✗ Language-specific tokenization
+
+**Best For**: Keyword-heavy queries, exact term matching
+
+---
+
+#### 3. Ensemble (Hybrid Search)
+
+**Type**: Hybrid (dense + sparse)
+**Implementation**: `EnsembleRetriever`
+**Components**: Naive retriever + BM25 retriever
+**Weighting**: 50% dense + 50% sparse
+
+**Configuration**:
+```python
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[naive_retriever, bm25_retriever],
+    weights=[0.5, 0.5]
+)
+```
+
+**Characteristics**:
+- ✓ Balances semantic and lexical matching
+- ✓ More robust than individual retrievers
+- ✓ Reasonable latency
+- ✗ More complex to tune
+- ✗ May retrieve duplicates
+
+**Best For**: Production systems needing robustness
+
+**Weight Tuning**:
+```python
+# More semantic
+ensemble = EnsembleRetriever(
+    retrievers=[naive_retriever, bm25_retriever],
+    weights=[0.7, 0.3]
+)
+
+# More lexical
+ensemble = EnsembleRetriever(
+    retrievers=[naive_retriever, bm25_retriever],
+    weights=[0.3, 0.7]
 )
 ```
 
 ---
 
-#### Embeddings Configuration
+#### 4. Cohere Rerank (Contextual Compression)
 
-**Model:** `text-embedding-3-small`
+**Type**: Reranking with contextual compression
+**Implementation**: `ContextualCompressionRetriever`
+**Base Retriever**: Dense vector search (k=20)
+**Reranker**: Cohere rerank-v3.5
+**Final K**: Controlled by base retriever, reranker returns top results
 
-**Parameters:**
-- Dimensions: 1536
-- `timeout`: 60 seconds (in ingest.py)
-- `max_retries`: 6 (in ingest.py)
-
-**Usage:**
+**Configuration**:
 ```python
-from langchain_openai import OpenAIEmbeddings
-
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small",
-    timeout=60,
-    max_retries=6
+wide_retriever = vector_store.as_retriever(search_kwargs={"k": 20})
+reranker = CohereRerank(model="rerank-v3.5")
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=wide_retriever
 )
+```
+
+**Characteristics**:
+- ✓ Highest quality results
+- ✓ Contextual understanding
+- ✓ Better ranking than dense search alone
+- ✗ Highest latency (~1-2s per query)
+- ✗ API costs (Cohere)
+- ✗ Requires COHERE_API_KEY
+
+**Best For**: Quality-critical applications, complex queries
+
+**Performance Tuning**:
+```python
+# Retrieve more candidates for better reranking
+wide_retriever = vector_store.as_retriever(search_kwargs={"k": 50})
+
+# Use different Cohere model
+reranker = CohereRerank(model="rerank-english-v2.0")  # Faster, English-only
 ```
 
 ---
 
-#### Reranker Configuration
+## Usage Patterns
 
-**Model:** Cohere `rerank-v3.5`
+### Basic RAG Query
 
-**Usage:**
+Complete example of querying the RAG system:
+
 ```python
-from langchain_cohere import CohereRerank
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+from src.retrievers import create_retrievers
+from src.graph import build_graph
 
-compressor = CohereRerank(model="rerank-v3.5")
+# 1. Load documents (cached locally after first download)
+documents = load_documents_from_huggingface()
+print(f"Loaded {len(documents)} documents")
+
+# 2. Create vector store
+vector_store = create_vector_store(
+    documents,
+    collection_name="gdelt_rag",
+    recreate_collection=True  # Set False to reuse existing
+)
+
+# 3. Create retrievers
+retrievers = create_retrievers(documents, vector_store, k=5)
+
+# 4. Build graph for naive retriever
+graph = build_graph(retrievers['naive'])
+
+# 5. Query the system
+result = graph.invoke({"question": "What is GDELT?"})
+
+# 6. Access results
+print(f"Question: {result['question']}")
+print(f"Retrieved {len(result['context'])} documents:")
+for i, doc in enumerate(result['context'], 1):
+    print(f"  {i}. {doc.page_content[:100]}...")
+print(f"\nResponse: {result['response']}")
 ```
 
 ---
 
-### Qdrant Configuration
+### Running Evaluation
 
-**Host:** `localhost`
-**Port:** `6333`
-**Collection:** `gdelt_comparative_eval`
+Complete example of running RAGAS evaluation:
 
-**Vector Configuration:**
-- Size: 1536 (matches text-embedding-3-small)
-- Distance: Cosine similarity
-
-**Usage:**
 ```python
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams
+from pathlib import Path
+import pandas as pd
+from ragas import EvaluationDataset, RunConfig, evaluate
+from ragas.metrics import Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall
+from ragas.llms import LangchainLLMWrapper
 
-client = QdrantClient(host="localhost", port=6333)
+from src.utils import load_documents_from_huggingface, load_golden_testset_from_huggingface
+from src.config import create_vector_store, get_llm
+from src.retrievers import create_retrievers
+from src.graph import build_all_graphs
 
-# Create collection
-client.create_collection(
-    collection_name="gdelt_comparative_eval",
-    vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
-)
-```
+# 1. Load data
+documents = load_documents_from_huggingface()
+golden_ds = load_golden_testset_from_huggingface()
+golden_df = golden_ds.to_pandas()
 
----
+# 2. Build RAG stack
+vector_store = create_vector_store(documents, recreate_collection=False)
+retrievers = create_retrievers(documents, vector_store, k=5)
+graphs = build_all_graphs(retrievers)
 
-### Retriever Configurations
+# 3. Run inference for one retriever
+name = 'naive'
+graph = graphs[name]
 
-#### Naive (Baseline)
-- **Type:** Dense vector search
-- **k:** 5
-- **Distance:** Cosine similarity
-- **Rerank:** No
+# Add response and retrieved_contexts columns
+golden_df['response'] = None
+golden_df['retrieved_contexts'] = None
 
----
+for idx, row in golden_df.iterrows():
+    result = graph.invoke({"question": row['user_input']})
+    golden_df.at[idx, 'response'] = result['response']
+    golden_df.at[idx, 'retrieved_contexts'] = [d.page_content for d in result['context']]
 
-#### BM25
-- **Type:** Sparse keyword matching
-- **k:** 5
-- **Algorithm:** BM25
-- **Rerank:** No
+# 4. Create RAGAS evaluation dataset
+eval_ds = EvaluationDataset.from_pandas(golden_df)
 
----
-
-#### Cohere Rerank
-- **Type:** Contextual compression
-- **Initial k:** 20
-- **Top n:** 5 (after reranking)
-- **Rerank model:** rerank-v3.5
-- **Rerank:** Yes
-
----
-
-#### Ensemble
-- **Type:** Hybrid (dense + sparse)
-- **Components:** Naive + BM25
-- **Weights:** [0.5, 0.5]
-- **k:** 5 (combined)
-- **Rerank:** No
-
----
-
-### RAGAS Configuration
-
-**Version:** 0.2.10
-
-**Metrics:**
-- Faithfulness
-- Answer Relevancy (ResponseRelevancy)
-- Context Precision
-- Context Recall (LLMContextRecall)
-
-**Run Configuration:**
-- Timeout: 360 seconds
-- Max workers: 4 (in RUN_MANIFEST.json)
-
-**Usage:**
-```python
-from ragas import evaluate, RunConfig
-from ragas.metrics import (
-    Faithfulness,
-    ResponseRelevancy,
-    ContextPrecision,
-    LLMContextRecall
-)
+# 5. Run evaluation
+evaluator_llm = LangchainLLMWrapper(get_llm())
+run_cfg = RunConfig(timeout=360)
 
 result = evaluate(
-    dataset=evaluation_dataset,
+    dataset=eval_ds,
     metrics=[
         Faithfulness(),
         ResponseRelevancy(),
@@ -2047,8 +1804,418 @@ result = evaluate(
         LLMContextRecall()
     ],
     llm=evaluator_llm,
-    run_config=RunConfig(timeout=360)
+    run_config=run_cfg
 )
+
+# 6. Analyze results
+result_df = result.to_pandas()
+print("\nMetric Scores:")
+print(f"Faithfulness:       {result_df['faithfulness'].mean():.4f}")
+print(f"Answer Relevancy:   {result_df['answer_relevancy'].mean():.4f}")
+print(f"Context Precision:  {result_df['context_precision'].mean():.4f}")
+print(f"Context Recall:     {result_df['context_recall'].mean():.4f}")
+
+# 7. Save results
+output_dir = Path("evaluation_results")
+output_dir.mkdir(exist_ok=True)
+result_df.to_csv(output_dir / f"{name}_results.csv", index=False)
+```
+
+---
+
+### Data Ingestion
+
+Complete example of ingesting new documents:
+
+```python
+from pathlib import Path
+from langchain_community.document_loaders import DirectoryLoader, PyMuPDFLoader
+from src.config import create_vector_store
+
+# 1. Load PDFs from directory
+raw_data_dir = Path("data/raw")
+loader = DirectoryLoader(
+    str(raw_data_dir),
+    glob="*.pdf",
+    loader_cls=PyMuPDFLoader
+)
+documents = loader.load()
+
+print(f"Loaded {len(documents)} document pages")
+
+# 2. Inspect first document
+doc = documents[0]
+print(f"\nSample document:")
+print(f"  Content: {doc.page_content[:200]}...")
+print(f"  Metadata: {doc.metadata}")
+
+# 3. Create vector store
+vector_store = create_vector_store(
+    documents,
+    collection_name="my_new_collection",
+    recreate_collection=True
+)
+
+print(f"\n✓ Ingested {len(documents)} documents to Qdrant")
+
+# 4. Test retrieval
+retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+results = retriever.invoke("test query")
+print(f"✓ Retrieved {len(results)} documents")
+
+# 5. Upload to HuggingFace (optional)
+from datasets import Dataset
+
+# Convert to HuggingFace Dataset format
+hf_data = []
+for doc in documents:
+    hf_data.append({
+        "page_content": doc.page_content,
+        "metadata": doc.metadata
+    })
+
+dataset = Dataset.from_list(hf_data)
+
+# Push to Hub (requires HF_TOKEN env var)
+dataset.push_to_hub(
+    "your-username/your-dataset-name",
+    private=False
+)
+```
+
+---
+
+### Custom Retriever Configuration
+
+Example of creating custom retriever configurations:
+
+```python
+from langchain.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
+from langchain_cohere import CohereRerank
+
+from src.utils import load_documents_from_huggingface
+from src.config import create_vector_store
+
+# Load data
+documents = load_documents_from_huggingface()
+vector_store = create_vector_store(documents)
+
+# 1. Custom k value
+custom_naive = vector_store.as_retriever(search_kwargs={"k": 10})
+
+# 2. Custom ensemble weights (favor semantic)
+naive_5 = vector_store.as_retriever(search_kwargs={"k": 5})
+bm25_5 = BM25Retriever.from_documents(documents, k=5)
+
+semantic_heavy = EnsembleRetriever(
+    retrievers=[naive_5, bm25_5],
+    weights=[0.8, 0.2]  # 80% semantic, 20% lexical
+)
+
+# 3. Custom reranker configuration
+wide_retriever = vector_store.as_retriever(search_kwargs={"k": 50})
+reranker = CohereRerank(
+    model="rerank-english-v2.0",  # Different model
+    top_n=3  # Return only top 3
+)
+custom_rerank = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=wide_retriever
+)
+
+# 4. Multi-retriever ensemble
+naive_10 = vector_store.as_retriever(search_kwargs={"k": 10})
+bm25_10 = BM25Retriever.from_documents(documents, k=10)
+naive_bm25_ensemble = EnsembleRetriever(
+    retrievers=[naive_10, bm25_10],
+    weights=[0.5, 0.5]
+)
+
+# Add reranker on top of ensemble
+final_retriever = ContextualCompressionRetriever(
+    base_compressor=CohereRerank(model="rerank-v3.5"),
+    base_retriever=naive_bm25_ensemble
+)
+
+# 5. Use custom retriever in graph
+from src.graph import build_graph
+
+graph = build_graph(final_retriever)
+result = graph.invoke({"question": "What is GDELT?"})
+print(result['response'])
+```
+
+---
+
+## Best Practices
+
+### Configuration Management
+
+**1. Use Environment Variables for Secrets**
+
+```python
+# ✓ Good - secrets in environment
+import os
+os.environ["OPENAI_API_KEY"] = "sk-..."
+os.environ["COHERE_API_KEY"] = "..."
+
+from src.config import get_llm
+llm = get_llm()
+```
+
+```python
+# ✗ Bad - hardcoded secrets
+llm = ChatOpenAI(api_key="sk-hardcoded-key")
+```
+
+**2. Pin Dataset Revisions for Reproducibility**
+
+```python
+# ✓ Good - pinned revision
+import os
+os.environ["HF_SOURCES_REV"] = "abc123def456"
+os.environ["HF_GOLDEN_REV"] = "xyz789"
+
+documents = load_documents_from_huggingface()
+golden = load_golden_testset_from_huggingface()
+```
+
+```python
+# ✗ Bad - floating revision (dataset may change)
+documents = load_documents_from_huggingface()
+```
+
+**3. Use Cached Instances**
+
+```python
+# ✓ Good - use cached getters
+from src.config import get_llm, get_embeddings, get_qdrant
+
+llm = get_llm()  # Cached
+embeddings = get_embeddings()  # Cached
+client = get_qdrant()  # Cached
+```
+
+```python
+# ✗ Bad - create new instances
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+llm1 = ChatOpenAI(model="gpt-4.1-mini")
+llm2 = ChatOpenAI(model="gpt-4.1-mini")  # Duplicate!
+```
+
+**4. Centralize Configuration**
+
+```python
+# ✓ Good - single source of truth
+# config/settings.py
+class Settings:
+    QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+    QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+    TOP_K = int(os.getenv("TOP_K", "5"))
+
+from config.settings import Settings
+retrievers = create_retrievers(docs, vs, k=Settings.TOP_K)
+```
+
+---
+
+### Error Handling
+
+**1. Handle Missing API Keys**
+
+```python
+import os
+
+def check_api_keys():
+    """Validate required API keys are set."""
+    if not os.getenv("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY environment variable must be set")
+
+    cohere_key = os.getenv("COHERE_API_KEY")
+    if not cohere_key:
+        print("⚠ COHERE_API_KEY not set - cohere_rerank will be unavailable")
+
+    return True
+
+# At script start
+check_api_keys()
+```
+
+**2. Handle Qdrant Connection Errors**
+
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
+
+def safe_get_qdrant():
+    """Get Qdrant client with connection validation."""
+    try:
+        client = QdrantClient(host="localhost", port=6333, timeout=5)
+        client.get_collections()  # Test connection
+        return client
+    except UnexpectedResponse:
+        raise RuntimeError(
+            "Cannot connect to Qdrant at localhost:6333. "
+            "Ensure Qdrant is running: docker-compose up -d qdrant"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Qdrant connection error: {e}")
+```
+
+**3. Handle Dataset Loading Errors**
+
+```python
+from datasets.exceptions import DatasetNotFoundError
+
+def safe_load_documents(dataset_name, revision=None):
+    """Load documents with error handling."""
+    try:
+        return load_documents_from_huggingface(
+            dataset_name=dataset_name,
+            revision=revision
+        )
+    except DatasetNotFoundError:
+        raise RuntimeError(
+            f"Dataset '{dataset_name}' not found on HuggingFace Hub. "
+            f"Check dataset name and ensure you have access."
+        )
+    except Exception as e:
+        raise RuntimeError(f"Error loading dataset: {e}")
+```
+
+**4. Handle Retriever Failures Gracefully**
+
+```python
+from typing import Dict, List
+from langchain_core.documents import Document
+
+def safe_retrieve(retrievers: Dict, question: str) -> Dict[str, List[Document]]:
+    """Retrieve with fallback on failure."""
+    results = {}
+
+    for name, retriever in retrievers.items():
+        try:
+            docs = retriever.invoke(question)
+            results[name] = docs
+        except Exception as e:
+            print(f"⚠ {name} retriever failed: {e}")
+            results[name] = []  # Empty results as fallback
+
+    return results
+```
+
+---
+
+### Performance Optimization
+
+**1. Reuse Vector Store Collection**
+
+```python
+# ✓ Good - reuse existing collection (fast)
+vector_store = create_vector_store(
+    documents,
+    recreate_collection=False  # Reuse if exists
+)
+```
+
+```python
+# ✗ Bad - recreate every time (slow)
+vector_store = create_vector_store(
+    documents,
+    recreate_collection=True  # Always rebuilds
+)
+```
+
+**2. Batch Processing**
+
+```python
+# ✓ Good - batch processing with progress
+from tqdm import tqdm
+
+questions = [...]  # Many questions
+results = []
+
+for question in tqdm(questions, desc="Processing"):
+    result = graph.invoke({"question": question})
+    results.append(result)
+```
+
+**3. Parallel Retrieval (Multiple Retrievers)**
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict
+
+def parallel_retrieve(retrievers: Dict, question: str) -> Dict:
+    """Retrieve from all retrievers in parallel."""
+    def retrieve_one(name, retriever):
+        return name, retriever.invoke(question)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(retrieve_one, name, ret)
+            for name, ret in retrievers.items()
+        ]
+        results = dict(f.result() for f in futures)
+
+    return results
+
+# Usage
+docs_by_retriever = parallel_retrieve(retrievers, "What is GDELT?")
+```
+
+**4. Caching LLM Responses**
+
+```python
+from functools import lru_cache
+import hashlib
+
+def hash_question(question: str) -> str:
+    """Create hash of question for cache key."""
+    return hashlib.md5(question.encode()).hexdigest()
+
+class CachedGraph:
+    def __init__(self, graph):
+        self.graph = graph
+        self.cache = {}
+
+    def invoke(self, state):
+        question = state["question"]
+        cache_key = hash_question(question)
+
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        result = self.graph.invoke(state)
+        self.cache[cache_key] = result
+        return result
+
+# Usage
+cached_graph = CachedGraph(graph)
+result1 = cached_graph.invoke({"question": "What is GDELT?"})
+result2 = cached_graph.invoke({"question": "What is GDELT?"})  # Cached!
+```
+
+**5. Optimize Embeddings Batch Size**
+
+```python
+# When adding many documents, batch them
+from typing import List
+from langchain_core.documents import Document
+
+def batch_add_documents(
+    vector_store,
+    documents: List[Document],
+    batch_size: int = 100
+):
+    """Add documents in batches for better performance."""
+    for i in range(0, len(documents), batch_size):
+        batch = documents[i:i + batch_size]
+        vector_store.add_documents(batch)
+        print(f"Added batch {i//batch_size + 1}/{len(documents)//batch_size + 1}")
 ```
 
 ---
@@ -2057,7 +2224,7 @@ result = evaluate(
 
 ### State TypedDict
 
-**Source:** `src/state.py:7-10`
+**Source**: `src/state.py:7-10`
 
 ```python
 from typing import List
@@ -2065,1056 +2232,511 @@ from typing_extensions import TypedDict
 from langchain_core.documents import Document
 
 class State(TypedDict):
-    question: str
-    context: List[Document]
-    response: str
+    question: str              # User's input question
+    context: List[Document]    # Retrieved documents
+    response: str              # Generated answer
 ```
 
-**Fields:**
+**Field Descriptions**:
 
-#### `question`
-**Type:** `str`
+- **question** (str):
+  - User's input question/query
+  - Set at graph invocation: `graph.invoke({"question": "..."})`
+  - Never modified during graph execution
 
-**Description:** User input question to be answered by the RAG system.
+- **context** (List[Document]):
+  - Retrieved documents from retriever
+  - Populated by `retrieve` node
+  - Each Document has `page_content` and `metadata`
 
-**Example:**
-```python
-state: State = {
-    "question": "What is GDELT Translingual?",
-    "context": [],
-    "response": ""
-}
-```
+- **response** (str):
+  - Generated answer from LLM
+  - Populated by `generate` node
+  - Final output of the RAG pipeline
 
----
-
-#### `context`
-**Type:** `List[Document]`
-
-**Description:** Retrieved LangChain Document objects containing relevant context.
-
-**Example:**
-```python
-from langchain_core.documents import Document
-
-state: State = {
-    "question": "What is GDELT?",
-    "context": [
-        Document(
-            page_content="GDELT is a global database...",
-            metadata={"page": 5, "title": "GDELT Paper"}
-        ),
-        Document(
-            page_content="The GDELT Project monitors...",
-            metadata={"page": 6, "title": "GDELT Paper"}
-        )
-    ],
-    "response": ""
-}
-```
-
----
-
-#### `response`
-**Type:** `str`
-
-**Description:** Generated answer from the LLM based on retrieved context.
-
-**Example:**
-```python
-state: State = {
-    "question": "What is GDELT?",
-    "context": [...],
-    "response": "GDELT (Global Database of Events, Language, and Tone) is a comprehensive database that monitors world events..."
-}
-```
-
----
-
-### RAGAS Schema
-
-**Expected DataFrame Schema for RAGAS 0.2.10:**
+**Usage in LangGraph**:
 
 ```python
-{
-    'user_input': str,           # Question
-    'response': str,              # Generated answer
-    'retrieved_contexts': List[str],  # Retrieved document texts
-    'reference': str              # Ground truth answer
-}
-```
-
-**Alternate Column Names (auto-normalized):**
-- `question` → `user_input`
-- `answer` → `response`
-- `contexts` → `retrieved_contexts`
-- `ground_truth` → `reference`
-- `ground_truths` → `reference`
-- `reference_contexts` → `reference`
-
----
-
-## Usage Patterns
-
-### Pattern 1: Running RAG Evaluation
-
-**Complete end-to-end evaluation workflow:**
-
-```python
-# 1. Set environment variables
-import os
-os.environ["OPENAI_API_KEY"] = "sk-proj-..."
-os.environ["COHERE_API_KEY"] = "..."
-
-# 2. Run the evaluation script
-# Option A: Command line
-# $ python scripts/single_file.py
-
-# Option B: Programmatic
-from pathlib import Path
-import sys
-sys.path.insert(0, str(Path.cwd() / "scripts"))
-
-# Import and run
-# (single_file.py runs automatically when imported as __main__)
-```
-
-**Step-by-step manual evaluation:**
-
-```python
-from pathlib import Path
-from datasets import load_dataset
-from langchain_core.documents import Document
-from src.graph import retrievers_config
-from ragas import EvaluationDataset, evaluate, RunConfig
-from ragas.metrics import Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall
-from ragas.llms import LangchainLLMWrapper
-from langchain_openai import ChatOpenAI
-import pandas as pd
-
-# 1. Load golden testset
-golden_dataset = load_dataset("dwb2023/gdelt-rag-golden-testset", split="train")
-golden_df = golden_dataset.to_pandas()
-
-# 2. Initialize evaluator LLM
-evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
-
-# 3. Run questions through retriever
-retriever_name = "naive"
-graph = retrievers_config[retriever_name]
-
-results = []
-for _, row in golden_df.iterrows():
-    question = row['user_input']
-    result = graph.invoke({"question": question})
-
-    results.append({
-        'user_input': question,
-        'response': result['response'],
-        'retrieved_contexts': [doc.page_content for doc in result['context']],
-        'reference': row['reference']
-    })
-
-# 4. Create evaluation dataset
-eval_df = pd.DataFrame(results)
-eval_dataset = EvaluationDataset.from_pandas(eval_df)
-
-# 5. Run RAGAS evaluation
-evaluation_result = evaluate(
-    dataset=eval_dataset,
-    metrics=[
-        Faithfulness(),
-        ResponseRelevancy(),
-        ContextPrecision(),
-        LLMContextRecall()
-    ],
-    llm=evaluator_llm,
-    run_config=RunConfig(timeout=360)
-)
-
-# 6. View results
-results_df = evaluation_result.to_pandas()
-print(results_df[['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']].mean())
-```
-
----
-
-### Pattern 2: Ingesting Documents
-
-**Complete ingestion pipeline:**
-
-```python
-# 1. Run the ingest script
-# $ python scripts/ingest.py
-
-# Or in notebook/REPL:
-from pathlib import Path
-from langchain_community.document_loaders import DirectoryLoader, PyMuPDFLoader
-from scripts.ingest import (
-    docs_to_jsonl,
-    docs_to_parquet,
-    docs_to_hfds,
-    build_testset,
-    write_manifest
-)
-import uuid
-from datetime import datetime
-
-# 2. Load PDFs
-project_root = Path.cwd()
-raw_path = project_root / "data" / "raw"
-interim_path = project_root / "data" / "interim"
-
-loader = DirectoryLoader(str(raw_path), glob="*.pdf", loader_cls=PyMuPDFLoader)
-docs = loader.load()
-
-print(f"Loaded {len(docs)} documents")
-
-# 3. Persist source documents
-docs_to_jsonl(docs, interim_path / "sources.jsonl")
-docs_to_parquet(docs, interim_path / "sources.parquet")
-docs_to_hfds(docs, interim_path / "sources.hfds")
-
-# 4. Generate RAGAS testset
-golden_testset = build_testset(docs, size=12)
-
-# 5. Persist testset
-golden_testset.to_jsonl(str(interim_path / "golden_testset.jsonl"))
-golden_testset.to_hf_dataset().save_to_disk(str(interim_path / "golden_testset.hfds"))
-
-# 6. Create manifest
-manifest = {
-    "id": f"ragas_pipeline_{uuid.uuid4()}",
-    "generated_at": datetime.utcnow().isoformat() + "Z",
-    "paths": {
-        "sources": {
-            "jsonl": str(interim_path / "sources.jsonl"),
-            "parquet": str(interim_path / "sources.parquet"),
-            "hfds": str(interim_path / "sources.hfds")
-        },
-        "golden_testset": {
-            "jsonl": str(interim_path / "golden_testset.jsonl"),
-            "hfds": str(interim_path / "golden_testset.hfds")
-        }
-    }
-}
-
-write_manifest(interim_path / "manifest.json", manifest)
-
-# 7. Enrich manifest
-from scripts.enrich_manifest import main as enrich_main
-enrich_main(interim_path / "manifest.json")
-```
-
----
-
-### Pattern 3: Uploading to HuggingFace
-
-**Upload datasets with dataset cards:**
-
-```python
-# 1. Set HuggingFace token
-import os
-os.environ["HF_TOKEN"] = "hf_..."
-
-# 2. Run upload script
-# $ python scripts/upload_to_hf.py
-
-# Or programmatically:
-from scripts.upload_to_hf import main as upload_main
-
-upload_main()
-
-# Output:
-# 🔐 Logging in to Hugging Face...
-# 📂 Loading datasets from data/interim...
-# 📤 Uploading sources dataset to dwb2023/gdelt-rag-sources...
-# ✅ Sources dataset uploaded successfully!
-# ...
-```
-
-**Custom upload workflow:**
-
-```python
-from pathlib import Path
-from datasets import load_from_disk
-from huggingface_hub import HfApi, login
-
-# 1. Login
-hf_token = os.environ["HF_TOKEN"]
-login(token=hf_token)
-
-# 2. Load dataset
-dataset = load_from_disk("data/interim/sources.hfds")
-
-# 3. Upload
-dataset.push_to_hub(
-    "username/dataset-name",
-    private=False,
-    token=hf_token
-)
-
-# 4. Upload dataset card
-api = HfApi()
-card_content = """---
-license: apache-2.0
-task_categories:
-- text-retrieval
----
-
-# Dataset Card
-...
-"""
-
-api.upload_file(
-    path_or_fileobj=card_content.encode(),
-    path_in_repo="README.md",
-    repo_id="username/dataset-name",
-    repo_type="dataset",
-    token=hf_token
-)
-```
-
----
-
-### Pattern 4: Custom Retriever Implementation
-
-**Add a new retriever to the system:**
-
-```python
-# 1. Create retriever in src/retrievers.py
-from langchain.retrievers import ParentDocumentRetriever
-
-# Add to src/retrievers.py:
-parent_doc_retriever = ParentDocumentRetriever(
-    vectorstore=vector_store,
-    docstore=...,
-    child_splitter=...,
-    k=5
-)
-
-# 2. Create retrieval function in src/graph.py
-def retrieve_parent_doc(state):
-    """Parent document retrieval"""
-    retrieved_docs = parent_doc_retriever.invoke(state["question"])
-    return {"context": retrieved_docs}
-
-# 3. Build LangGraph workflow
-parent_doc_graph_builder = StateGraph(State).add_sequence([retrieve_parent_doc, generate])
-parent_doc_graph_builder.add_edge(START, "retrieve_parent_doc")
-parent_doc_graph = parent_doc_graph_builder.compile()
-
-# 4. Add to retrievers_config
-retrievers_config["parent_doc"] = parent_doc_graph
-
-# 5. Now it will be included in evaluations automatically
-```
-
----
-
-### Pattern 5: Querying the RAG System
-
-**Simple question answering:**
-
-```python
-from src.graph import baseline_graph
-
-# Ask a question
-result = baseline_graph.invoke({
-    "question": "What is GDELT Translingual?"
-})
-
-print(f"Question: {result['question']}")
-print(f"\nAnswer: {result['response']}")
-print(f"\nRetrieved {len(result['context'])} documents:")
-for i, doc in enumerate(result['context'], 1):
-    print(f"\n{i}. Page {doc.metadata.get('page', '?')}")
-    print(f"   {doc.page_content[:100]}...")
-```
-
-**Comparing retrievers:**
-
-```python
-from src.graph import retrievers_config
-
-question = "What formats does GDELT support?"
-
-print(f"Question: {question}\n")
-print("=" * 80)
-
-for retriever_name, graph in retrievers_config.items():
-    result = graph.invoke({"question": question})
-
-    print(f"\n{retriever_name.upper()}")
-    print("-" * 80)
-    print(f"Answer: {result['response'][:200]}...")
-    print(f"Retrieved: {len(result['context'])} documents")
-```
-
----
-
-## Best Practices
-
-### Retriever Selection
-
-**When to use each retriever:**
-
-1. **Naive (Baseline)**
-   - Good starting point
-   - Fast and simple
-   - Use when: semantic similarity is primary concern
-   - Limitations: misses exact keyword matches
-
-2. **BM25**
-   - Use when: exact keyword matching is important
-   - Good for: technical terms, acronyms, specific phrases
-   - Limitations: weak semantic understanding
-
-3. **Ensemble**
-   - Use when: want balance of semantic + keyword matching
-   - Good for: general-purpose retrieval
-   - Best for: diverse query types
-
-4. **Cohere Rerank**
-   - Use when: highest quality results needed
-   - Good for: complex semantic queries
-   - Limitations: slower, more expensive
-   - Best for: production deployments where accuracy matters most
-
-**Recommendation:** Start with Ensemble, optimize to Cohere Rerank if needed.
-
----
-
-### Error Handling
-
-**Common errors and solutions:**
-
-#### 1. Missing API Keys
-```python
-# Error: openai.AuthenticationError
-# Solution:
-import os
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("Set OPENAI_API_KEY environment variable")
-```
-
-#### 2. Qdrant Connection Error
-```python
-# Error: Cannot connect to Qdrant
-# Solution:
-# 1. Ensure Qdrant is running:
-# $ docker-compose up -d qdrant
-
-# 2. Check connection:
-from qdrant_client import QdrantClient
-try:
-    client = QdrantClient(host="localhost", port=6333)
-    print("Connected:", client.get_collections())
-except Exception as e:
-    print(f"Connection failed: {e}")
-```
-
-#### 3. RAGAS Schema Validation Error
-```python
-# Error: ValueError: Missing required columns
-# Solution: Use validation function
-from scripts.single_file import validate_and_normalize_ragas_schema
-
-try:
-    validated_df = validate_and_normalize_ragas_schema(df, retriever_name)
-except ValueError as e:
-    print(f"Schema validation failed: {e}")
-    print("Available columns:", df.columns.tolist())
-```
-
-#### 4. Rate Limit Errors
-```python
-# Error: openai.RateLimitError
-# Solution: Use retry logic (already in ingest.py)
-from tenacity import retry, stop_after_attempt, wait_exponential
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=20)
-)
-def call_api():
-    # API call here
-    pass
-```
-
----
-
-### Performance Optimization
-
-#### 1. Batch Processing
-```python
-# Instead of:
-for question in questions:
-    result = graph.invoke({"question": question})
-
-# Use batching where possible:
-from langchain.schema import Document
-results = llm.batch([
-    {"messages": [{"role": "user", "content": q}]}
-    for q in questions
-])
-```
-
-#### 2. Caching Embeddings
-```python
-# Embeddings are expensive - cache them
-from langchain.embeddings import CacheBackedEmbeddings
-from langchain.storage import LocalFileStore
-
-store = LocalFileStore("./cache/embeddings")
-cached_embedder = CacheBackedEmbeddings.from_bytes_store(
-    embeddings, store, namespace="text-embedding-3-small"
-)
-```
-
-#### 3. Reduce k for Faster Retrieval
-```python
-# High k = slower but more context
-retriever = vector_store.as_retriever(search_kwargs={"k": 20})
-
-# Low k = faster but less context
-retriever = vector_store.as_retriever(search_kwargs={"k": 3})
-
-# Sweet spot for most use cases: k=5
-```
-
-#### 4. Use Async for Concurrent Processing
-```python
-# Process multiple queries concurrently
-import asyncio
-
-async def process_questions(questions, graph):
-    tasks = [graph.ainvoke({"question": q}) for q in questions]
-    return await asyncio.gather(*tasks)
-
-# Run
-results = asyncio.run(process_questions(questions, baseline_graph))
-```
-
----
-
-### Dataset Management
-
-#### 1. Version Control for Datasets
-```python
-# Always include checksums in manifest
-from scripts.enrich_manifest import sha256
-
-checksum = sha256(Path("data/sources.jsonl"))
-print(f"Dataset checksum: {checksum}")
-
-# Compare before/after
-if checksum != expected_checksum:
-    print("⚠️  Dataset has changed!")
-```
-
-#### 2. Multi-Format Persistence
-```python
-# Always save in multiple formats for flexibility
-docs_to_jsonl(docs, path / "data.jsonl")      # Human-readable
-docs_to_parquet(docs, path / "data.parquet")  # Analytics
-docs_to_hfds(docs, path / "data.hfds")        # Fast loading
-
-# Choose format based on use case:
-# - JSONL: debugging, manual inspection
-# - Parquet: pandas analysis, SQL queries
-# - HFDS: training, fast iteration
-```
-
-#### 3. Manifest Best Practices
-```python
-# Always include:
-manifest = {
-    "id": f"run_{uuid.uuid4()}",              # Unique ID
-    "generated_at": datetime.utcnow().isoformat(),
-    "env": {...},                              # Package versions
-    "fingerprints": {...},                     # File checksums
-    "run": {"random_seed": 42}                 # Reproducibility
-}
-```
-
----
-
-### LLM Configuration
-
-#### 1. Temperature Settings
-```python
-# For RAG generation: temperature=0 (deterministic)
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
-
-# For creative tasks: temperature>0
-creative_llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.7)
-```
-
-#### 2. Timeout and Retry Configuration
-```python
-# Production settings
-llm = ChatOpenAI(
-    model="gpt-4.1-mini",
-    temperature=0,
-    timeout=60,        # Prevent hanging
-    max_retries=6      # Handle transient errors
-)
-```
-
-#### 3. Cost Optimization
-```python
-# Use cheaper models for evaluation
-# gpt-4.1-mini is already cost-effective
-
-# For large-scale evaluation, consider:
-# 1. Caching LLM responses
-# 2. Sampling subset of test cases
-# 3. Using smaller testset during development
-```
-
----
-
-## Examples
-
-### Complete Example: End-to-End Evaluation
-
-```python
-#!/usr/bin/env python3
-"""
-Complete RAG evaluation example - from scratch to results.
-"""
-
-import os
-from pathlib import Path
-from datasets import load_dataset
-from langchain_core.documents import Document
-from langchain_openai import ChatOpenAI
-import pandas as pd
-
-# Set API keys
-os.environ["OPENAI_API_KEY"] = "sk-proj-..."
-os.environ["COHERE_API_KEY"] = "..."
-
-# Import project modules
-from src.graph import retrievers_config
-from ragas import EvaluationDataset, evaluate, RunConfig
-from ragas.metrics import Faithfulness, ResponseRelevancy, ContextPrecision, LLMContextRecall
-from ragas.llms import LangchainLLMWrapper
-from scripts.single_file import validate_and_normalize_ragas_schema
-
-def main():
-    print("Starting RAG Evaluation...")
-
-    # 1. Load golden testset
-    print("\n1. Loading golden testset...")
-    golden_dataset = load_dataset("dwb2023/gdelt-rag-golden-testset", split="train")
-    golden_df = golden_dataset.to_pandas()
-    print(f"   Loaded {len(golden_df)} test cases")
-
-    # 2. Initialize evaluator
-    print("\n2. Initializing evaluator...")
-    evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
-
-    # 3. Process questions through all retrievers
-    print("\n3. Running questions through retrievers...")
-    results = {}
-
-    for retriever_name, graph in retrievers_config.items():
-        print(f"\n   Processing {retriever_name}...")
-
-        retriever_results = []
-        for _, row in golden_df.iterrows():
-            question = row['user_input']
-            result = graph.invoke({"question": question})
-
-            retriever_results.append({
-                'user_input': question,
-                'response': result['response'],
-                'retrieved_contexts': [doc.page_content for doc in result['context']],
-                'reference': row['reference']
-            })
-
-        results[retriever_name] = pd.DataFrame(retriever_results)
-        print(f"   ✓ {retriever_name}: {len(retriever_results)} questions processed")
-
-    # 4. Run RAGAS evaluation
-    print("\n4. Running RAGAS evaluation...")
-    evaluation_results = {}
-
-    for retriever_name, df in results.items():
-        print(f"\n   Evaluating {retriever_name}...")
-
-        # Validate schema
-        validated_df = validate_and_normalize_ragas_schema(df, retriever_name)
-        eval_dataset = EvaluationDataset.from_pandas(validated_df)
-
-        # Evaluate
-        result = evaluate(
-            dataset=eval_dataset,
-            metrics=[
-                Faithfulness(),
-                ResponseRelevancy(),
-                ContextPrecision(),
-                LLMContextRecall()
-            ],
-            llm=evaluator_llm,
-            run_config=RunConfig(timeout=360)
-        )
-
-        evaluation_results[retriever_name] = result
-        print(f"   ✓ {retriever_name} evaluation complete")
-
-    # 5. Generate comparative results
-    print("\n5. Generating comparative results...")
-    comparison_data = []
-
-    for retriever_name, result in evaluation_results.items():
-        df = result.to_pandas()
-
-        comparison_data.append({
-            'Retriever': retriever_name.replace('_', ' ').title(),
-            'Faithfulness': df['faithfulness'].mean(),
-            'Answer Relevancy': df['answer_relevancy'].mean(),
-            'Context Precision': df['context_precision'].mean(),
-            'Context Recall': df['context_recall'].mean()
-        })
-
-    comparison_df = pd.DataFrame(comparison_data)
-    comparison_df['Average'] = comparison_df[['Faithfulness', 'Answer Relevancy',
-                                               'Context Precision', 'Context Recall']].mean(axis=1)
-    comparison_df = comparison_df.sort_values('Average', ascending=False)
-
-    # 6. Display results
-    print("\n" + "=" * 80)
-    print("EVALUATION RESULTS")
-    print("=" * 80)
-    print("\n", comparison_df.to_string(index=False))
-
-    # 7. Save results
-    output_dir = Path("output/evaluation")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    comparison_df.to_csv(output_dir / "comparative_results.csv", index=False)
-    print(f"\n✓ Results saved to {output_dir}")
-
-    return comparison_df
-
-if __name__ == "__main__":
-    results = main()
-```
-
----
-
-### Example: Custom Retriever
-
-```python
-"""
-Example: Adding a hybrid retriever with custom weighting.
-"""
-
-from langchain.retrievers import EnsembleRetriever
-from langchain_community.retrievers import BM25Retriever
-from src.retrievers import vector_store, documents
-from src.graph import generate
 from src.state import State
-from langgraph.graph import START, StateGraph
+from langgraph.graph import StateGraph, START, END
 
-# 1. Create custom weighted ensemble
-# Favor dense search (70%) over sparse (30%)
-custom_ensemble = EnsembleRetriever(
-    retrievers=[
-        vector_store.as_retriever(search_kwargs={"k": 5}),
-        BM25Retriever.from_documents(documents, k=5)
-    ],
-    weights=[0.7, 0.3]  # Custom weighting
-)
-
-# 2. Create retrieval function
-def retrieve_custom_ensemble(state):
-    """Custom weighted ensemble retrieval"""
-    retrieved_docs = custom_ensemble.invoke(state["question"])
+# Define nodes
+def retrieve(state: State) -> dict:
+    # Partial update
     return {"context": retrieved_docs}
 
-# 3. Build LangGraph workflow
-custom_graph_builder = StateGraph(State).add_sequence([
-    retrieve_custom_ensemble,
-    generate
-])
-custom_graph_builder.add_edge(START, "retrieve_custom_ensemble")
-custom_graph = custom_graph_builder.compile()
+def generate(state: State) -> dict:
+    # Partial update
+    return {"response": generated_answer}
 
-# 4. Test the custom retriever
-question = "What is GDELT Translingual?"
-result = custom_graph.invoke({"question": question})
+# Build graph
+graph = StateGraph(State)
+graph.add_node("retrieve", retrieve)
+graph.add_node("generate", generate)
+graph.add_edge(START, "retrieve")
+graph.add_edge("retrieve", "generate")
+graph.add_edge("generate", END)
 
-print(f"Question: {question}")
-print(f"\nAnswer: {result['response']}")
-print(f"\nRetrieved {len(result['context'])} documents")
+compiled_graph = graph.compile()
 
-# 5. Add to retrievers_config for evaluation
-from src.graph import retrievers_config
-retrievers_config["custom_ensemble_70_30"] = custom_graph
+# Invoke
+result = compiled_graph.invoke({"question": "What is GDELT?"})
+# result is a State dict with all fields populated
 ```
 
 ---
 
-### Example: Analyzing Retrieval Quality
+### Custom Types
+
+The system uses standard LangChain and Python types. No custom type definitions beyond `State`.
+
+**Common Types**:
 
 ```python
-"""
-Example: Analyzing which documents are retrieved for each strategy.
-"""
+from typing import List, Dict, Optional
+from langchain_core.documents import Document
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
 
-from src.graph import retrievers_config
-import pandas as pd
+# Document
+doc: Document  # Has page_content (str) and metadata (dict)
 
-def analyze_retrieval(question: str):
-    """Compare retrieved documents across all retrievers."""
+# Retrievers
+RetrieverType = object  # Any retriever implementing .invoke(query: str) -> List[Document]
 
-    print(f"Question: {question}\n")
-    print("=" * 80)
+# Retriever dictionary
+retrievers: Dict[str, RetrieverType]  # {"naive": retriever1, "bm25": retriever2, ...}
 
-    analysis = []
+# Graph
+CompiledGraph = object  # From StateGraph.compile()
 
-    for retriever_name, graph in retrievers_config.items():
-        # Get retrieval results
-        result = graph.invoke({"question": question})
+# Graphs dictionary
+graphs: Dict[str, CompiledGraph]  # {"naive": graph1, "bm25": graph2, ...}
+```
 
-        print(f"\n{retriever_name.upper()}")
-        print("-" * 80)
+---
 
-        for i, doc in enumerate(result['context'], 1):
-            page = doc.metadata.get('page', '?')
-            snippet = doc.page_content[:100].replace('\n', ' ')
+## Dependencies
 
-            print(f"{i}. Page {page}: {snippet}...")
+### Required Packages
 
-            analysis.append({
-                'retriever': retriever_name,
-                'rank': i,
-                'page': page,
-                'content_preview': snippet
-            })
+Core dependencies with their purposes:
 
-    # Create analysis DataFrame
-    df = pd.DataFrame(analysis)
+```python
+# LangChain Core
+langchain                    # Core LangChain functionality
+langchain-core              # Core abstractions (Document, etc.)
+langchain-community         # Community integrations (BM25, loaders)
 
-    # Find common documents
-    print("\n" + "=" * 80)
-    print("COMMON DOCUMENTS")
-    print("=" * 80)
+# LangChain Integrations
+langchain-openai            # OpenAI LLM and embeddings
+langchain-qdrant            # Qdrant vector store integration
+langchain-cohere            # Cohere reranker
 
-    page_counts = df.groupby('page').size().sort_values(ascending=False)
-    print("\nPages retrieved by multiple strategies:")
-    for page, count in page_counts.items():
-        if count > 1:
-            retrievers = df[df['page'] == page]['retriever'].tolist()
-            print(f"  Page {page}: {count} retrievers ({', '.join(retrievers)})")
+# LangGraph
+langgraph                   # Workflow orchestration
 
-    return df
+# Vector Store
+qdrant-client              # Qdrant client
 
-# Run analysis
-question = "What formats does GDELT support?"
-analysis_df = analyze_retrieval(question)
+# Data & Evaluation
+datasets                    # HuggingFace datasets
+ragas                       # RAGAS evaluation framework
+pandas                      # Data manipulation
+pyarrow                     # Parquet support
 
-# Save analysis
-analysis_df.to_csv("output/retrieval_analysis.csv", index=False)
+# Utilities
+python-dotenv              # Environment variable loading
+tenacity                    # Retry logic
+tqdm                        # Progress bars
+```
+
+**Installation**:
+
+```bash
+# Install all dependencies
+pip install -r requirements.txt
+
+# Or install individually
+pip install langchain langchain-openai langchain-qdrant langchain-cohere
+pip install langgraph qdrant-client
+pip install datasets ragas pandas pyarrow
+pip install python-dotenv tenacity tqdm
+```
+
+**Version Compatibility**:
+
+```
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langgraph>=0.0.20
+ragas>=0.2.10
+qdrant-client>=1.7.0
+```
+
+---
+
+### External Services
+
+#### Qdrant (Vector Database)
+
+**Purpose**: Store and search document embeddings
+
+**Setup**:
+```bash
+# Start with Docker Compose
+docker-compose up -d qdrant
+
+# Or with Docker
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+**Configuration**:
+```python
+# Environment variables
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+```
+
+**Health Check**:
+```bash
+curl http://localhost:6333/health
+# Should return: {"title":"qdrant","version":"..."}
+```
+
+**Web UI**: http://localhost:6333/dashboard
+
+---
+
+#### OpenAI (LLM & Embeddings)
+
+**Purpose**: Generate answers and create embeddings
+
+**Setup**:
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+**Models Used**:
+- LLM: `gpt-4.1-mini` (temperature=0 for determinism)
+- Embeddings: `text-embedding-3-small` (1536 dimensions)
+
+**Cost Estimates** (as of 2024):
+- LLM: ~$0.10-0.15 per 1M tokens
+- Embeddings: ~$0.02 per 1M tokens
+- Evaluation (12 questions × 4 retrievers): ~$5-6
+
+**Rate Limits**:
+- Tier 1: 200 RPM, 40,000 TPM
+- Tier 2: 500 RPM, 100,000 TPM
+
+---
+
+#### Cohere (Reranker)
+
+**Purpose**: Contextual reranking for improved retrieval quality
+
+**Setup**:
+```bash
+export COHERE_API_KEY=...
+```
+
+**Models Used**:
+- `rerank-v3.5`: Latest reranker (multilingual)
+- `rerank-english-v2.0`: English-only (faster)
+
+**Cost Estimates**:
+- Reranking: ~$1.00 per 1000 searches
+- Evaluation (12 questions): ~$0.01-0.02
+
+**Optional**: System works without Cohere (3 out of 4 retrievers)
+
+---
+
+#### HuggingFace Hub (Datasets)
+
+**Purpose**: Host and version datasets
+
+**Setup**:
+```bash
+# For reading public datasets (no token required)
+# Automatic on first use
+
+# For uploading datasets
+export HF_TOKEN=hf_...
+```
+
+**Datasets**:
+- Sources: `dwb2023/gdelt-rag-sources` (38 documents)
+- Golden Testset: `dwb2023/gdelt-rag-golden-testset` (12 QA pairs)
+
+**Revision Pinning**:
+```bash
+export HF_SOURCES_REV=abc123def456
+export HF_GOLDEN_REV=xyz789
 ```
 
 ---
 
 ## Appendix
 
-### Dependencies
-
-**Core Dependencies (from pyproject.toml):**
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `langchain` | >=0.3.19 | Document loading, retrieval, prompts |
-| `langchain-openai` | >=0.3.7 | OpenAI LLM and embeddings integration |
-| `langchain-cohere` | ==0.4.4 | Cohere reranking integration |
-| `langchain-qdrant` | >=0.2.0 | Qdrant vector store integration |
-| `langgraph` | ==0.6.7 | State graph workflow orchestration |
-| `ragas` | ==0.2.10 | RAG evaluation metrics |
-| `qdrant-client` | >=1.13.2 | Qdrant vector database client |
-| `rank-bm25` | >=0.2.2 | BM25 sparse retrieval |
-| `pymupdf` | >=1.26.3 | PDF document loading |
-| `huggingface-hub` | >=0.26.0 | HuggingFace dataset operations |
-| `datasets` | >=3.2.0 | HuggingFace datasets library |
-| `cohere` | >=5.12.0,<5.13.0 | Cohere API client |
-| `jupyter` | >=1.1.1 | Notebook support |
-| `streamlit` | >=1.40.0 | Web interface (optional) |
-
-**Python Version:** >=3.11
-
----
-
-### File Paths Reference
-
-**Source Files:**
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `src/__init__.py` | 1 | Package initialization (empty) |
-| `src/config.py` | 11 | Configuration constants and global objects |
-| `src/state.py` | 10 | State TypedDict definition |
-| `src/prompts.py` | 12 | Prompt templates |
-| `src/retrievers.py` | 58 | Retriever definitions |
-| `src/graph.py` | 72 | LangGraph workflow definitions |
-| `src/utils.py` | 2 | Utility functions (empty) |
-| `scripts/ingest.py` | 336 | Data ingestion pipeline |
-| `scripts/single_file.py` | 508 | RAG evaluation script |
-| `scripts/upload_to_hf.py` | 293 | HuggingFace upload script |
-| `scripts/generate_run_manifest.py` | 188 | Reproducibility manifest generator |
-| `scripts/enrich_manifest.py` | 244 | Manifest enrichment script |
-
-**Total Source Lines:** ~1,735 lines
-
----
-
-### Project Structure
+### File Structure
 
 ```
 cert-challenge/
-├── src/                          # Core library code
+├── src/                           # Core modules
 │   ├── __init__.py               # Package initialization
-│   ├── config.py                 # Configuration
+│   ├── config.py                 # Configuration & caching
 │   ├── state.py                  # State schema
 │   ├── prompts.py                # Prompt templates
-│   ├── retrievers.py             # Retriever definitions
-│   ├── graph.py                  # LangGraph workflows
-│   └── utils.py                  # Utilities
-├── scripts/                      # Pipeline scripts
-│   ├── ingest.py                 # Data ingestion
-│   ├── single_file.py            # RAG evaluation
-│   ├── upload_to_hf.py           # HuggingFace upload
-│   ├── generate_run_manifest.py  # Manifest generation
-│   └── enrich_manifest.py        # Manifest enrichment
-├── data/                         # Data directory
-│   ├── raw/                      # Source PDFs
-│   ├── interim/                  # Processed datasets
-│   │   ├── sources.jsonl
-│   │   ├── sources.parquet
+│   ├── retrievers.py             # Retriever factories
+│   ├── graph.py                  # LangGraph builders
+│   └── utils.py                  # Utility functions
+│
+├── scripts/                       # Executable scripts
+│   ├── ingest.py                 # Data ingestion pipeline
+│   ├── upload_to_hf.py           # Upload to HuggingFace
+│   ├── generate_run_manifest.py  # Reproducibility manifest
+│   ├── enrich_manifest.py        # Manifest enrichment
+│   ├── run_eval_harness.py       # Production evaluation
+│   ├── single_file.py            # Standalone evaluation
+│   └── validate_langgraph.py     # Validation & diagnostics
+│
+├── deliverables/                  # Evaluation outputs
+│   └── evaluation_evidence/
+│       ├── *_raw_dataset.parquet
+│       ├── *_evaluation_dataset.csv
+│       ├── *_detailed_results.csv
+│       └── comparative_ragas_results.csv
+│
+├── data/                          # Data storage
+│   ├── raw/                       # Source PDFs
+│   ├── interim/                   # Processed data
+│   │   ├── sources.docs.jsonl
+│   │   ├── sources.docs.parquet
 │   │   ├── sources.hfds/
 │   │   ├── golden_testset.jsonl
 │   │   ├── golden_testset.parquet
 │   │   ├── golden_testset.hfds/
 │   │   └── manifest.json
-│   └── processed/                # Final outputs
-├── deliverables/                 # Evaluation outputs
-│   └── evaluation_evidence/
-│       ├── comparative_ragas_results.csv
-│       ├── *_evaluation_dataset.csv
-│       ├── *_detailed_results.csv
-│       └── RUN_MANIFEST.json
-├── .env                          # Environment variables (gitignored)
-├── .env.example                  # Environment template
-├── pyproject.toml                # Project dependencies
-├── docker-compose.yml            # Qdrant container
-└── README.md                     # Project overview
-```
-
----
-
-### Quick Start Guide
-
-**1. Setup Environment:**
-
-```bash
-# Clone repository
-cd cert-challenge
-
-# Install dependencies
-pip install -e .
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env and add API keys
-nano .env
-```
-
-**2. Start Qdrant:**
-
-```bash
-docker-compose up -d qdrant
-```
-
-**3. Run Data Ingestion:**
-
-```bash
-python scripts/ingest.py
-```
-
-**4. Run Evaluation:**
-
-```bash
-python scripts/single_file.py
-```
-
-**5. Upload to HuggingFace (optional):**
-
-```bash
-python scripts/upload_to_hf.py
+│   └── processed/                 # Final outputs
+│
+├── docker-compose.yml             # Qdrant service
+├── requirements.txt               # Python dependencies
+├── Makefile                       # Common commands
+└── README.md                      # Project documentation
 ```
 
 ---
 
 ### Common Workflows
 
-**Development Workflow:**
-1. Modify retriever in `src/retrievers.py`
-2. Update graph in `src/graph.py`
-3. Test with single question
-4. Run full evaluation
-5. Compare results
+#### 1. Complete Evaluation Workflow
 
-**Evaluation Workflow:**
-1. Ensure Qdrant is running
-2. Run `single_file.py`
-3. Review comparative results
-4. Generate manifest
-5. Save to deliverables
+```mermaid
+graph TD
+    A[Raw PDFs] --> B[ingest.py]
+    B --> C[Sources Dataset]
+    B --> D[Golden Testset]
+    C --> E[upload_to_hf.py]
+    D --> E
+    E --> F[HuggingFace Hub]
+    F --> G[run_eval_harness.py]
+    G --> H[RAGAS Evaluation]
+    H --> I[Comparative Results]
+    I --> J[generate_run_manifest.py]
+    J --> K[RUN_MANIFEST.json]
+```
 
-**Data Pipeline Workflow:**
-1. Add PDFs to `data/raw/`
-2. Run `ingest.py`
-3. Verify outputs in `data/interim/`
-4. Run `enrich_manifest.py`
-5. Upload with `upload_to_hf.py`
-
----
-
-### Support and Resources
-
-**Documentation:**
-- LangChain: https://python.langchain.com/
-- LangGraph: https://langchain-ai.github.io/langgraph/
-- RAGAS: https://docs.ragas.io/
-- Qdrant: https://qdrant.tech/documentation/
-
-**Datasets:**
-- Sources: https://huggingface.co/datasets/dwb2023/gdelt-rag-sources
-- Golden Testset: https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset
-
-**Repository:**
-- GitHub: `/home/donbr/don-aie-cohort8/cert-challenge`
+**Steps**:
+1. `scripts/ingest.py` - Extract PDFs, generate testset
+2. `scripts/upload_to_hf.py` - Upload to HuggingFace
+3. `scripts/run_eval_harness.py` - Run evaluation
+4. `scripts/generate_run_manifest.py` - Create manifest
 
 ---
 
-## Changelog
+#### 2. Query Workflow
 
-**Version 0.1.0** (Current)
-- Initial API reference documentation
-- Complete coverage of src/ and scripts/ modules
-- Configuration reference
-- Usage patterns and examples
-- Best practices guide
+```mermaid
+graph LR
+    A[Question] --> B[retrieve node]
+    B --> C[Vector Store]
+    C --> D[Top-k Documents]
+    D --> E[generate node]
+    E --> F[LLM]
+    F --> G[Response]
+```
+
+**Code**:
+```python
+result = graph.invoke({"question": "What is GDELT?"})
+```
+
+**Data Flow**:
+1. `question` → retrieve node
+2. Retriever queries vector store
+3. Returns `context` (List[Document])
+4. generate node formats prompt
+5. LLM generates answer
+6. Returns `response` (str)
 
 ---
 
-*This documentation was generated on 2025-01-17 for the GDELT RAG Comparative Evaluation project.*
+#### 3. Data Ingestion Workflow
 
-*For questions or issues, refer to the source code or project README.*
+See documentation for `scripts/ingest.py` above.
+
+**Outputs**:
+- JSONL, Parquet, HuggingFace Dataset formats
+- Manifest with checksums and metadata
+
+---
+
+#### 4. Validation Workflow
+
+See documentation for `scripts/validate_langgraph.py` above.
+
+**Use Cases**:
+- Pre-deployment validation
+- Debugging environment issues
+- Demonstrating correct patterns
+
+---
+
+## Quick Reference
+
+### Import Cheatsheet
+
+```python
+# Configuration
+from src.config import (
+    get_llm, get_embeddings, get_qdrant,
+    get_collection_name, create_vector_store
+)
+
+# State
+from src.state import State
+
+# Prompts
+from src.prompts import BASELINE_PROMPT
+
+# Retrievers
+from src.retrievers import create_retrievers
+
+# Graph
+from src.graph import build_graph, build_all_graphs
+
+# Utils
+from src.utils import (
+    load_documents_from_huggingface,
+    load_golden_testset_from_huggingface
+)
+```
+
+### Common Commands
+
+```bash
+# Start Qdrant
+docker-compose up -d qdrant
+
+# Run evaluation
+make eval
+# or
+python scripts/run_eval_harness.py --recreate false
+
+# Validate setup
+python scripts/validate_langgraph.py
+
+# Ingest data
+python scripts/ingest.py
+
+# Upload to HuggingFace
+export HF_TOKEN=...
+python scripts/upload_to_hf.py
+```
+
+### Configuration Template
+
+```bash
+# .env file
+OPENAI_API_KEY=sk-...
+COHERE_API_KEY=...
+HF_TOKEN=hf_...
+
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION=gdelt_eval
+
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_EMBED_MODEL=text-embedding-3-small
+
+HF_SOURCES_REV=abc123
+HF_GOLDEN_REV=xyz789
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**1. ImportError: No module named 'src'**
+
+```bash
+# Solution: Add project root to PYTHONPATH
+export PYTHONPATH=.
+python scripts/run_eval_harness.py
+```
+
+**2. Qdrant connection refused**
+
+```bash
+# Solution: Start Qdrant
+docker-compose up -d qdrant
+
+# Check status
+curl http://localhost:6333/health
+```
+
+**3. OPENAI_API_KEY not set**
+
+```bash
+# Solution: Set environment variable
+export OPENAI_API_KEY=sk-...
+
+# Or in .env file
+echo "OPENAI_API_KEY=sk-..." >> .env
+```
+
+**4. RAGAS schema validation error**
+
+```python
+# Solution: Use validation function
+from scripts.single_file import validate_and_normalize_ragas_schema
+
+df = validate_and_normalize_ragas_schema(df, "retriever_name")
+```
+
+**5. Out of memory during embedding**
+
+```python
+# Solution: Batch documents
+from src.config import create_vector_store
+
+# Process in smaller batches
+batch_size = 100
+for i in range(0, len(documents), batch_size):
+    batch = documents[i:i + batch_size]
+    # Process batch
+```
+
+---
+
+**End of API Reference**
+
+For more information, see:
+- Project README: `/home/donbr/don-aie-cohort8/cert-challenge/README.md`
+- Data Flow Documentation: `/home/donbr/don-aie-cohort8/cert-challenge/ra_output/architecture_20251018_120546/docs/02_data_flow.md`
+- Architecture Documentation: `/home/donbr/don-aie-cohort8/cert-challenge/ra_output/architecture_20251018_120546/docs/01_architecture_overview.md`

@@ -1,67 +1,69 @@
 networks:
-  certchal-network:
+  gdelt-network:
 
 volumes:
-  redis_data:
   neo4j_data:
   neo4j_logs:
   neo4j_import:
   neo4j_plugins:
   qdrant_data:
   minio_data:
-  phoenix_data:
-
+  langgraph-data:
 services:
-  postgres:
-    image: postgres:latest
-    container_name: certchal-postgres
-    networks: [certchal-network]
-    restart: unless-stopped
+  langgraph-redis:
+    image: redis:6
+    container_name: langgraph-redis
+    networks: [gdelt-network]
+    healthcheck:
+      test: redis-cli ping
+      interval: 5s
+      timeout: 1s
+      retries: 5
+  langgraph-postgres:
+    image: postgres:16
+    container_name: langgraph-postgres
+    networks: [gdelt-network]
+    ports:
+      - "5433:5432"
     environment:
-      POSTGRES_DB: certchal
-      POSTGRES_USER: certchal
-      POSTGRES_PASSWORD: certchal
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U certchal -d certchal"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
-  adminer:
-    image: adminer
-    networks: [certchal-network]
-    restart: always
-    ports:
-      - 8080:8080
-
-  redis:
-    image: redis:latest
-    container_name: certchal-redis
-    networks: [certchal-network]
-    restart: unless-stopped
-    command: [
-      "redis-server",
-      "--save", "60", "1",
-      "--loglevel", "warning",
-      "--maxmemory", "1gb",
-      "--maxmemory-policy", "allkeys-lru"
-    ]
-    ports:
-      - "6379:6379"
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
-      - redis_data:/data
+      - langgraph-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: pg_isready -U postgres
+      start_period: 10s
+      timeout: 1s
+      retries: 5
       interval: 5s
-      timeout: 3s
-      retries: 30
+  langgraph-api:
+    image: gdelt-image
+    container_name: langgraph-api
+    networks: [gdelt-network]
+    ports:
+      - "8123:8000"
+    depends_on:
+      langgraph-redis:
+        condition: service_healthy
+      langgraph-postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?missing OPENAI_API_KEY}
+      COHERE_API_KEY: ${COHERE_API_KEY:?missing COHERE_API_KEY}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:?missing LANGSMITH_API_KEY}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      REDIS_URI: "${REDIS_URI:-redis://langgraph-redis:6379}"
+      DATABASE_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable
 
   neo4j:
     image: neo4j:latest
-    container_name: certchal-neo4j
-    networks: [certchal-network]
+    container_name: neo4j
+    networks: [gdelt-network]
     restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/neo4jpassword
@@ -84,8 +86,8 @@ services:
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: certchal-qdrant
-    networks: [certchal-network]
+    container_name: qdrant
+    networks: [gdelt-network]
     restart: always
     ports:
       - "6333:6333"   # HTTP
@@ -106,8 +108,8 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: certchal-minio
-    networks: [certchal-network]
+    container_name: minio
+    networks: [gdelt-network]
     restart: unless-stopped
     ports:
       - "9000:9000"   # S3
@@ -123,29 +125,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-
-  phoenix:
-    image: arizephoenix/phoenix:latest
-    container_name: certchal-phoenix
-    networks: [certchal-network]
-    restart: unless-stopped
-    ports:
-      - "6006:6006"
-      - "4317:4317"
-    environment:
-      - PHOENIX_WORKING_DIR=/mnt/data
-    volumes:
-      - phoenix_data:/mnt/data
-
-# Example dependency stitching when app services are added:
-#   depends_on:
-#     postgres:
-#       condition: service_healthy
-#     redis:
-#       condition: service_healthy
-#     neo4j:
-#       condition: service_healthy
-#     qdrant:
-#       condition: service_healthy
-#     phoenix:
-#       condition: service_healthy
