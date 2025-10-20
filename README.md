@@ -159,14 +159,86 @@ By preserving SHA-256 fingerprints and HF lineage, this mechanism “signs” th
 
 ## 🧮 Evaluation Results (Summary)
 
-| Retriever         | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Avg         |
-| ----------------- | ------------ | ---------------- | ----------------- | -------------- | ----------- |
-| **Cohere Rerank** | **96.5 %**   | **94.5 %**       | **98.6 %**        | **96.2 %**     | **96.47 %** |
-| Ensemble          | 97.6 %       | 96.1 %           | 83.8 %            | 98.3 %         | 93.96 %     |
-| BM25              | 95.6 %       | 95.3 %           | 87.3 %            | 98.3 %         | 94.14 %     |
-| Naive             | 93.5 %       | 94.7 %           | 84.1 %            | 94.2 %         | 91.6 %      |
+> Source of truth: `deliverables/evaluation_evidence/RUN_MANIFEST.json` (auto-generated each run).
 
-→ **Cohere Rerank** recommended for production (≈ +17 % precision gain).
+| Retriever         | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Avg  |
+|------------------|-------------:|-----------------:|------------------:|---------------:|-----:|
+| **Cohere Rerank**| **95.8%**    | **94.8%**        | **93.1%**         | **96.7%**      | **95.1%** |
+| Ensemble         | 93.4%        | 94.6%            | 87.5%             | **98.8%**      | 93.6% |
+| BM25             | 94.2%        | 94.8%            | 85.8%             | **98.8%**      | 93.4% |
+| Naive            | 94.0%        | 94.4%            | 88.5%             | **98.8%**      | 93.9% |
+
+**Provenance:** dataset paths & SHA-256 fingerprints are recorded in `data/interim/manifest.json`.
+**Reproducibility:** these numbers are written by the evaluation run into `RUN_MANIFEST.json`.
+**TLDR summary:** `data/processed/comparative_ragas_results.csv`
+
+---
+
+## 📦 HuggingFace Datasets
+
+This project publishes **4 datasets** to HuggingFace Hub for reproducibility and benchmarking:
+
+### Interim Datasets (Raw Data)
+
+These datasets contain the source documents and golden testset used for evaluation:
+
+- **[dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)** - 38 GDELT documentation pages
+  - GDELT GKG 2.1 architecture documentation
+  - Knowledge graph construction guides
+  - Baltimore Bridge Collapse case study
+  - Format: Multiple formats (JSONL, Parquet, HuggingFace Dataset)
+
+- **[dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)** - 12 QA pairs
+  - Synthetically generated questions using RAGAS
+  - Ground truth answers and reference contexts
+  - Single-hop and multi-hop questions
+
+### Processed Datasets (Evaluation Results)
+
+These datasets contain consolidated evaluation results from all 5 retriever strategies:
+
+- **[dwb2023/gdelt-rag-evaluation-datasets](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-datasets)** - 60 RAGAS evaluation inputs
+  - Schema: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
+  - Use cases: Benchmarking retriever strategies, analyzing retrieval quality, reproducing evaluation results
+
+- **[dwb2023/gdelt-rag-detailed-results](https://huggingface.co/datasets/dwb2023/gdelt-rag-detailed-results)** - 60 RAGAS metric scores
+  - Schema: All evaluation dataset fields PLUS `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
+  - Use cases: Performance analysis, error analysis, training retrieval models with quality labels
+
+### Loading Examples
+
+```python
+from datasets import load_dataset
+
+# Load evaluation datasets
+eval_ds = load_dataset("dwb2023/gdelt-rag-evaluation-datasets")
+
+# Filter by retriever
+cohere_evals = eval_ds['train'].filter(lambda x: x['retriever'] == 'cohere_rerank')
+print(f"Cohere Rerank: {len(cohere_evals)} examples")
+
+# Load detailed results with metrics
+results_ds = load_dataset("dwb2023/gdelt-rag-detailed-results")
+
+# Analyze performance by retriever
+import pandas as pd
+df = results_ds['train'].to_pandas()
+performance = df.groupby('retriever')[
+    ['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']
+].mean()
+print(performance)
+```
+
+**Output**:
+```
+                 faithfulness  answer_relevancy  context_precision  context_recall
+retriever
+baseline             0.9351          0.9335           0.9459            0.9410
+bm25                 0.9462          0.9583           0.9519            0.9511
+cohere_rerank        0.9508          0.9321           0.9670            0.9668
+ensemble             0.9424          0.9542           0.9477            0.9486
+naive                0.9351          0.9335           0.9459            0.9410
+```
 
 ---
 
@@ -239,7 +311,7 @@ Generates comprehensive repository analysis in `ra_output/`:
 
 Apache 2.0 — see `LICENSE`
 
-**Contact:** Don Brown (`dwb2023`) – AI Engineering Bootcamp Cohort 8
+**Contact:** Don Branson (`dwb2023`) – AI Engineering Bootcamp Cohort 8
 
 ---
 

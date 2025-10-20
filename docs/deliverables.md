@@ -1,7 +1,7 @@
 # Certification Challenge Deliverables
 
 **Project**: GDELT Knowledge Graph RAG Assistant
-**Student**: Don Brown (dwb2023)
+**Peer Supporter**: Don Branson (dwb2023)
 **Submission Date**: October 17, 2025
 **Dataset Repository**: [dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)
 **Golden Testset**: [dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)
@@ -519,6 +519,34 @@ The **Context Precision (81.10%)** bottleneck suggests that while we retrieve th
 - **Generation Method**: RAGAS 0.2.10 synthetic data generation with 3 synthesizers
 - **Size**: 12 question-answer-ground_truth triples
 
+### Public Datasets
+
+All evaluation results are publicly available on HuggingFace Hub for reproducibility and benchmarking:
+
+#### Interim Datasets (Raw Data)
+- **[dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)** - 38 GDELT documentation pages
+- **[dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)** - 12 QA pairs for evaluation
+
+#### Processed Datasets (Evaluation Results)
+- **[dwb2023/gdelt-rag-evaluation-datasets](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-datasets)** - 60 RAGAS evaluation inputs
+  - **Purpose**: Consolidated RAGAS input datasets from 5 retriever strategies (baseline, naive, bm25, ensemble, cohere_rerank)
+  - **Rows**: 60 (12 questions × 5 retrievers)
+  - **Key Column**: `retriever` - identifies source strategy
+  - **Schema**: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
+  - **Use Cases**: Benchmarking new retrievers, analyzing retrieval quality, reproducing evaluation results
+
+- **[dwb2023/gdelt-rag-detailed-results](https://huggingface.co/datasets/dwb2023/gdelt-rag-detailed-results)** - 60 RAGAS metric scores with per-question analysis
+  - **Purpose**: Detailed RAGAS evaluation results with all 4 metric scores per question
+  - **Rows**: 60 (12 questions × 5 retrievers)
+  - **Schema**: All evaluation dataset fields PLUS `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
+  - **Use Cases**: Performance analysis, error analysis, training retrieval models using RAGAS scores as quality labels
+
+**Loading Examples** (see [README.md](../README.md#-huggingface-datasets) for Python code)
+
+**Publishing Scripts**:
+- `scripts/publish_interim_datasets.py` - Publishes raw sources and golden testset
+- `scripts/publish_processed_datasets.py` - Publishes consolidated evaluation results
+
 ### Per-Question Performance Sample
 
 Example from `baseline_detailed_results.csv` (anonymized for brevity):
@@ -936,7 +964,7 @@ cert-challenge/
 
 ### Contact
 
-**Student**: Don Brown (dwb2023)
+**Peer Supporter**: Don Branson (dwb2023)
 **Cohort**: AI Engineering Bootcamp Cohort 8
 **Submission Date**: October 17, 2025
 **Datasets**: [dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2), [dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)

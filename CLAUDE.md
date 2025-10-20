@@ -233,15 +233,29 @@ Cost: ~$5.65 per full run
 
 ### HuggingFace Datasets
 
-**Sources**: `dwb2023/gdelt-rag-sources` (38 documents)
+**Interim Datasets** (raw data):
+
+**Sources**: `dwb2023/gdelt-rag-sources-v2` (38 documents)
 - GDELT GKG 2.1 architecture docs
 - Knowledge graph construction guides
 - Baltimore Bridge Collapse case study
 
-**Golden Testset**: `dwb2023/gdelt-rag-golden-testset` (12 QA pairs)
+**Golden Testset**: `dwb2023/gdelt-rag-golden-testset-v2` (12 QA pairs)
 - Synthetic questions generated via RAGAS
 - Ground truth answers for evaluation
 - Reference contexts for context recall metric
+
+**Processed Datasets** (evaluation results):
+
+**Evaluation Datasets**: `dwb2023/gdelt-rag-evaluation-datasets` (60 evaluation inputs)
+- Schema: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
+- Consolidated RAGAS inputs from 5 retrievers (baseline, naive, bm25, ensemble, cohere_rerank)
+- Use: Benchmarking retriever strategies, analyzing retrieval quality
+
+**Detailed Results**: `dwb2023/gdelt-rag-detailed-results` (60 results with RAGAS scores)
+- Schema: Same as above + `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
+- Per-question RAGAS metric scores for all 5 retrievers
+- Use: Performance analysis, error analysis, training retrieval models
 
 ### Multi-Format Persistence
 
@@ -940,6 +954,7 @@ This project has comprehensive documentation organized across multiple files. Us
 **Data Pipeline Scripts**:
 - `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
 - `publish_interim_datasets.py` - Upload interim datasets to HuggingFace Hub
+- `publish_processed_datasets.py` - Upload processed evaluation results to HuggingFace Hub
 
 ### External Dependencies
 

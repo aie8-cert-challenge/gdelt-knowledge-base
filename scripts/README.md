@@ -11,6 +11,7 @@ All evaluation, validation, and data pipeline scripts for the GDELT RAG certific
 | **run_full_evaluation.py** | RAGAS evaluation (standalone reference) | 20-30 min | $5-6 | 16 CSV files + manifest |
 | **ingest_raw_pdfs.py** | Extract raw PDFs → interim datasets | 5-10 min | $2-3 | data/interim/* |
 | **publish_interim_datasets.py** | Upload interim datasets to HuggingFace | 1 min | $0 | HF repos |
+| **publish_processed_datasets.py** | Upload processed evaluation results to HuggingFace | 2-3 min | $0 | HF repos |
 
 ## Naming Convention
 
@@ -37,7 +38,8 @@ PYTHONPATH=. python scripts/run_eval_harness.py
 make eval
 
 # 3. Publish datasets (optional, one-time)
-python scripts/publish_interim_datasets.py
+python scripts/publish_interim_datasets.py        # Publishes raw sources + golden testset
+python scripts/publish_processed_datasets.py      # Publishes evaluation results
 ```
 
 ### Quick Validation (before deployment)
@@ -288,6 +290,77 @@ python scripts/publish_interim_datasets.py
 
 ---
 
+## publish_processed_datasets.py - HuggingFace Upload (Processed Results)
+
+**Purpose**: Upload consolidated evaluation results from `data/processed/` to HuggingFace Hub for public benchmarking and reproducibility.
+
+**Prerequisites**:
+```bash
+# Set HuggingFace token
+export HF_TOKEN=hf_...
+
+# Ensure processed results exist
+ls data/processed/*_evaluation_dataset.csv
+ls data/processed/*_detailed_results.csv
+```
+
+**Usage**:
+```bash
+python scripts/publish_processed_datasets.py
+```
+
+**What it uploads**:
+- `dwb2023/gdelt-rag-evaluation-datasets` (consolidated evaluation inputs from 5 retrievers)
+- `dwb2023/gdelt-rag-detailed-results` (consolidated RAGAS metric scores from 5 retrievers)
+
+**Key Feature**: Automatically adds `retriever` column to identify source retriever (baseline, naive, bm25, ensemble, cohere_rerank)
+
+**Dataset 1 Schema** (`gdelt-rag-evaluation-datasets`):
+- `retriever` (string) - Source retriever name [NEW]
+- `user_input` (string) - Question
+- `retrieved_contexts` (list[string]) - Retrieved documents
+- `reference_contexts` (list[string]) - Ground truth contexts
+- `response` (string) - Generated answer
+- `reference` (string) - Ground truth answer
+
+**Dataset 2 Schema** (`gdelt-rag-detailed-results`):
+- All fields from Dataset 1 PLUS:
+- `faithfulness` (float) - Answer grounding score (0-1)
+- `answer_relevancy` (float) - Question relevance score (0-1)
+- `context_precision` (float) - Ranking quality score (0-1)
+- `context_recall` (float) - Coverage score (0-1)
+
+**Output**:
+- Creates comprehensive dataset cards on HuggingFace Hub
+- Prints dataset URLs for verification
+- Shows consolidation statistics (total rows per retriever)
+
+**Duration**: 2-3 minutes
+**Cost**: $0 (HuggingFace Hub free tier)
+
+**When to run**:
+- After evaluation runs (`scripts/run_eval_harness.py` or `scripts/run_full_evaluation.py`)
+- For certification submission to make evaluation results publicly accessible
+- When sharing benchmark datasets with the research community
+
+**Why "publish_processed_datasets"?** - Clarifies this publishes PROCESSED evaluation results (from `data/processed/`), not interim raw data. The `publish_*` prefix indicates this is a ONE-TIME operation after evaluation completes.
+
+**Repository URLs** (after upload):
+- [dwb2023/gdelt-rag-evaluation-datasets](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-datasets)
+- [dwb2023/gdelt-rag-detailed-results](https://huggingface.co/datasets/dwb2023/gdelt-rag-detailed-results)
+
+**Use Cases**:
+- **Benchmarking**: Compare your retriever against 5 baseline strategies
+- **Research**: Analyze per-question performance across retrievers
+- **Reproducibility**: Validate certification challenge evaluation results
+- **Training**: Use RAGAS scores as quality labels for retrieval model training
+
+**See also**:
+- [scripts/run_eval_harness.py](#run_eval_harnesspy-vs-run_full_evaluationpy) - Generate processed evaluation results first
+- [scripts/publish_interim_datasets.py](#publish_interim_datasetspy---huggingface-upload) - Publishes interim raw datasets
+
+---
+
 ## Make Commands
 
 For convenience, use Makefile targets instead of running scripts directly:
@@ -326,6 +399,12 @@ make help       # Show all commands
   - ✅ `run_app_validation.py` (not `run_validation.py`)
   - ✅ `ingest_raw_pdfs.py` (not `ingest.py`)
   - ✅ `publish_interim_datasets.py` (not `publish_datasets.py`)
+  - ✅ `publish_processed_datasets.py` (new script for processed results)
+
+**Issue**: publish_processed_datasets.py fails with "No CSV files found"
+- **Cause**: Processed evaluation results don't exist yet
+- **Fix**: Run evaluation first: `python scripts/run_eval_harness.py`
+- **Verify**: Check `data/processed/` contains `*_evaluation_dataset.csv` and `*_detailed_results.csv`
 
 ---
 
