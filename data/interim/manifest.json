@@ -1,9 +1,8 @@
 {
-  "id": "ragas_pipeline_ba3a6303-b2bb-4313-a3cb-26c2236967c8",
-  "generated_at": "2025-10-17T07:12:55.087548Z",
+  "id": "ragas_pipeline_b640f536-ee15-4db6-86c1-ddb955157875",
+  "generated_at": "2025-10-20T02:04:36.475894Z",
   "run": {
-    "random_seed": 42,
-    "git_commit_sha": "a0d4dd3"
+    "random_seed": 42
   },
   "env": {
     "python": "3.11.13",
@@ -22,14 +21,14 @@
   },
   "paths": {
     "sources": {
-      "jsonl": "data/interim/sources.docs.jsonl",
-      "parquet": "data/interim/sources.docs.parquet",
-      "hfds": "data/interim/sources.hfds"
+      "jsonl": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.jsonl",
+      "parquet": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.parquet",
+      "hfds": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.hfds"
     },
     "golden_testset": {
-      "jsonl": "data/interim/golden_testset.jsonl",
-      "parquet": "data/interim/golden_testset.parquet",
-      "hfds": "data/interim/golden_testset.hfds"
+      "jsonl": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.jsonl",
+      "parquet": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.parquet",
+      "hfds": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.hfds"
     }
   },
   "fingerprints": {
@@ -38,8 +37,8 @@
       "parquet_sha256": "a00f7c9c9d66aa320847924b1280645fbc1af76bed4a93adc6a3a268c4259673"
     },
     "golden_testset": {
-      "jsonl_sha256": "a1c3cb0adf4986ac48fcbee091eb460b5cd1a74895abd5569e594d1bbcae43ca",
-      "parquet_sha256": "91c3ffedbf217e8a633a0ef4c7d94e6965549ccbbb1c4a3150a5f2edf9ed9011"
+      "jsonl_sha256": "4380d82c9bec2036249ba32799b3aee0529727ec3463117bf396b138885e1329",
+      "parquet_sha256": "e7b5f11801611130434f2a51337bf85c3740f10f30b414e993ceb69b6389b201"
     }
   },
   "quick_schema": {
@@ -71,8 +70,8 @@
             "producer": "pikepdf 8.15.1",
             "creator": "arXiv GenPDF (tex2pdf:)",
             "creationdate": "",
-            "source": "data/raw/2503.07584v3.pdf",
-            "file_path": "data/raw/2503.07584v3.pdf",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
             "total_pages": 12,
             "format": "PDF 1.5",
             "title": "Talking to GDELT Through Knowledge Graphs",
@@ -92,8 +91,8 @@
             "producer": "pikepdf 8.15.1",
             "creator": "arXiv GenPDF (tex2pdf:)",
             "creationdate": "",
-            "source": "data/raw/2503.07584v3.pdf",
-            "file_path": "data/raw/2503.07584v3.pdf",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
             "total_pages": 12,
             "format": "PDF 1.5",
             "title": "Talking to GDELT Through Knowledge Graphs",
@@ -113,8 +112,8 @@
             "producer": "pikepdf 8.15.1",
             "creator": "arXiv GenPDF (tex2pdf:)",
             "creationdate": "",
-            "source": "data/raw/2503.07584v3.pdf",
-            "file_path": "data/raw/2503.07584v3.pdf",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
             "total_pages": 12,
             "format": "PDF 1.5",
             "title": "Talking to GDELT Through Knowledge Graphs",
@@ -134,8 +133,8 @@
             "producer": "pikepdf 8.15.1",
             "creator": "arXiv GenPDF (tex2pdf:)",
             "creationdate": "",
-            "source": "data/raw/2503.07584v3.pdf",
-            "file_path": "data/raw/2503.07584v3.pdf",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
             "total_pages": 12,
             "format": "PDF 1.5",
             "title": "Talking to GDELT Through Knowledge Graphs",
@@ -155,8 +154,8 @@
             "producer": "pikepdf 8.15.1",
             "creator": "arXiv GenPDF (tex2pdf:)",
             "creationdate": "",
-            "source": "data/raw/2503.07584v3.pdf",
-            "file_path": "data/raw/2503.07584v3.pdf",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
             "total_pages": 12,
             "format": "PDF 1.5",
             "title": "Talking to GDELT Through Knowledge Graphs",
@@ -181,44 +180,44 @@
       ],
       "sample": [
         {
-          "user_input": "How is JSON related to the GDELT Global Knowledge Graph (GKG) data format and what considerations should a data scientist keep in mind when working with it?",
+          "user_input": "Can you explane the main differnces between GKG 1.0 and the newer versions in terms of data format and usage?",
           "reference_contexts": [
             "INTRODUCTION This codebook introduces the GDELT Global Knowledge Graph (GKG) Version 2.1, which expands GDELT\u2019s ability to quantify global human society beyond cataloging physical occurrences towards actually representing all of the latent dimensions, geography, and network structure of the global news. It applies an array of highly sophisticated natural language processing algorithms to each document to compute a range of codified metadata encoding key latent and contextual dimensions of the document. To sum up the GKG in a single sentence, it connects every person, organization, location, count, theme, news source, and event across the planet into a single massive network that captures what\u2019s happening around the world, what its context is and who\u2019s involved, and how the world is feeling about it, every single day. It has been just short of sixteen months since the original prototype introduction of the GKG 1.0 system on November 3, 2013 and in those fourteen months the GKG system has found application in an incredible number and diversity of fields. The uniqueness of the GKG indicators in capturing the latent dimensions of society that precede physical unrest and their global scope has enabled truly unimaginable new applications. We\u2019ve learned a lot over the past year in terms of the features and capabilities of greatest interest to the GKG community, and with this Version 2.1 release of the GKG, we are both integrating those new features and moving the GKG into production status (from its original alpha status) in recognition of the widespread production use of the system today. Due to the vast number of use cases articulated for the GKG, a decision was made at its release to create a raw output format that could be processed into the necessary refined formats for a wide array of software packages and analysis needs and that would support a diverse assortment of extremely complex analytic needs in a single file. Unlike the primary GDELT event stream, which is designed for direct import into major statistical packages like R, the GKG file format requires more sophisticated preprocessing and users will likely want to make use of a scripting language like PERL or Python to extract and reprocess the data for import into a statistical package. Thus, users may require more advanced text processing and scripting language skills to work with the GKG data and additional nuance may be required when thinking about how to incorporate these indicators into statistical models and network and geographic constructs, as outlined in this codebook. Encoding the GKG in XML, JSON, RDF, or other file formats significantly increases the on-disk footprint of the format due to its complexity and size (thus why the GKG is only available in CSV format), though users requiring access to the GKG in these formats can easily write a PERL or Python or similar script to translate the GKG format to any file format needed. The GKG is optimized for fast scanning, storing one record per line and using a tab- delimited format to separate the fields. This makes it possible to use highly optimized fully parallelized streamed parsing to rapidly process the GKG. Similar to the 1.0 format, the files have a \u201c.csv\u201d ending, despite being tab-delimited, to address issues with some software packages that cannot handle \u201c.txt\u201d or \u201c.tsv\u201d endings for parsing tasks. The new GKG format preserves most of the previous fields in their existing format for backwards compatibility (and we will continue to generate the daily Version 1.0 files in parallel into the future), but"
           ],
-          "reference": "The GDELT Global Knowledge Graph (GKG) is primarily available in a tab-delimited CSV format rather than JSON due to the complexity and size of encoding it in JSON, XML, RDF, or other file formats, which significantly increases the on-disk footprint. However, users who require the GKG data in JSON or other formats can write scripts in PERL, Python, or similar languages to translate the CSV format into JSON. Working with the GKG data requires advanced text processing and scripting skills to preprocess and reformat the raw output for statistical packages and complex analytic needs.",
+          "reference": "The GKG 1.0 system was the original prototype introduced on November 3, 2013, and it has been used in a wide variety of fields due to its unique indicators capturing latent dimensions of society. The newer GKG Version 2.1 expands on this by integrating new features and moving the system into production status from its original alpha status. While the new format preserves most of the previous fields for backwards compatibility and continues to generate daily Version 1.0 files in parallel, the GKG 2.1 format is optimized for fast scanning using a tab-delimited CSV format with one record per line, enabling highly parallelized streamed parsing. Unlike the primary GDELT event stream, the GKG file format requires more sophisticated preprocessing, often needing scripting languages like PERL or Python to extract and reprocess data for statistical packages. Encoding the GKG in XML, JSON, RDF, or other formats significantly increases file size, so the GKG is only available in CSV format, though users can write scripts to convert it if needed.",
           "synthesizer_name": "single_hop_specifc_query_synthesizer"
         },
         {
-          "user_input": "Wht is GDELT Translingual?",
+          "user_input": "Can you explane how RID is used in the GDELT GCAM module for emotion analysis?",
           "reference_contexts": [
             "adds a series of new capabilities that greatly enhance what can be done with the GKG data, opening entirely new analytic opportunities. Some of the most significant changes: \uf0b7 Realtime Measurement of 2,300 Emotions and Themes. The GDELT Global Content Analysis Measures (GCAM) module represents what we believe is the largest deployment of sentiment analysis in the world: bringing together 24 emotional measurement packages that together assess more than 2,300 emotions and themes from every article in realtime, multilingual dimensions natively assessing the emotions of 15 languages (Arabic, Basque, Catalan, Chinese, French, Galician, German, Hindi, Indonesian, Korean, Pashto, Portuguese, Russian, Spanish, and Urdu). GCAM is designed to enable unparalleled assessment of the emotional undercurrents and reaction at a planetary scale by bringing together an incredible array of dimensions, from LIWC\u2019s \u201cAnxiety\u201d to Lexicoder\u2019s \u201cPositivity\u201d to WordNet Affect\u2019s \u201cSmugness\u201d to RID\u2019s \u201cPassivity\u201d. \uf0b7 Realtime Translation of 65 Languages. GDELT 2.0 brings with it the public debut of GDELT Translingual, representing what we believe is the largest realtime streaming news machine translation deployment in the world: all global news that GDELT monitors in 65 languages, representing 98.4% of its daily non-English monitoring volume, is translated in realtime into English for processing through the entire GDELT Event and GKG/GCAM pipelines. GDELT Translingual is designed to allow GDELT to monitor the entire planet at full volume, creating the very first glimpses of a world without language barriers. The GKG system now processes every news report monitored by GDELT across these 65 languages, making it possible to trace people, organizations, locations, themes, and emotions across languages and media systems. \uf0b7 Relevant Imagery, Videos, and Social Embeds. A large fraction of the world\u2019s news outlets now specify a hand-selected image for each article to appear when it is shared via social media that represents the core focus of the article. GDELT identifies this imagery in a wide array of formats including Open Graph, Twitter Cards, Google+, IMAGE_SRC, and SailThru formats. In addition, GDELT also uses a set of highly specialized algorithms to analyze the article content itself to identify inline imagery of high likely relevance to the story, along with videos and embedded social media posts (such as embedded Tweets or YouTube or Vine videos), a list of which is compiled. This makes it possible to gain a unique ground-level view into emerging situations anywhere in the world, even in those areas with very little social media penetration, and to act as a kind of curated list of social posts in those areas with strong social use. \uf0b7 Quotes, Names, and Amounts. The world\u2019s news contains a wealth of information on food prices, aid promises, numbers of troops, tanks, and protesters, and nearly any other countable item. GDELT 2.0 now attempts to compile a list of all \u201camounts\u201d expressed in each article to offer numeric context to global events. In parallel, a new Names engine augments the existing Person and Organization names engines by identifying an array of other kinds of proper names, such as named events (Orange Revolution / Umbrella Movement), occurrences like the World Cup, named dates like Holocaust Remembrance Day, on through named legislation like Iran Nuclear Weapon Free Act, Affordable Care Act and Rouge National Urban Park Initiative. Finally, GDELT also identifies attributable quotes from each article, making it possible to see the evolving language used by political leadership across the world. \uf0b7"
           ],
-          "reference": "GDELT Translingual is the largest realtime streaming news machine translation deployment in the world, translating all global news monitored by GDELT in 65 languages into English in realtime. It enables GDELT to monitor the entire planet at full volume, allowing tracing of people, organizations, locations, themes, and emotions across languages and media systems.",
+          "reference": "RID is one of the 24 emotional measurement packages integrated into the GDELT Global Content Analysis Measures (GCAM) module, which together assess more than 2,300 emotions and themes from every article in realtime. Specifically, RID contributes to measuring emotions such as \"Passivity\" within this large-scale sentiment analysis system.",
           "synthesizer_name": "single_hop_specifc_query_synthesizer"
         },
         {
-          "user_input": "what is date mentions in news articles?",
+          "user_input": "Could you elaborate on the significant changes introduced in version 1.0, particularly focusing on the new Proximity Context capability and its impact on encoding date mentions in news articles and documents?",
           "reference_contexts": [
             "Date Mentions. We\u2019ve heard from many of you the desire to encode the list of date references found in news articles and documents in order to identify repeating mentions of specific dates as possible \u201canniversary violence\u201d indicators. All day, month, and year dates are now extracted from each document. \uf0b7 Proximity Context. Perhaps the greatest change to the overall format from version 1.0 is the introduction of the new Proximity Context capability. The GKG records an enormously rich array"
           ],
-          "reference": "Date Mentions refer to the list of date references found in news articles and documents, which are extracted to identify repeating mentions of specific dates as possible \u201canniversary violence\u201d indicators. All day, month, and year dates are now extracted from each document.",
+          "reference": "Version 1.0 introduced a major change with the addition of the Proximity Context capability, which represents the greatest change to the overall format. This version also enhanced the extraction of date mentions by encoding all day, month, and year dates found in news articles and documents. This allows for the identification of repeating mentions of specific dates, which can serve as potential indicators of \"anniversary violence.\" The Proximity Context capability enriches the Global Knowledge Graph (GKG) by recording a highly detailed array of contextual information around these date references.",
           "synthesizer_name": "single_hop_specifc_query_synthesizer"
         },
         {
-          "user_input": "how GKG 2.1 help to know Russia with people and roles in news articles when before it was hard to connect them all together in one place?",
+          "user_input": "How does the GKG 2.1 system improve the association of John Kerry with his functional role and geographic context compared to the previous GKG system?",
           "reference_contexts": [
             "of contextual details from the news, encoding not only the people, organizations, locations and events driving the news, but also functional roles and underlying thematic context. However, with the previous GKG system it was difficult to associate those various data points together. For example, an article might record that Barack Obama, John Kerry, and Vladimir Putin all appeared somewhere in an article together and that the United States and Russia appeared in that article and that the roles of President and Secretary of State were mentioned in that article, but there was no way to associate each person with the corresponding location and functional roles. GKG 2.1 addresses this by providing the approximate character offset of each reference to an object in the original article. While not allowing for deeper semantic association, this new field allows for simple proximity-based contextualization. In the case of the example article above, the mention of United States likely occurs much closer to Barack Obama and John Kerry than to Vladimir Putin, while Secretary of State likely occurs much closer to John Kerry than to the others. In this way, critical information on role, geographic, thematic association, and other connectivity can be explored. Pilot tests have already demonstrated that these proximity indicators can be highly effective at recovering these kinds of functional, thematic, and geographic affiliations. \uf0b7 Over 100 New GKG Themes. There are more than 100 new themes in the GDELT Global Knowledge Graph, ranging from economic indicators like price gouging and the price of heating oil to infrastructure topics like the construction of new power generation capacity to social issues like marginalization and burning in effigy. The list of recognized infectious diseases, ethnic groups, and terrorism organizations has been considerably expanded, and more than 600 global humanitarian and development aid organizations have been added, along with global currencies and massive new taxonomies capturing global animals and plants to aid with tracking species migration and poaching. \uf0b7 Extensible XML Block. GDELT has historically relied primarily on mainstream news coverage for its source material. Whether from print, broadcast, or web-based mediums, news coverage across the world is relatively consistent in the kinds of information it captures. As GDELT encodes an ever-increasing range of materials, including academic journal articles and government reports, additional types of information are available to codify. As a first example of this, Leetaru, Perkins and Rewerts (2014) 1 apply the GKG to encode more than 21 billion words of academic literature, including the entire contents of JSTOR, DTIC, CORE, CireSeerX, and the Internet Archive\u2019s 1.6 billion PDFs relevant to Africa and the Middle East. Academic literature contains a list of cited references at the bottom of each article that indicate the papers cited within that paper. This citation list is extremely valuable in constructing citation graphs over the literature to better understand trends and experts. Yet, such citation lists are unique to this class of literature and will not be found in ordinary news material and thus it would be cumbersome to add additional fields to the GKG file format to handle each of these kinds of specialized data types. Instead, the GKG now includes a special field called V2EXTRASXML that is XML formatted and includes these kinds of specialized data types that are applicable only to subsets of the collection. Moving forward, this will allow the GKG to encode highly specialized enhanced information from specialized input streams. \uf0b7"
           ],
-          "reference": "GKG 2.1 helps by providing the approximate character offset of each reference to an object in the original article, which allows for simple proximity-based contextualization. This means that while it does not allow for deeper semantic association, it can show that mentions of Russia likely occur closer to certain people like Vladimir Putin, and roles like President or Secretary of State occur closer to the relevant individuals. This proximity information helps recover functional, thematic, and geographic affiliations involving Russia and people mentioned in the news, which was difficult with the previous GKG system that only recorded co-occurrence without associating each person with locations and roles.",
+          "reference": "The GKG 2.1 system improves the association of John Kerry with his functional role and geographic context by providing the approximate character offset of each reference to an object in the original article. This allows for simple proximity-based contextualization, enabling the system to determine that mentions of the United States likely occur much closer to Barack Obama and John Kerry than to Vladimir Putin, and that the role of Secretary of State likely occurs much closer to John Kerry than to the others. While it does not allow for deeper semantic association, this proximity information helps explore critical details on role, geographic, thematic association, and other connectivity that were difficult to associate in the previous GKG system.",
           "synthesizer_name": "single_hop_specifc_query_synthesizer"
         },
         {
-          "user_input": "How does the GDELT Global Knowledge Graph (GKG) Version 2.1 enable the realtime measurement of emotions and themes across multiple languages, and what new analytic opportunities does this capability introduce according to the codebook?",
+          "user_input": "how the GDELT Event Database integration improved by adding unique record identifiers to the GKG and why they remove the counts-only file in the GDELT Event Database context?",
           "reference_contexts": [
-            "<1-hop>\n\nINTRODUCTION This codebook introduces the GDELT Global Knowledge Graph (GKG) Version 2.1, which expands GDELT\u2019s ability to quantify global human society beyond cataloging physical occurrences towards actually representing all of the latent dimensions, geography, and network structure of the global news. It applies an array of highly sophisticated natural language processing algorithms to each document to compute a range of codified metadata encoding key latent and contextual dimensions of the document. To sum up the GKG in a single sentence, it connects every person, organization, location, count, theme, news source, and event across the planet into a single massive network that captures what\u2019s happening around the world, what its context is and who\u2019s involved, and how the world is feeling about it, every single day. It has been just short of sixteen months since the original prototype introduction of the GKG 1.0 system on November 3, 2013 and in those fourteen months the GKG system has found application in an incredible number and diversity of fields. The uniqueness of the GKG indicators in capturing the latent dimensions of society that precede physical unrest and their global scope has enabled truly unimaginable new applications. We\u2019ve learned a lot over the past year in terms of the features and capabilities of greatest interest to the GKG community, and with this Version 2.1 release of the GKG, we are both integrating those new features and moving the GKG into production status (from its original alpha status) in recognition of the widespread production use of the system today. Due to the vast number of use cases articulated for the GKG, a decision was made at its release to create a raw output format that could be processed into the necessary refined formats for a wide array of software packages and analysis needs and that would support a diverse assortment of extremely complex analytic needs in a single file. Unlike the primary GDELT event stream, which is designed for direct import into major statistical packages like R, the GKG file format requires more sophisticated preprocessing and users will likely want to make use of a scripting language like PERL or Python to extract and reprocess the data for import into a statistical package. Thus, users may require more advanced text processing and scripting language skills to work with the GKG data and additional nuance may be required when thinking about how to incorporate these indicators into statistical models and network and geographic constructs, as outlined in this codebook. Encoding the GKG in XML, JSON, RDF, or other file formats significantly increases the on-disk footprint of the format due to its complexity and size (thus why the GKG is only available in CSV format), though users requiring access to the GKG in these formats can easily write a PERL or Python or similar script to translate the GKG format to any file format needed. The GKG is optimized for fast scanning, storing one record per line and using a tab- delimited format to separate the fields. This makes it possible to use highly optimized fully parallelized streamed parsing to rapidly process the GKG. Similar to the 1.0 format, the files have a \u201c.csv\u201d ending, despite being tab-delimited, to address issues with some software packages that cannot handle \u201c.txt\u201d or \u201c.tsv\u201d endings for parsing tasks. The new GKG format preserves most of the previous fields in their existing format for backwards compatibility (and we will continue to generate the daily Version 1.0 files in parallel into the future), but",
-            "<2-hop>\n\nadds a series of new capabilities that greatly enhance what can be done with the GKG data, opening entirely new analytic opportunities. Some of the most significant changes: \uf0b7 Realtime Measurement of 2,300 Emotions and Themes. The GDELT Global Content Analysis Measures (GCAM) module represents what we believe is the largest deployment of sentiment analysis in the world: bringing together 24 emotional measurement packages that together assess more than 2,300 emotions and themes from every article in realtime, multilingual dimensions natively assessing the emotions of 15 languages (Arabic, Basque, Catalan, Chinese, French, Galician, German, Hindi, Indonesian, Korean, Pashto, Portuguese, Russian, Spanish, and Urdu). GCAM is designed to enable unparalleled assessment of the emotional undercurrents and reaction at a planetary scale by bringing together an incredible array of dimensions, from LIWC\u2019s \u201cAnxiety\u201d to Lexicoder\u2019s \u201cPositivity\u201d to WordNet Affect\u2019s \u201cSmugness\u201d to RID\u2019s \u201cPassivity\u201d. \uf0b7 Realtime Translation of 65 Languages. GDELT 2.0 brings with it the public debut of GDELT Translingual, representing what we believe is the largest realtime streaming news machine translation deployment in the world: all global news that GDELT monitors in 65 languages, representing 98.4% of its daily non-English monitoring volume, is translated in realtime into English for processing through the entire GDELT Event and GKG/GCAM pipelines. GDELT Translingual is designed to allow GDELT to monitor the entire planet at full volume, creating the very first glimpses of a world without language barriers. The GKG system now processes every news report monitored by GDELT across these 65 languages, making it possible to trace people, organizations, locations, themes, and emotions across languages and media systems. \uf0b7 Relevant Imagery, Videos, and Social Embeds. A large fraction of the world\u2019s news outlets now specify a hand-selected image for each article to appear when it is shared via social media that represents the core focus of the article. GDELT identifies this imagery in a wide array of formats including Open Graph, Twitter Cards, Google+, IMAGE_SRC, and SailThru formats. In addition, GDELT also uses a set of highly specialized algorithms to analyze the article content itself to identify inline imagery of high likely relevance to the story, along with videos and embedded social media posts (such as embedded Tweets or YouTube or Vine videos), a list of which is compiled. This makes it possible to gain a unique ground-level view into emerging situations anywhere in the world, even in those areas with very little social media penetration, and to act as a kind of curated list of social posts in those areas with strong social use. \uf0b7 Quotes, Names, and Amounts. The world\u2019s news contains a wealth of information on food prices, aid promises, numbers of troops, tanks, and protesters, and nearly any other countable item. GDELT 2.0 now attempts to compile a list of all \u201camounts\u201d expressed in each article to offer numeric context to global events. In parallel, a new Names engine augments the existing Person and Organization names engines by identifying an array of other kinds of proper names, such as named events (Orange Revolution / Umbrella Movement), occurrences like the World Cup, named dates like Holocaust Remembrance Day, on through named legislation like Iran Nuclear Weapon Free Act, Affordable Care Act and Rouge National Urban Park Initiative. Finally, GDELT also identifies attributable quotes from each article, making it possible to see the evolving language used by political leadership across the world. \uf0b7"
+            "<1-hop>\n\n\uf0b7 Single Data File. Previously there were two separate GKG data files, one containing Counts only and one containing the full GKG file. The original rationale for having two separate files was that users interested only in counts could download a much smaller daily file, but in practice nearly all applications use the full GKG file in order to make use of its thematic and other data fields to contextualize those counts and to tie them into the GDELT Event Database. Thus, we are eliminating the separate counts-only file to simplify the GKG data environment. \uf0b7 Production Status. The GKG has now moved out of Alpha Experimental Release status and into production status. This means that the file format is now stabilized and will not change.",
+            "<2-hop>\n\nUnique Record Identifiers. To bring the GKG in line with the practices of the GDELT Event Database, every GKG record is now assigned a unique identifier. As with the event database, sequential identifiers do not indicate sequential events, but an identifier uniquely identifies a record across the entire collection. The addition of unique record identifiers to the GKG will make it easier to uniquely refer to a particular GKG record. 1 http://dlib.org/dlib/september14/leetaru/09leetaru.html"
           ],
-          "reference": "The GDELT Global Knowledge Graph (GKG) Version 2.1 enhances the ability to measure emotions and themes in realtime by integrating the GDELT Global Content Analysis Measures (GCAM) module, which deploys 24 emotional measurement packages assessing more than 2,300 emotions and themes from every article. This system natively analyzes emotions in 15 languages, including Arabic, Chinese, French, Hindi, Russian, and Spanish, among others. Additionally, GDELT 2.0 introduces GDELT Translingual, a realtime streaming news machine translation system that translates news from 65 languages into English, covering 98.4% of non-English monitoring volume. This allows the GKG to process news reports globally across languages, tracing people, organizations, locations, themes, and emotions seamlessly. These capabilities open entirely new analytic opportunities by enabling unparalleled assessment of emotional undercurrents and reactions at a planetary scale, supporting sophisticated sentiment analysis and cross-lingual event tracking that were not possible before.",
+          "reference": "The GDELT Event Database integration improved by adding unique record identifiers to the GKG, aligning it with the event database practices. Each GKG record now has a unique identifier that allows for easy and unambiguous reference to particular records across the entire collection, even though the identifiers do not indicate sequential events. Additionally, the counts-only file was removed because most applications use the full GKG file to access thematic and other data fields that help contextualize counts and link them to the GDELT Event Database. Removing the separate counts-only file simplifies the GKG data environment.",
           "synthesizer_name": "multi_hop_abstract_query_synthesizer"
         }
       ]
@@ -227,168 +226,39 @@
   "artifacts": {
     "sources": {
       "jsonl": {
-        "path": "data/interim/sources.docs.jsonl",
-        "bytes": 168076,
-        "sha256": "a89a81a053b3c691690feb646ab8b9887890fcb4c5bc2f7ff6c4d4a07e84a8d3",
-        "rows": 38
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.jsonl",
+        "bytes": 168076
       },
       "parquet": {
-        "path": "data/interim/sources.docs.parquet",
-        "bytes": 91815,
-        "sha256": "a00f7c9c9d66aa320847924b1280645fbc1af76bed4a93adc6a3a268c4259673",
-        "rows": 38,
-        "schema": [
-          {
-            "name": "page_content",
-            "dtype": "object"
-          },
-          {
-            "name": "producer",
-            "dtype": "object"
-          },
-          {
-            "name": "creator",
-            "dtype": "object"
-          },
-          {
-            "name": "creationdate",
-            "dtype": "object"
-          },
-          {
-            "name": "source",
-            "dtype": "object"
-          },
-          {
-            "name": "file_path",
-            "dtype": "object"
-          },
-          {
-            "name": "total_pages",
-            "dtype": "int64"
-          },
-          {
-            "name": "format",
-            "dtype": "object"
-          },
-          {
-            "name": "title",
-            "dtype": "object"
-          },
-          {
-            "name": "author",
-            "dtype": "object"
-          },
-          {
-            "name": "subject",
-            "dtype": "object"
-          },
-          {
-            "name": "keywords",
-            "dtype": "object"
-          },
-          {
-            "name": "moddate",
-            "dtype": "object"
-          },
-          {
-            "name": "trapped",
-            "dtype": "object"
-          },
-          {
-            "name": "modDate",
-            "dtype": "object"
-          },
-          {
-            "name": "creationDate",
-            "dtype": "object"
-          },
-          {
-            "name": "page",
-            "dtype": "int64"
-          }
-        ]
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.parquet",
+        "bytes": 91815
       },
       "hfds": {
-        "path": "data/interim/sources.hfds",
-        "rows": 38
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.hfds"
       }
     },
     "golden_testset": {
       "jsonl": {
-        "path": "data/interim/golden_testset.jsonl",
-        "bytes": 66983,
-        "sha256": "a1c3cb0adf4986ac48fcbee091eb460b5cd1a74895abd5569e594d1bbcae43ca",
-        "rows": 12
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.jsonl",
+        "bytes": 67852
       },
       "parquet": {
-        "path": "data/interim/golden_testset.parquet",
-        "bytes": 42067,
-        "sha256": "91c3ffedbf217e8a633a0ef4c7d94e6965549ccbbb1c4a3150a5f2edf9ed9011",
-        "rows": 12,
-        "schema": [
-          {
-            "name": "user_input",
-            "dtype": "object"
-          },
-          {
-            "name": "reference_contexts",
-            "dtype": "object"
-          },
-          {
-            "name": "reference",
-            "dtype": "object"
-          },
-          {
-            "name": "synthesizer_name",
-            "dtype": "object"
-          }
-        ]
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.parquet",
+        "bytes": 46008
       },
       "hfds": {
-        "path": "data/interim/golden_testset.hfds",
-        "rows": 12
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.hfds"
       }
-    }
-  },
-  "inputs": {
-    "source_dir": "data/raw"
-  },
-  "metrics": {
-    "sources": {
-      "docs": 38,
-      "page_content_stats": {
-        "avg_chars": 3747.0,
-        "max_chars": 5241,
-        "scanned": 38
-      }
-    },
-    "golden_testset": {
-      "rows": 12,
-      "avg_reference_contexts": 1.6666666666666667
     }
   },
   "lineage": {
     "hf": {
       "dataset_repo_id": {
-        "sources": "dwb2023/gdelt-rag-sources",
-        "golden_testset": "dwb2023/gdelt-rag-golden-testset"
+        "sources": "dwb2023/gdelt-rag-sources-v2",
+        "golden_testset": "dwb2023/gdelt-rag-golden-testset-v2"
       },
       "pending_upload": false,
-      "uploaded_at": "2025-10-17T15:08:24.169563+00:00"
-    },
-    "langsmith": {
-      "project": null,
-      "dataset_name": null
-    },
-    "phoenix": {
-      "workspace": null,
-      "dataset_name": null
+      "uploaded_at": "2025-10-20T02:36:56.430363+00:00"
     }
-  },
-  "compliance": {
-    "license": "apache-2.0",
-    "pii_present": "unknown",
-    "pii_policy": "manual-review-before-publish",
-    "notes": null
   }
 }

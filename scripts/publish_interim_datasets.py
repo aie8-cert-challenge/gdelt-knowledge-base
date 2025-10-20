@@ -19,8 +19,8 @@ from huggingface_hub import HfApi, login
 
 # Configuration
 HF_USERNAME = "dwb2023"
-SOURCES_DATASET_NAME = f"{HF_USERNAME}/gdelt-rag-sources"
-GOLDEN_TESTSET_NAME = f"{HF_USERNAME}/gdelt-rag-golden-testset"
+SOURCES_DATASET_NAME = f"{HF_USERNAME}/gdelt-rag-sources-v2"
+GOLDEN_TESTSET_NAME = f"{HF_USERNAME}/gdelt-rag-golden-testset-v2"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -200,6 +200,13 @@ def load_manifest():
 def update_manifest(sources_repo: str, golden_testset_repo: str):
     """Update manifest with dataset repo IDs."""
     manifest = load_manifest()
+
+    # Create lineage structure if it doesn't exist
+    if "lineage" not in manifest:
+        manifest["lineage"] = {}
+
+    if "hf" not in manifest["lineage"]:
+        manifest["lineage"]["hf"] = {}
 
     # Update lineage section
     manifest["lineage"]["hf"]["dataset_repo_id"] = {
