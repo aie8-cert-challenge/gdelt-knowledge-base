@@ -14,8 +14,8 @@ This table maps the certification challenge requirements (Task 2 Deliverable #2)
 | **Vector Database** | Qdrant | High-performance vector similarity search with production-grade filtering; native metadata support; excellent Docker deployment experience | Task 2.2.4 |
 | **Monitoring** | LangSmith | LangSmith observability for embeddings and LLM traces | Task 2.2.5 |
 | **Evaluation** | RAGAS 0.2.10 | Research-backed RAG evaluation metrics (faithfulness, context precision/recall, response relevancy); integrates with LangChain for automated assessments | Task 2.2.6 |
-| **User Interface** | Streamlit (future) | Rapid prototyping with built-in chat components; Python-native development; ideal for technical demos and internal tools | Task 2.2.7 |
-| **Serving & Inference** | Docker Compose (dev) → FastAPI (prod) | Docker Compose for local development with infrastructure services; FastAPI for production API endpoints with async support and OpenAPI docs | Task 2.2.8 |
+| **User Interface** | LangGraph Studio (dev) → Streamlit/React (future) | Interactive graph visualization and testing during development; production UI to be determined based on deployment target | Task 2.2.7 |
+| **Serving & Inference** | LangGraph Platform (dev) → Docker Compose (prod) | LangGraph Platform for local development (`uv run langgraph dev`); Docker Compose for production deployment with Redis + Postgres | Task 2.2.8 |
 
 ## Extended Architecture Components
 
@@ -86,8 +86,8 @@ LangGraph supervisor pattern coordinates the three agents:
 ```mermaid
 graph TB
     subgraph "User Interface Layer"
-        UI[Streamlit Chat Interface]
-        API[FastAPI REST Endpoints]
+        STUDIO[LangGraph Studio]
+        API[LangGraph Platform API]
     end
 
     subgraph "Orchestration Layer"
@@ -189,6 +189,75 @@ graph TB
     class PHX,LS,RAGAS obsLayer
     class TAVILY,COHERE externalLayer
 ```
+
+## Current Implementation Status
+
+### Deployed Components
+
+**✅ Core RAG Engine** (`src/` modules):
+- `src/config.py` - Cached singletons for LLM, embeddings, Qdrant client
+- `src/utils.py` - HuggingFace dataset loaders
+- `src/retrievers.py` - 4 retrieval strategies (naive, BM25, ensemble, Cohere rerank)
+- `src/graph.py` - LangGraph workflow factories
+- `src/state.py` - TypedDict schema for state management
+- `src/prompts.py` - RAG prompt templates
+
+**✅ LangGraph Workflows**:
+- Factory pattern for runtime graph creation
+- Two-node workflow: START → retrieve → generate → END
+- Partial state updates (nodes return dicts, LangGraph merges)
+- Supports all 4 retrieval strategies
+
+**✅ Evaluation Pipeline**:
+- `scripts/single_file.py` - Self-contained evaluation (reference implementation)
+- `scripts/run_eval_harness.py` - Modular evaluation using src/ modules
+- Both scripts generate RUN_MANIFEST.json with data provenance
+- RAGAS integration for 4 metrics (faithfulness, answer relevancy, context precision, context recall)
+
+**✅ LangGraph Platform Deployment**:
+- `app/graph_app.py` - Deployment entrypoint
+- Local development: `uv run langgraph dev` (in-memory runtime, no Docker required)
+- Interactive UI: LangGraph Studio at http://localhost:2024
+- Production deployment: Docker Compose with Redis + Postgres
+
+**✅ Interactive UI**:
+- LangGraph Studio (http://localhost:2024)
+- Graph visualization and step-by-step execution
+- Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+
+### Planned Components (Post-Certification)
+
+**🔲 Multi-Agent Orchestration**:
+- Retrieval Agent (adaptive strategy selection)
+- GDELT Domain Expert Agent (schema validation, terminology)
+- Response Synthesis Agent (citation, formatting)
+- Supervisor pattern for agent coordination
+
+**🔲 Neo4j Graph Traversal Integration**:
+- Knowledge graph storage for GDELT entity relationships
+- Graph-based retrieval augmentation
+- Cypher query generation for complex queries
+
+**🔲 Production UI**:
+- Streamlit or React frontend
+- Chat interface with retriever selector
+- Citation display and source tracking
+- Cost/performance monitoring dashboard
+
+**🔲 FastAPI REST Endpoints**:
+- RESTful API for programmatic access
+- OpenAPI documentation
+- Rate limiting and authentication
+- Async support for concurrent requests
+
+### Architecture Evolution Note
+
+This project has evolved through multiple refactoring cycles:
+1. **Initial prototype**: Inline implementations in notebooks
+2. **Modular refactoring**: Extraction to `src/` modules with factory pattern
+3. **Current state**: Production-ready core with LangGraph Platform deployment
+
+Documentation may reference prototype files (`app/baseline_rag.py`, `app/retriever_registry.py`, `app/streamlit_ui.py`) that were refactored into `src/` modules. **When in doubt, trust the code in `src/` and the commands in CLAUDE.md**.
 
 ## Data Flow: Query Execution
 

@@ -20,12 +20,37 @@
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Documentation Guide](#documentation-guide)
 - [Project Overview](#project-overview)
 - [Technology Stack](#technology-stack)
 - [Evaluation Results](#evaluation-results)
 - [Running Evaluations](#running-evaluations)
 - [Project Structure](#project-structure)
 - [Contributing](#contributing)
+
+---
+
+## Documentation Guide
+
+This project has comprehensive documentation organized across multiple files:
+
+**Core Documentation**:
+- **[README.md](README.md)** (this file) - Project overview, quick start, installation
+- **[CLAUDE.md](CLAUDE.md)** - Complete technical reference for AI assistants and developers
+- **[docs/deliverables.md](docs/deliverables.md)** - Certification challenge answers (1,152 lines)
+- **[docs/architecture.md](docs/architecture.md)** - System design patterns and architectural decisions
+
+**Directory-Specific Guides**:
+- **[scripts/README.md](scripts/README.md)** - All evaluation and utility scripts (5 scripts documented)
+- **[src/README.md](src/README.md)** - Factory pattern guide, module reference, adding retrievers
+- **[data/README.md](data/README.md)** - Data flow, manifest schema, file formats, lineage
+
+**Quick Navigation**:
+- 🔍 Want to understand the codebase? → Start with [CLAUDE.md](CLAUDE.md)
+- 🚀 Want to run evaluations? → See [scripts/README.md](scripts/README.md)
+- 🛠️ Want to add a retriever? → See [src/README.md](src/README.md#quick-start-adding-a-new-retriever)
+- 📊 Want to understand data flow? → See [data/README.md](data/README.md#data-flow)
+- ✅ Want to validate setup? → Run `make validate` (must pass 100%)
 
 ---
 
@@ -68,14 +93,21 @@ cp .env.example .env
 ### Run the Application
 
 ```bash
-# Option 1: CLI demo with example queries
-python app/baseline_rag.py
+# Option 1: LangGraph Studio UI (Interactive, Recommended)
+uv run langgraph dev --allow-blocking
+# Access at: http://localhost:2024
+# Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
-# Option 2: Streamlit UI (interactive)
-streamlit run app/streamlit_ui.py
+# Option 2: Command-line evaluation (self-contained reference)
+python scripts/single_file.py
 
-# Option 3: Test all retrievers
-python app/retriever_registry.py
+# Option 3: Modular evaluation (uses src/ modules)
+python scripts/run_eval_harness.py
+# Or use make command:
+make eval
+
+# Option 4: Quick validation
+make validate
 ```
 
 ---

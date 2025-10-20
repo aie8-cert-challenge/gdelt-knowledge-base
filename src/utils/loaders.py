@@ -1,7 +1,7 @@
-# utils.py
+# loaders.py
 
 """
-Utility functions for GDELT RAG system
+Data loading utilities for GDELT RAG system.
 
 This module provides helper functions for loading and processing documents
 from HuggingFace datasets.

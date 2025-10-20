@@ -22,6 +22,7 @@ def generate_manifest(
     output_path: Path,
     evaluation_results: Optional[Dict[str, Any]] = None,
     retrievers_config: Optional[Dict[str, Any]] = None,
+    data_provenance: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Generate run manifest JSON for reproducibility.
@@ -30,6 +31,7 @@ def generate_manifest(
         output_path: Path to save manifest JSON
         evaluation_results: Optional dict of RAGAS evaluation results
         retrievers_config: Optional dict of retriever configurations
+        data_provenance: Optional dict linking to ingestion manifest
 
     Returns:
         Dictionary containing the manifest
@@ -161,6 +163,10 @@ def generate_manifest(
                 results_summary[retriever_name] = {"error": str(e)}
 
         manifest["results_summary"] = results_summary
+
+    # Add data provenance if provided
+    if data_provenance:
+        manifest["data_provenance"] = data_provenance
 
     # Write to file
     output_path.parent.mkdir(parents=True, exist_ok=True)
