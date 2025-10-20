@@ -20,12 +20,37 @@
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Documentation Guide](#documentation-guide)
 - [Project Overview](#project-overview)
 - [Technology Stack](#technology-stack)
 - [Evaluation Results](#evaluation-results)
 - [Running Evaluations](#running-evaluations)
 - [Project Structure](#project-structure)
 - [Contributing](#contributing)
+
+---
+
+## Documentation Guide
+
+This project has comprehensive documentation organized across multiple files:
+
+**Core Documentation**:
+- **[README.md](README.md)** (this file) - Project overview, quick start, installation
+- **[CLAUDE.md](CLAUDE.md)** - Complete technical reference for AI assistants and developers
+- **[docs/deliverables.md](docs/deliverables.md)** - Certification challenge answers (1,152 lines)
+- **[docs/architecture.md](docs/architecture.md)** - System design patterns and architectural decisions
+
+**Directory-Specific Guides**:
+- **[scripts/README.md](scripts/README.md)** - All evaluation and utility scripts (5 scripts documented)
+- **[src/README.md](src/README.md)** - Factory pattern guide, module reference, adding retrievers
+- **[data/README.md](data/README.md)** - Data flow, manifest schema, file formats, lineage
+
+**Quick Navigation**:
+- 🔍 Want to understand the codebase? → Start with [CLAUDE.md](CLAUDE.md)
+- 🚀 Want to run evaluations? → See [scripts/README.md](scripts/README.md)
+- 🛠️ Want to add a retriever? → See [src/README.md](src/README.md#quick-start-adding-a-new-retriever)
+- 📊 Want to understand data flow? → See [data/README.md](data/README.md#data-flow)
+- ✅ Want to validate setup? → Run `make validate` (must pass 100%)
 
 ---
 
