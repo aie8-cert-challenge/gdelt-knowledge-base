@@ -45,17 +45,26 @@ make env
 # Validate src/ module implementation (must pass 100%)
 make validate
 
-# Run full RAGAS evaluation pipeline (~20-30 min, $5-6 cost)
+# Run full RAGAS evaluation pipeline (writes Parquet to data/processed/)
 make eval
+
+# Generate human-readable deliverables (converts Parquet → CSV)
+make deliverables
 
 # Run evaluation with fresh Qdrant collection
 make eval recreate=true
 
+# Clean derived deliverables (regenerable)
+make clean-deliverables
+
+# Clean processed data (requires re-eval)
+make clean-processed
+
+# Full cleanup (cache + interim + processed + deliverables)
+make clean-all
+
 # Start Jupyter for notebook work
 make notebook
-
-# Clean Python cache
-make clean
 
 # View all available commands
 make help
@@ -257,7 +266,7 @@ Cost: ~$5.65 per full run
 - Per-question RAGAS metric scores for all 5 retrievers
 - Use: Performance analysis, error analysis, training retrieval models
 
-### Multi-Format Persistence
+### Multi-Format Persistence (Parquet-First Architecture)
 
 ```
 data/interim/
@@ -269,8 +278,20 @@ data/interim/
 ├── golden_testset.hfds/
 └── manifest.json          # Checksums, versions, provenance
 
-deliverables/evaluation_evidence/
-├── naive_evaluation_dataset.csv
+data/processed/            # Working data (Parquet-first, ZSTD compressed)
+├── naive_evaluation_inputs.parquet       # RAGAS input datasets (RAG outputs)
+├── naive_evaluation_metrics.parquet      # RAGAS metric scores
+├── bm25_evaluation_inputs.parquet
+├── bm25_evaluation_metrics.parquet
+├── ensemble_evaluation_inputs.parquet
+├── ensemble_evaluation_metrics.parquet
+├── cohere_rerank_evaluation_inputs.parquet
+├── cohere_rerank_evaluation_metrics.parquet
+├── comparative_ragas_results.parquet
+└── RUN_MANIFEST.json                     # Provenance manifest
+
+deliverables/evaluation_evidence/  # Derived (CSV for human review, regenerable)
+├── naive_evaluation_dataset.csv          # Generated via scripts/generate_deliverables.py
 ├── naive_detailed_results.csv
 ├── bm25_evaluation_dataset.csv
 ├── bm25_detailed_results.csv
@@ -279,8 +300,10 @@ deliverables/evaluation_evidence/
 ├── cohere_rerank_evaluation_dataset.csv
 ├── cohere_rerank_detailed_results.csv
 ├── comparative_ragas_results.csv
-└── RUN_MANIFEST.json      # Reproducibility metadata
+└── RUN_MANIFEST.json                     # Copied from data/processed/
 ```
+
+**Key Principle**: `deliverables/` is **derived only**. Evaluation scripts write to `data/processed/` (Parquet), then run `make deliverables` to generate human-readable CSV files.
 
 ## Adding New Retrievers
 
@@ -955,6 +978,7 @@ This project has comprehensive documentation organized across multiple files. Us
 - `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
 - `publish_interim_datasets.py` - Upload interim datasets to HuggingFace Hub
 - `publish_processed_datasets.py` - Upload processed evaluation results to HuggingFace Hub
+- `generate_deliverables.py` - Convert Parquet → CSV for human review (derived artifacts only)
 
 ### External Dependencies
 

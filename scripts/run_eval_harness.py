@@ -73,7 +73,7 @@ RECREATE_COLLECTION = args.recreate.lower() == "true"
 DATASET_SOURCES = "dwb2023/gdelt-rag-sources"
 DATASET_GOLDEN = "dwb2023/gdelt-rag-golden-testset"
 K = 5  # Number of documents to retrieve (matches single_file.py)
-OUT_DIR = Path(__file__).parent.parent / "deliverables" / "evaluation_evidence"
+OUT_DIR = Path(__file__).parent.parent / "data" / "processed"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Disable HuggingFace progress bars
@@ -192,11 +192,10 @@ for name, graph in graphs.items():
 
     print(f"   ✓ Processed {len(df)} questions")
 
-    # Save raw outputs immediately (6 columns: user_input, reference_contexts,
-    # reference, synthesizer_name, response, retrieved_contexts)
-    raw_file = OUT_DIR / f"{name}_raw_dataset.parquet"
-    df.to_parquet(raw_file, index=False)
-    print(f"   💾 Saved: {raw_file.name}")
+    # Save inference results immediately (before RAGAS evaluation)
+    inference_file = OUT_DIR / f"{name}_evaluation_inputs.parquet"
+    df.to_parquet(str(inference_file), compression="zstd", index=False)
+    print(f"   💾 Saved inference results: {inference_file.name}")
 
     datasets[name] = df
 
@@ -220,12 +219,8 @@ for name, df in datasets.items():
     print(f"\n🔍 Evaluating {name}...")
 
     # Create RAGAS evaluation dataset
+    # NOTE: evaluation_inputs.parquet already saved in Step 3 (after inference)
     eval_ds = EvaluationDataset.from_pandas(df)
-
-    # Save evaluation dataset
-    ds_file = OUT_DIR / f"{name}_evaluation_dataset.csv"
-    eval_ds.to_csv(str(ds_file))
-    print(f"   💾 Saved evaluation dataset: {ds_file.name}")
 
     # Run RAGAS evaluation
     res = evaluate(
@@ -243,9 +238,9 @@ for name, df in datasets.items():
     print(f"   ✓ Evaluation complete")
 
     # Save detailed results with per-question scores
-    det_file = OUT_DIR / f"{name}_detailed_results.csv"
-    res.to_pandas().to_csv(det_file, index=False)
-    print(f"   💾 Saved detailed results: {det_file.name}")
+    det_file = OUT_DIR / f"{name}_evaluation_metrics.parquet"
+    res.to_pandas().to_parquet(det_file, compression="zstd", index=False)
+    print(f"   💾 Saved evaluation metrics: {det_file.name}")
 
 print(f"\n✓ All evaluations complete!")
 
@@ -279,9 +274,9 @@ for name, res in results.items():
 comp_df = pd.DataFrame(comp).sort_values("Average", ascending=False).reset_index(drop=True)
 
 # Save comparative table
-comp_csv = OUT_DIR / "comparative_ragas_results.csv"
-comp_df.to_csv(comp_csv, index=False)
-print(f"\n💾 Saved comparative results: {comp_csv.name}")
+comp_parquet = OUT_DIR / "comparative_ragas_results.parquet"
+comp_df.to_parquet(comp_parquet, compression="zstd", index=False)
+print(f"\n💾 Saved comparative results: {comp_parquet.name}")
 
 # Display results
 print("\n" + "="*80)
@@ -322,10 +317,10 @@ Retrievers Evaluated:
   {', '.join(datasets.keys())}
 
 Output Files ({OUT_DIR}):
-  - Raw datasets: {len(datasets)} × parquet files (6 columns each)
-  - Evaluation datasets: {len(datasets)} × CSV files (RAGAS format)
-  - Detailed results: {len(datasets)} × CSV files (with metric scores)
-  - Comparative summary: comparative_ragas_results.csv
+  - Evaluation inputs: {len(datasets)} × *_evaluation_inputs.parquet (6 columns: RAG outputs)
+  - Evaluation metrics: {len(datasets)} × *_evaluation_metrics.parquet (10 columns: RAG + RAGAS)
+  - Comparative summary: comparative_ragas_results.parquet
+  - Provenance manifest: RUN_MANIFEST.json
 
 Metrics Computed:
   - Faithfulness (answer grounded in context)

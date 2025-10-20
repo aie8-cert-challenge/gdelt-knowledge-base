@@ -10,8 +10,8 @@ This script:
 5. Uploads to Hugging Face Hub with dataset cards
 
 Datasets Created:
-- dwb2023/gdelt-rag-evaluation-datasets: RAGAS input datasets (questions, contexts, responses)
-- dwb2023/gdelt-rag-detailed-results: RAGAS evaluation results with metric scores
+- dwb2023/gdelt-rag-evaluation-inputs: RAGAS input datasets (questions, contexts, responses)
+- dwb2023/gdelt-rag-evaluation-metrics: RAGAS evaluation results with metric scores
 """
 
 import os
@@ -23,8 +23,8 @@ from huggingface_hub import HfApi, login
 
 # Configuration
 HF_USERNAME = "dwb2023"
-EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-datasets"
-DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-detailed-results"
+EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-inputs"
+DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-metrics"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -107,16 +107,7 @@ This dataset contains consolidated RAGAS evaluation input datasets from 5 differ
 
 ### Performance Results
 
-Based on RAGAS evaluation metrics (see `gdelt-rag-detailed-results` dataset):
-
-| Retriever | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Overall |
-|-----------|--------------|------------------|-------------------|----------------|---------|
-| Cohere Rerank | 0.98 | 0.97 | 0.99 | 0.91 | 96.47% |
-| BM25 | 0.95 | 0.96 | 0.95 | 0.91 | 94.14% |
-| Ensemble | 0.95 | 0.96 | 0.94 | 0.91 | 93.96% |
-| Naive | 0.92 | 0.94 | 0.92 | 0.89 | 91.60% |
-
-**Key Finding**: Cohere Rerank outperforms all other strategies by +2.33% over BM25 and +4.87% over naive baseline.
+Based on RAGAS evaluation metrics (see `gdelt-rag-evaluation-metrics` dataset):
 
 ### Data Splits
 
@@ -165,7 +156,7 @@ This dataset was created as part of the AI Engineering Bootcamp Cohort 8 certifi
 
 ### Related Datasets
 
-- **Evaluation Results**: `dwb2023/gdelt-rag-detailed-results` (RAGAS metric scores)
+- **Evaluation Results**: `dwb2023/gdelt-rag-evaluation-metrics` (RAGAS metric scores)
 - **Golden Testset**: `dwb2023/gdelt-rag-golden-testset-v2` (ground truth QA pairs)
 - **Source Documents**: `dwb2023/gdelt-rag-sources-v2` (knowledge base)
 
@@ -245,6 +236,8 @@ This dataset contains detailed RAGAS evaluation results with per-question metric
 
 ### Aggregate Performance Results
 
+- based on prior evaluation results and experience what we expect to see
+
 | Retriever | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Overall |
 |-----------|--------------|------------------|-------------------|----------------|---------|
 | Cohere Rerank | 0.9844 | 0.9717 | 0.9999 | 0.9136 | 96.47% |
@@ -252,7 +245,7 @@ This dataset contains detailed RAGAS evaluation results with per-question metric
 | Ensemble | 0.9520 | 0.9582 | 0.9442 | 0.9056 | 93.96% |
 | Naive | 0.9249 | 0.9432 | 0.9152 | 0.8904 | 91.60% |
 
-**Key Insights**:
+**Key Insights - from prior evaluations**:
 - Cohere Rerank achieves near-perfect context precision (99.99%)
 - All retrievers score >0.89 on context recall (good coverage)
 - Cohere Rerank leads in faithfulness (98.44%, fewest hallucinations)
@@ -324,7 +317,7 @@ Created as part of AI Engineering Bootcamp Cohort 8 certification challenge (Jan
 
 ### Related Datasets
 
-- **Evaluation Inputs**: dwb2023/gdelt-rag-evaluation-datasets (without metric scores)
+- **Evaluation Inputs**: dwb2023/gdelt-rag-evaluation-inputs (without metric scores)
 - **Golden Testset**: dwb2023/gdelt-rag-golden-testset-v2
 - **Source Documents**: dwb2023/gdelt-rag-sources-v2
 
@@ -334,31 +327,31 @@ For questions or issues, please open an issue on the GitHub repository.
 """
 
 
-def load_csv_with_retriever_column(file_path: Path, retriever_name: str) -> pd.DataFrame:
-    """Load CSV and add retriever column."""
-    df = pd.read_csv(file_path)
+def load_parquet_with_retriever_column(file_path: Path, retriever_name: str) -> pd.DataFrame:
+    """Load Parquet and add retriever column."""
+    df = pd.read_parquet(file_path)
     df.insert(0, "retriever", retriever_name)
     return df
 
 
 def load_and_consolidate_datasets(pattern: str) -> pd.DataFrame:
-    """Load and consolidate all CSV files matching pattern with retriever column."""
+    """Load and consolidate all Parquet files matching pattern with retriever column."""
     dfs = []
 
     for retriever in RETRIEVERS:
-        file_path = DATA_DIR / f"{retriever}_{pattern}.csv"
+        file_path = DATA_DIR / f"{retriever}_{pattern}.parquet"
 
         if not file_path.exists():
             print(f"   Warning: {file_path.name} not found, skipping...")
             continue
 
         print(f"   • Loading {file_path.name}...")
-        df = load_csv_with_retriever_column(file_path, retriever)
+        df = load_parquet_with_retriever_column(file_path, retriever)
         dfs.append(df)
         print(f"      Loaded {len(df)} rows from {retriever}")
 
     if not dfs:
-        raise ValueError(f"No CSV files found matching pattern: *_{pattern}.csv")
+        raise ValueError(f"No Parquet files found matching pattern: *_{pattern}.parquet")
 
     consolidated = pd.concat(dfs, ignore_index=True)
     print(f"   ✅ Consolidated {len(consolidated)} total rows from {len(dfs)} retrievers")
@@ -383,7 +376,7 @@ def main():
     # Dataset 1: Evaluation Datasets
     # ========================================
     print(f"\n📂 Loading evaluation datasets from {DATA_DIR}...")
-    eval_df = load_and_consolidate_datasets("evaluation_dataset")
+    eval_df = load_and_consolidate_datasets("evaluation_inputs")
 
     print("\n🔄 Converting evaluation datasets to HuggingFace Dataset...")
     eval_dataset = Dataset.from_pandas(eval_df)
@@ -413,7 +406,7 @@ def main():
     # Dataset 2: Detailed Results
     # ========================================
     print(f"\n📂 Loading detailed results from {DATA_DIR}...")
-    results_df = load_and_consolidate_datasets("detailed_results")
+    results_df = load_and_consolidate_datasets("evaluation_metrics")
 
     print("\n🔄 Converting detailed results to HuggingFace Dataset...")
     results_dataset = Dataset.from_pandas(results_df)

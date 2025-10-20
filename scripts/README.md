@@ -7,11 +7,12 @@ All evaluation, validation, and data pipeline scripts for the GDELT RAG certific
 | Script | Purpose | Duration | Cost | Output |
 |--------|---------|----------|------|--------|
 | **run_app_validation.py** | Validate application stack (100% pass required) | 2 min | $0 | Terminal: 23/23 checks |
-| **run_eval_harness.py** | RAGAS evaluation (modular, uses src/) | 20-30 min | $5-6 | 16 CSV files + manifest |
-| **run_full_evaluation.py** | RAGAS evaluation (standalone reference) | 20-30 min | $5-6 | 16 CSV files + manifest |
+| **run_eval_harness.py** | RAGAS evaluation (modular, uses src/) | 20-30 min | $5-6 | Parquet files in data/processed/ |
+| **run_full_evaluation.py** | RAGAS evaluation (standalone reference) | 20-30 min | $5-6 | Parquet files in data/processed/ |
 | **ingest_raw_pdfs.py** | Extract raw PDFs → interim datasets | 5-10 min | $2-3 | data/interim/* |
 | **publish_interim_datasets.py** | Upload interim datasets to HuggingFace | 1 min | $0 | HF repos |
 | **publish_processed_datasets.py** | Upload processed evaluation results to HuggingFace | 2-3 min | $0 | HF repos |
+| **generate_deliverables.py** | Convert Parquet → CSV for human review | 1 min | $0 | deliverables/*.csv |
 
 ## Naming Convention
 
@@ -32,12 +33,17 @@ This makes it immediately clear which scripts are idempotent operations vs. one-
 source .venv/bin/activate
 PYTHONPATH=. python scripts/run_app_validation.py
 
-# 2. Run comparative evaluation
+# 2. Run comparative evaluation (writes Parquet to data/processed/)
 PYTHONPATH=. python scripts/run_eval_harness.py
 # or use make command:
 make eval
 
-# 3. Publish datasets (optional, one-time)
+# 3. Generate human-readable deliverables (converts Parquet → CSV)
+python scripts/generate_deliverables.py
+# or use make command:
+make deliverables
+
+# 4. Publish datasets (optional, one-time)
 python scripts/publish_interim_datasets.py        # Publishes raw sources + golden testset
 python scripts/publish_processed_datasets.py      # Publishes evaluation results
 ```
@@ -180,32 +186,29 @@ print(ds.info.download_checksums)  # Shows revision info
 
 ### Output Files
 
-Both evaluation scripts generate the same 16 files:
+Both evaluation scripts generate files in `data/processed/` (10 files total):
 
 ```
-deliverables/evaluation_evidence/
-├── naive_raw_dataset.parquet              # Immediate save (pre-RAGAS)
-├── naive_evaluation_dataset.csv           # Full RAGAS dataset
-├── naive_detailed_results.csv             # Per-question metrics
-├── bm25_raw_dataset.parquet
-├── bm25_evaluation_dataset.csv
-├── bm25_detailed_results.csv
-├── ensemble_raw_dataset.parquet
-├── ensemble_evaluation_dataset.csv
-├── ensemble_detailed_results.csv
-├── cohere_rerank_raw_dataset.parquet
-├── cohere_rerank_evaluation_dataset.csv
-├── cohere_rerank_detailed_results.csv
-├── comparative_ragas_results.csv          # Main summary table
+data/processed/
+├── naive_evaluation_inputs.parquet        # RAG outputs (6 columns)
+├── naive_evaluation_metrics.parquet       # RAGAS scores (10 columns)
+├── bm25_evaluation_inputs.parquet
+├── bm25_evaluation_metrics.parquet
+├── ensemble_evaluation_inputs.parquet
+├── ensemble_evaluation_metrics.parquet
+├── cohere_rerank_evaluation_inputs.parquet
+├── cohere_rerank_evaluation_metrics.parquet
+├── comparative_ragas_results.parquet      # Summary table
 └── RUN_MANIFEST.json                      # Reproducibility metadata
 ```
 
 **File Descriptions**:
-- **`*_raw_dataset.parquet`**: Raw retrieval results (questions + contexts) saved immediately before RAGAS evaluation
-- **`*_evaluation_dataset.csv`**: Full RAGAS-compatible dataset with all fields
-- **`*_detailed_results.csv`**: Per-question breakdown of all RAGAS metrics
+- **`*_evaluation_inputs.parquet`**: RAG outputs before RAGAS scoring (6 columns: question, contexts, reference, etc.)
+- **`*_evaluation_metrics.parquet`**: Per-question RAGAS metrics (10 columns: RAG outputs + 4 metric scores)
 - **`comparative_ragas_results.csv`**: Summary table comparing all 4 retrievers (the "money shot")
 - **`RUN_MANIFEST.json`**: Complete provenance (models, datasets, checksums, versions)
+
+**Note**: Human-readable CSV files are generated separately via `make deliverables` (see `generate_deliverables.py` below)
 
 ---
 
@@ -358,6 +361,70 @@ python scripts/publish_processed_datasets.py
 **See also**:
 - [scripts/run_eval_harness.py](#run_eval_harnesspy-vs-run_full_evaluationpy) - Generate processed evaluation results first
 - [scripts/publish_interim_datasets.py](#publish_interim_datasetspy---huggingface-upload) - Publishes interim raw datasets
+
+---
+
+## generate_deliverables.py - Derived Artifacts Generator
+
+**Purpose**: Convert machine-readable Parquet files to human-readable CSV files for review and certification submission.
+
+**Architecture Compliance**: Enforces the "deliverables/ is derived only" principle from `docs/data-ingestion-and-processing.md`.
+
+**Usage**:
+```bash
+python scripts/generate_deliverables.py
+# or use make command:
+make deliverables
+```
+
+**Input** (reads from `data/processed/`):
+- `*_evaluation_inputs.parquet` (4 retrievers)
+- `*_evaluation_metrics.parquet` (4 retrievers)
+- `comparative_ragas_results.parquet`
+- `RUN_MANIFEST.json`
+
+**Output** (writes to `deliverables/evaluation_evidence/`):
+- `*_evaluation_dataset.csv` (human-readable evaluation inputs)
+- `*_detailed_results.csv` (human-readable metrics)
+- `comparative_ragas_results.csv` (human-readable summary)
+- `RUN_MANIFEST.json` (copied)
+
+**Key Principle**: The deliverables/ directory is **regenerable**. You can delete it anytime and recreate with `make deliverables`.
+
+**Duration**: 1 minute
+**Cost**: $0 (local conversion only)
+
+**When to run**:
+- After evaluation runs (`scripts/run_eval_harness.py` completes)
+- Before certification submission (to generate CSV files)
+- Anytime you need human-readable versions of Parquet data
+
+**Why separate from evaluation?**
+- **Separation of concerns**: Machine data (Parquet) vs. human data (CSV)
+- **Architecture compliance**: No process writes directly to deliverables/
+- **Flexibility**: Can regenerate with different formats/filters without re-running expensive evaluation
+- **Storage efficiency**: Working data stays in compressed Parquet format
+
+**Example workflow**:
+```bash
+# 1. Run evaluation (writes Parquet to data/processed/)
+make eval
+
+# 2. Generate deliverables (converts to CSV in deliverables/)
+make deliverables
+
+# 3. Review CSV files (human-friendly)
+ls deliverables/evaluation_evidence/*.csv
+
+# 4. Clean and regenerate if needed
+make clean-deliverables
+make deliverables
+```
+
+**See also**:
+- [docs/data-ingestion-and-processing.md](../docs/data-ingestion-and-processing.md) - Architecture specification
+- [scripts/run_eval_harness.py](#run_eval_harnesspy-vs-run_full_evaluationpy) - Generates source Parquet files
+- [Makefile](../Makefile) - Automation targets
 
 ---
 

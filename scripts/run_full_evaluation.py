@@ -348,7 +348,7 @@ print(f"   Processing {len(golden_df)} questions × {len(retrievers_config)} ret
 datasets = {}
 
 # Create output directory for immediate persistence
-output_dir = Path(__file__).parent.parent / "deliverables" / "evaluation_evidence"
+output_dir = Path(__file__).parent.parent / "data" / "processed"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 for retriever_name, graph in retrievers_config.items():
@@ -370,12 +370,12 @@ for retriever_name, graph in retrievers_config.items():
 
     print(f"   ✓ {retriever_name}: {len(datasets[retriever_name])} questions processed")
 
-    # 💾 PERSIST IMMEDIATELY - Don't wait until Step 9 to prevent data loss
-    raw_file = output_dir / f"{retriever_name}_raw_dataset.parquet"
-    datasets[retriever_name].to_parquet(raw_file, index=False)
-    print(f"   💾 Saved: {raw_file.name}")
+    # Save inference results immediately (before RAGAS evaluation)
+    inference_file = output_dir / f"{retriever_name}_evaluation_inputs.parquet"
+    datasets[retriever_name].to_parquet(str(inference_file), compression="zstd", index=False)
+    print(f"   💾 Saved inference results: {inference_file.name}")
 
-print("\n   ✓ All retriever datasets populated!")
+print("\n   ✓ All retriever datasets populated and saved!")
 
 # 8. Create RAGAS EvaluationDatasets
 print("\n8. Creating RAGAS EvaluationDatasets...")
@@ -412,15 +412,10 @@ for retriever_name, eval_dataset in evaluation_datasets.items():
     evaluation_results[retriever_name] = result
     print(f"   ✓ {retriever_name} evaluation complete")
 
-    # 💾 SAVE IMMEDIATELY - Don't wait until end to prevent data loss!
-    # Save evaluation dataset
-    dataset_file = output_dir / f"{retriever_name}_evaluation_dataset.csv"
-    eval_dataset.to_csv(str(dataset_file))
-    print(f"   💾 Saved: {dataset_file.name}")
-
-    # Save detailed results
-    detailed_file = output_dir / f"{retriever_name}_detailed_results.csv"
-    result.to_pandas().to_csv(detailed_file, index=False)
+    # NOTE: evaluation_inputs already saved in Step 7 (after inference)
+    # Save evaluation metrics only
+    detailed_file = output_dir / f"{retriever_name}_evaluation_metrics.parquet"
+    result.to_pandas().to_parquet(detailed_file, compression="zstd", index=False)
     print(f"   💾 Saved: {detailed_file.name}")
 
 print("\n   ✓ All RAGAS evaluations complete!")
@@ -456,9 +451,9 @@ try:
     comparison_df = comparison_df.sort_values('Average', ascending=False).reset_index(drop=True)
 
     # Save comparative summary table (Task 7 deliverable)
-    comparison_csv = output_dir / "comparative_ragas_results.csv"
-    comparison_df.to_csv(comparison_csv, index=False)
-    print(f"   ✓ Comparative results saved to {comparison_csv}")
+    comparison_parquet = output_dir / "comparative_ragas_results.parquet"
+    comparison_df.to_parquet(comparison_parquet, compression="zstd", index=False)
+    print(f"   ✓ Comparative results saved to {comparison_parquet}")
 
 except Exception as e:
     print(f"   ⚠️  Comparison table generation failed: {e}")
@@ -516,9 +511,10 @@ print("\n" + "="*80)
 print("✅ COMPREHENSIVE EVALUATION COMPLETE!")
 print("="*80)
 print(f"\nOutputs saved to: {output_dir}")
-print(f"   - comparative_ragas_results.csv (summary table)")
-print(f"   - [retriever]_evaluation_dataset.csv (full datasets)")
-print(f"   - [retriever]_detailed_results.csv (per-question metrics)")
+print(f"   - comparative_ragas_results.parquet (summary table)")
+print(f"   - [retriever]_evaluation_inputs.parquet (6 columns: RAG outputs)")
+print(f"   - [retriever]_evaluation_metrics.parquet (10 columns: RAG + RAGAS metrics)")
+print(f"   - RUN_MANIFEST.json (provenance and reproducibility)")
 
 # 13. Generate Run Manifest for Reproducibility
 print("\n13. Generating RUN_MANIFEST.json for reproducibility...")
