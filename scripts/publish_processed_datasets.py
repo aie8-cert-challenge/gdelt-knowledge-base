@@ -334,31 +334,31 @@ For questions or issues, please open an issue on the GitHub repository.
 """
 
 
-def load_csv_with_retriever_column(file_path: Path, retriever_name: str) -> pd.DataFrame:
-    """Load CSV and add retriever column."""
-    df = pd.read_csv(file_path)
+def load_parquet_with_retriever_column(file_path: Path, retriever_name: str) -> pd.DataFrame:
+    """Load Parquet and add retriever column."""
+    df = pd.read_parquet(file_path)
     df.insert(0, "retriever", retriever_name)
     return df
 
 
 def load_and_consolidate_datasets(pattern: str) -> pd.DataFrame:
-    """Load and consolidate all CSV files matching pattern with retriever column."""
+    """Load and consolidate all Parquet files matching pattern with retriever column."""
     dfs = []
 
     for retriever in RETRIEVERS:
-        file_path = DATA_DIR / f"{retriever}_{pattern}.csv"
+        file_path = DATA_DIR / f"{retriever}_{pattern}.parquet"
 
         if not file_path.exists():
             print(f"   Warning: {file_path.name} not found, skipping...")
             continue
 
         print(f"   • Loading {file_path.name}...")
-        df = load_csv_with_retriever_column(file_path, retriever)
+        df = load_parquet_with_retriever_column(file_path, retriever)
         dfs.append(df)
         print(f"      Loaded {len(df)} rows from {retriever}")
 
     if not dfs:
-        raise ValueError(f"No CSV files found matching pattern: *_{pattern}.csv")
+        raise ValueError(f"No Parquet files found matching pattern: *_{pattern}.parquet")
 
     consolidated = pd.concat(dfs, ignore_index=True)
     print(f"   ✅ Consolidated {len(consolidated)} total rows from {len(dfs)} retrievers")
@@ -383,7 +383,7 @@ def main():
     # Dataset 1: Evaluation Datasets
     # ========================================
     print(f"\n📂 Loading evaluation datasets from {DATA_DIR}...")
-    eval_df = load_and_consolidate_datasets("evaluation_dataset")
+    eval_df = load_and_consolidate_datasets("evaluation_inputs")
 
     print("\n🔄 Converting evaluation datasets to HuggingFace Dataset...")
     eval_dataset = Dataset.from_pandas(eval_df)
@@ -413,7 +413,7 @@ def main():
     # Dataset 2: Detailed Results
     # ========================================
     print(f"\n📂 Loading detailed results from {DATA_DIR}...")
-    results_df = load_and_consolidate_datasets("detailed_results")
+    results_df = load_and_consolidate_datasets("evaluation_metrics")
 
     print("\n🔄 Converting detailed results to HuggingFace Dataset...")
     results_dataset = Dataset.from_pandas(results_df)
