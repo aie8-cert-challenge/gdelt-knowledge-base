@@ -56,13 +56,13 @@ ra_output/                # Analysis outputs (timestamped)
 
 ```bash
 # Architecture analysis (generates ra_output/architecture_{timestamp}/)
-python -m ra_orchestrators.architecture_orchestrator
+python -m ra_orchestrators.architecture_orchestrator "Project Name"
 
 # UX design workflow (generates ra_output/ux_{timestamp}/)
 python -m ra_orchestrators.ux_orchestrator "Project Name"
 
 # With timeout for long-running analyses
-timeout 1800 python -m ra_orchestrators.architecture_orchestrator
+timeout 1800 python -m ra_orchestrators.architecture_orchestrator "Project Name"
 ```
 
 ### Agent Management

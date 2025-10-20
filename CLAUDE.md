@@ -16,7 +16,7 @@ Certification challenge project for AI Engineering Bootcamp Cohort 8: a producti
 - **Deployment**: `app/graph_app.py` (LangGraph Platform entrypoint only)
 - **UI**: LangGraph Studio (`uv run langgraph dev`)
 
-**Documentation Drift**: Some documentation (architecture.md, deliverables.md) may reference prototype files that were refactored into `src/` modules. When in doubt, trust the code in `src/` and the commands in this CLAUDE.md file.
+**Documentation Drift**: Some documentation (initial-initial-architecture.m, deliverables.md) may reference prototype files that were refactored into `src/` modules. When in doubt, trust the code in `src/` and the commands in this CLAUDE.md file.
 
 **Reference Implementation**: Use `scripts/single_file.py` as the learning reference - it shows the full evaluation pipeline in one file without abstractions.
 
@@ -889,22 +889,35 @@ make validate
 This project has comprehensive documentation organized across multiple files. Use this guide to find what you need:
 
 **Core Documentation**:
-- **[README.md](README.md)** - Project overview, quick start, installation (356 lines)
-- **[CLAUDE.md](CLAUDE.md)** (this file) - Complete technical reference for AI assistants (965 lines)
+- **[README.md](README.md)** - Project overview, quick start, installation (380 lines)
+- **[CLAUDE.md](CLAUDE.md)** (this file) - Complete technical reference for AI assistants (965+ lines)
 - **[docs/deliverables.md](docs/deliverables.md)** - Certification challenge answers (1,152 lines)
-- **[docs/architecture.md](docs/architecture.md)** - System design patterns and decisions (18KB)
+- **[docs/initial-architecture.m](docs/initial-architecture.m)** - System design patterns and decisions (18KB)
 - **[docs/certification-challenge-task-list.md](docs/certification-challenge-task-list.md)** - Scoring rubric
 
-**Directory-Specific Guides** (for detailed module/script reference):
-- **scripts/** - See inline docstrings in each script, or run `python <script> --help`
-- **src/** - Factory pattern documentation in this file (lines 95-215)
-- **data/** - Data flow documented in this file (lines 216-269)
+**Architecture Documentation** (auto-generated comprehensive analysis):
+- **[architecture/README.md](architecture/README.md)** - Architecture overview and navigation guide (1,100 lines)
+- **[architecture/docs/01_component_inventory.md](architecture/docs/01_component_inventory.md)** - Module-by-module reference
+- **[architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md)** - Visual system overview
+- **[architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md)** - Sequence diagrams and pipelines
+- **[architecture/docs/04_api_reference.md](architecture/docs/04_api_reference.md)** - Comprehensive API documentation
+
+**Directory-Specific Guides**:
+- **[scripts/README.md](scripts/README.md)** - All evaluation and utility scripts (5 scripts documented)
+- **[src/README.md](src/README.md)** - Factory pattern guide, module reference, adding retrievers
+- **[data/README.md](data/README.md)** - Data flow, manifest schema, file formats, lineage
+
+**Repository Analyzer Framework** (optional, for codebase analysis):
+- **[ra_orchestrators/README.md](ra_orchestrators/README.md)** - Multi-domain agent orchestration framework
+- **[ra_orchestrators/CLAUDE.md](ra_orchestrators/CLAUDE.md)** - Framework usage guide for AI assistants
 
 **Quick Navigation**:
-- Want to run evaluations? → See "Common Development Tasks" (lines 42-62)
-- Want to add a new retriever? → See "Adding New Retrievers" (lines 271-302)
-- Want to understand factory pattern? → See "Factory Pattern Philosophy" (lines 97-99)
-- Want API reference? → See "Key Implementation Files" (lines 827-849)
+- 🔍 Want to understand the codebase? → Start with [architecture/README.md](architecture/README.md)
+- 🚀 Want to run evaluations? → See "Common Development Tasks" (this file)
+- 🛠️ Want to add a retriever? → See [src/README.md](src/README.md#quick-start-adding-a-new-retriever)
+- 📊 Want to understand data flow? → See [architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md)
+- ✅ Want to validate setup? → Run `make validate` (must pass 100%)
+- 📐 Want architecture diagrams? → See [architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md)
 
 ### Module Inventory (src/)
 
@@ -937,3 +950,51 @@ This project has comprehensive documentation organized across multiple files. Us
 - **RAGAS**: RAG evaluation framework (v0.2.10)
 - **LangChain**: RAG abstractions and orchestration
 - **LangGraph**: Stateful graph workflows
+
+## Repository Analyzer Framework
+
+This repository includes an optional **Repository Analyzer Framework** (`ra_orchestrators/`, `ra_agents/`, `ra_tools/`) - a portable, drop-in analysis toolkit for comprehensive codebase analysis. This framework was used to generate the comprehensive architecture documentation in `architecture/`.
+
+### What It Does
+
+The framework provides multi-domain orchestration with specialized agents for:
+- **Architecture Analysis** - Code structure, patterns, diagrams, data flows, API documentation
+- **UX/UI Design** - User research, information architecture, visual design, prototyping
+- **DevOps** (Future) - Infrastructure analysis, CI/CD workflows, IaC generation
+- **Testing** (Future) - Test strategy, coverage analysis, test generation
+
+### Key Features
+
+1. **Portable** - Drop into any repository without modification
+2. **No Collisions** - `ra_` prefix avoids conflicts with existing code
+3. **Timestamped Outputs** - Each run creates `ra_output/{domain}_{YYYYMMDD_HHMMSS}/`
+4. **Extensibility** - Base framework supports new domains in <1 day
+5. **Reusability** - Agents and tools shared across domains
+
+### Usage
+
+```bash
+# Architecture analysis (used to generate architecture/ docs)
+python -m ra_orchestrators.architecture_orchestrator
+
+# UX design workflow
+python -m ra_orchestrators.ux_orchestrator "Project Name"
+
+# With timeout for long-running analyses
+timeout 1800 python -m ra_orchestrators.architecture_orchestrator
+```
+
+### Documentation
+
+- **[ra_orchestrators/README.md](ra_orchestrators/README.md)** - User-facing usage guide
+- **[ra_orchestrators/CLAUDE.md](ra_orchestrators/CLAUDE.md)** - Complete technical reference for AI assistants
+- **[ra_orchestrators/claude-agents-research.md](ra_orchestrators/claude-agents-research.md)** - Comprehensive research (832 lines)
+
+### When to Use
+
+- Generating comprehensive architecture documentation
+- Analyzing new codebases for patterns and structure
+- Creating UX design specifications from requirements
+- Performing multi-domain repository analysis
+
+**Note**: The framework is separate from the core GDELT RAG application and can be safely ignored for typical development work. It's primarily useful for documentation generation and deep codebase analysis.

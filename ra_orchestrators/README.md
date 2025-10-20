@@ -19,12 +19,7 @@ This orchestrator system extends the proven patterns from `architecture.py` into
 python -m ra_orchestrators.architecture_orchestrator "Project Name"
 ```
 
-Or run directly:
-```bash
-python ra_orchestrators/architecture_orchestrator.py "Project Name"
-```
-
-Generates comprehensive repository analysis in `repo_analysis/`:
+Generates comprehensive repository analysis in `ra_output/`:
 - Component inventory
 - Architecture diagrams
 - Data flow analysis
@@ -151,7 +146,7 @@ ux_orchestrator.invoke_orchestrator(
 ### Architecture Analysis
 
 ```
-repo_analysis/
+ra_output/
 ├── docs/
 │   ├── 01_component_inventory.md
 │   ├── 03_data_flows.md

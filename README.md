@@ -1,380 +1,253 @@
 # GDELT Knowledge Graph RAG Assistant
 
-> **Certification Challenge Project** - AI Engineering Bootcamp Cohort 8
->
-> An intelligent question-answering system for GDELT (Global Database of Events, Language, and Tone) documentation, powered by Retrieval-Augmented Generation.
+> **Certification Challenge Project** — AI Engineering Bootcamp Cohort 8  
+> An intelligent question-answering system for GDELT (Global Database of Events, Language, and Tone) documentation, powered by **Retrieval-Augmented Generation**.
 
 ---
 
-**Documentation**:
-- 📋 [Full Deliverables](./docs/deliverables.md) - Complete answers to all certification requirements
-- 📚 [Task Rubric](./docs/certification-challenge-task-list.md) - 100-point scoring breakdown
-- 🏗️ [Architecture Diagram](./docs/cert-challenge.excalidraw) - System design (Excalidraw format)
+## 📚 Documentation Overview
 
-**Datasets**:
-- 📄 [Source Documents](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources) - 38 PDF pages on GDELT KGs
-- ⭐ [Golden Testset](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset) - 12 RAGAS evaluation QA pairs
+**Core Docs**
+- 🏗️ **[CLAUDE.md](./CLAUDE.md)** — canonical developer guide for this repository  
+- 📋 **[Full Deliverables](./docs/deliverables.md)** — complete certification submissions  
+- 📊 **[Task Rubric](./docs/certification-challenge-task-list.md)** — 100-point grading breakdown  
+- 🧠 **[docs/initial-architecture.md](./docs/initial-architecture.md)** — *early conceptual design (frozen)*  
 
----
+**Architecture Documentation (Auto-Generated)**
+Located in the **`architecture/`** directory — produced by the *Claude Agent SDK Analyzer*:
+| File | Purpose |
+|------|----------|
+| `architecture/README.md` | Top-level architecture summary and system lifecycle |
+| `architecture/docs/01_component_inventory.md` | Detailed module inventory |
+| `architecture/docs/03_data_flows.md` | Ingestion → retrieval → evaluation flows |
+| `architecture/docs/04_api_reference.md` | Public API reference |
+| `architecture/diagrams/02_architecture_diagrams.md` | Layered system & runtime dependency diagrams |
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Documentation Guide](#documentation-guide)
-- [Project Overview](#project-overview)
-- [Technology Stack](#technology-stack)
-- [Evaluation Results](#evaluation-results)
-- [Running Evaluations](#running-evaluations)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-
----
-
-## Documentation Guide
-
-This project has comprehensive documentation organized across multiple files:
-
-**Core Documentation**:
-- **[README.md](README.md)** (this file) - Project overview, quick start, installation
-- **[CLAUDE.md](CLAUDE.md)** - Complete technical reference for AI assistants and developers
-- **[docs/deliverables.md](docs/deliverables.md)** - Certification challenge answers (1,152 lines)
-- **[docs/architecture.md](docs/architecture.md)** - System design patterns and architectural decisions
-
-**Directory-Specific Guides**:
-- **[scripts/README.md](scripts/README.md)** - All evaluation and utility scripts (5 scripts documented)
-- **[src/README.md](src/README.md)** - Factory pattern guide, module reference, adding retrievers
-- **[data/README.md](data/README.md)** - Data flow, manifest schema, file formats, lineage
-
-**Quick Navigation**:
-- 🔍 Want to understand the codebase? → Start with [CLAUDE.md](CLAUDE.md)
-- 🚀 Want to run evaluations? → See [scripts/README.md](scripts/README.md)
-- 🛠️ Want to add a retriever? → See [src/README.md](src/README.md#quick-start-adding-a-new-retriever)
-- 📊 Want to understand data flow? → See [data/README.md](data/README.md#data-flow)
-- ✅ Want to validate setup? → Run `make validate` (must pass 100%)
+> 🧠 **Note:** `docs/initial-architecture.md` captures the *original design sketch* before automation and is no longer updated.  
+> The current `architecture/` tree is generated automatically from the live codebase.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
-
-- Python 3.11+
-- `uv` package manager ([installation guide](https://github.com/astral-sh/uv))
-- OpenAI API key (required)
-- Cohere API key (optional, for reranking)
+- Python 3.11 +
+- [`uv`](https://github.com/astral-sh/uv) package manager  
+- `OPENAI_API_KEY` (required)  
+- `COHERE_API_KEY` (optional — reranking)
 
 ### Installation
-
 ```bash
-# Clone the repository
 git clone https://github.com/<your-username>/cert-challenge.git
 cd cert-challenge
-
-# Create virtual environment
 uv venv --python 3.11
-source .venv/bin/activate  # Linux/WSL/Mac
-# .venv\Scripts\activate   # Windows
-
-# Install dependencies
+source .venv/bin/activate        # Linux/WSL/Mac
+# .venv\Scripts\activate         # Windows
 uv pip install -e .
-```
+````
 
-### Set Environment Variables
+### Environment Setup
 
 ```bash
-# Copy example env file
 cp .env.example .env
-
-# Edit .env and add your API keys:
+# Edit .env with:
 # OPENAI_API_KEY=your_key_here
-# COHERE_API_KEY=your_key_here  # Optional
+# COHERE_API_KEY=optional
 ```
 
-### Run the Application
+### Run
 
 ```bash
-# Option 1: LangGraph Studio UI (Interactive, Recommended)
+# Interactive LangGraph Studio UI
+uv add langgraph-cli[inmem]
 uv run langgraph dev --allow-blocking
-# Access at: http://localhost:2024
-# Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+# → http://localhost:2024
+# Studio: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
-# Option 2: Command-line evaluation (self-contained reference)
-python scripts/single_file.py
-
-# Option 3: Modular evaluation (uses src/ modules)
+# CLI evaluation
 python scripts/run_eval_harness.py
-# Or use make command:
+# or
 make eval
 
-# Option 4: Quick validation
+# Quick validation
 make validate
 ```
 
 ---
 
-## Project Overview
+## 🧩 Architecture Summary
 
-### Problem Statement
+This system follows a **5-layer architecture**:
 
-Researchers and analysts working with GDELT struggle to quickly find answers to complex questions about knowledge graph construction, data formats, and analytical techniques without manually searching through dense technical documentation.
+| Layer             | Purpose                                               | Key Modules                    |
+| ----------------- | ----------------------------------------------------- | ------------------------------ |
+| **Configuration** | External services (OpenAI, Qdrant, Cohere)            | `src/config.py`                |
+| **Data**          | Ingestion + persistence (HF datasets + manifest)      | `src/utils/`                   |
+| **Retrieval**     | Multi-strategy search (naive, BM25, ensemble, rerank) | `src/retrievers.py`            |
+| **Orchestration** | LangGraph workflows (retrieve → generate)             | `src/graph.py`, `src/state.py` |
+| **Execution**     | Scripts and LangGraph Server entrypoints              | `scripts/`, `app/graph_app.py` |
 
-### Solution
+**Design Principles**
 
-An AI-powered Q&A system that provides instant, citation-backed answers from GDELT research papers using:
-- Retrieval-Augmented Generation (RAG)
-- Multiple retrieval strategies (naive, BM25, reranking, ensemble)
-- RAGAS evaluation framework
-- Production-grade technology stack
+* Factory pattern → deferred initialization of retrievers/graphs
+* Singleton pattern → resource caching (`@lru_cache`)
+* Strategy pattern → interchangeable retriever implementations
 
-### Target Audience
-
-- GDELT researchers implementing analysis pipelines
-- Data scientists building geopolitical risk assessment systems
-- Analysts investigating cross-lingual event tracking
-- Teams adopting GDELT for the first time
-
----
-
-## Technology Stack
-
-| Component | Technology | Rationale |
-|-----------|------------|-----------|
-| **LLM** | OpenAI GPT-4.1-mini | Cost-effective reasoning for RAG |
-| **Embeddings** | text-embedding-3-small | Strong semantic similarity at 1536 dims |
-| **Vector DB** | Qdrant | Production-grade, LangChain integration |
-| **Orchestration** | LangChain + LangGraph | Battle-tested RAG abstractions |
-| **Monitoring** | LangSmith | End-to-end LLM observability |
-| **Evaluation** | RAGAS 0.2.10 | Purpose-built RAG metrics |
-| **UI** | Streamlit | Rapid prototyping, chat interface |
-| **Data** | HuggingFace Datasets | Versioned, reproducible datasets |
-
-**Advanced Retrieval Techniques**:
-- Dense vector search (baseline)
-- BM25 sparse keyword matching
-- Cohere rerank-v3.5 (contextual compression)
-- Ensemble hybrid search (dense + sparse)
+See the generated diagrams in
+[`architecture/diagrams/02_architecture_diagrams.md`](./architecture/diagrams/02_architecture_diagrams.md).
 
 ---
 
-## Evaluation Results
+## 🧠 Evaluation Workflow (Automated)
 
-### Task 5: Baseline RAG Performance
+1. Load 12 QA pairs (golden testset)
+2. Load 38 source docs from Hugging Face
+3. Create Qdrant vector store
+4. Build 4 retriever strategies
+5. Execute 48 RAG queries
+6. Evaluate with RAGAS metrics (Faithfulness, Answer Relevancy, Context Precision, Context Recall)
+7. Persist results → `deliverables/evaluation_evidence/`
 
-*Results from `notebooks/task5_baseline_evaluation_don.py` (Naive retriever baseline)*
-
-| Metric | Score |
-|--------|-------|
-| Faithfulness | 94.48% |
-| Answer Relevancy | 86.79% |
-| Context Precision | 81.10% |
-| Context Recall | 98.33% |
-| **Average** | **90.18%** |
-
-**Key Finding**: Strong baseline with excellent Context Recall (98.33%), but Context Precision (81.10%) is the bottleneck. Dense vector search alone retrieves relevant documents but struggles with ranking quality.
-
-### Task 7: Comparative Retrieval Performance
-
-*Results from `notebooks/task5_baseline_evaluation_don.py` (all 4 retrievers)*
-
-| Retriever | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Average |
-|-----------|--------------|------------------|-------------------|----------------|---------|
-| **Cohere Rerank** | **96.50%** | **94.51%** | **98.61%** | **96.25%** | **96.47%** |
-| Ensemble | 97.58% | 96.11% | 83.79% | 98.33% | 93.96% |
-| BM25 | 95.62% | 95.34% | 87.26% | 98.33% | 94.14% |
-| Naive (baseline) | 93.49% | 94.65% | 84.11% | 94.17% | 91.60% |
-
-**Key Findings**:
-- **Winner**: Cohere Rerank at **96.47%** (+5.3% over baseline)
-- **Dramatic Context Precision improvement**: +17.2% (81.10% → 98.61%)
-- **BM25**: +4.4% Context Recall improvement via keyword matching
-- **Ensemble**: Best Faithfulness (97.58%) and Answer Relevancy (96.11%)
-
-**Recommendation**: Deploy Cohere Rerank for production. The $20/month cost is negligible compared to the quality improvement (saves ~490 errors per 10K queries).
+Cost ≈ $5 – 6 per run / 20–30 min.
 
 ---
 
-## Running Evaluations
+## 🔏 Provenance and Manifest Integrity
 
-### Step 1: Baseline Evaluation (Task 5)
+Every major stage in this project — from **data ingestion** to **evaluation runs** — is signed by machine-readable manifests to ensure **traceability**, **data integrity**, and **AI assistant accountability**.
+
+### 📄 Ingestion Manifest (`data/interim/manifest.json`)
+Records the creation of intermediate artifacts (raw → interim → HF datasets) with:
+- Environment fingerprint (`langchain`, `ragas`, `pyarrow`, etc.)
+- Source & golden testset paths and SHA-256 hashes
+- Quick schema preview of extracted columns
+- Hugging Face lineage metadata linking to:
+  - `dwb2023/gdelt-rag-sources-v2`
+  - `dwb2023/gdelt-rag-golden-testset-v2`
+
+This ensures that every RAGAS evaluation run references a reproducible, signed dataset snapshot.
+
+### 🧾 Run Manifest (`deliverables/evaluation_evidence/RUN_MANIFEST.json`)
+Documents the execution of each evaluation:
+- Models: `gpt-4.1-mini` (RAG generation), `text-embedding-3-small`
+- Retrievers: naive, BM25, ensemble, cohere_rerank
+- Deterministic configuration (`temperature=0`)
+- Metrics: Faithfulness, Answer Relevancy, Context Precision, Context Recall
+- SHA links back to the ingestion manifest for complete lineage
+
+Together, these manifests create a **verifiable audit trail** between:
+> _source PDFs → testset → vector store → evaluation results_
+
+By preserving SHA-256 fingerprints and HF lineage, this mechanism “signs” the dataset state — keeping automated assistants and evaluation scripts consistent, comparable, and honest.
+
+---
+
+## ⚙️ Technology Stack
+
+| Component         | Technology                           | Purpose                        |
+| ----------------- | ------------------------------------ | ------------------------------ |
+| **LLM**           | OpenAI GPT-4.1-mini                  | Deterministic RAG generation   |
+| **Embeddings**    | text-embedding-3-small               | 1536-dim semantic vectors      |
+| **Vector DB**     | Qdrant                               | Fast cosine search             |
+| **Orchestration** | LangGraph 0.6.7 + LangChain 0.3.19 + | Graph-based workflows          |
+| **Evaluation**    | RAGAS 0.2.10 (pinned)                | Stable evaluation API          |
+| **Monitoring**    | LangSmith                            | LLM trace observability        |
+| **Data**          | Hugging Face Datasets                | Reproducible versioned sources |
+| **UI**            | Streamlit                            | Prototype chat interface       |
+
+---
+
+## 🧮 Evaluation Results (Summary)
+
+| Retriever         | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Avg         |
+| ----------------- | ------------ | ---------------- | ----------------- | -------------- | ----------- |
+| **Cohere Rerank** | **96.5 %**   | **94.5 %**       | **98.6 %**        | **96.2 %**     | **96.47 %** |
+| Ensemble          | 97.6 %       | 96.1 %           | 83.8 %            | 98.3 %         | 93.96 %     |
+| BM25              | 95.6 %       | 95.3 %           | 87.3 %            | 98.3 %         | 94.14 %     |
+| Naive             | 93.5 %       | 94.7 %           | 84.1 %            | 94.2 %         | 91.6 %      |
+
+→ **Cohere Rerank** recommended for production (≈ +17 % precision gain).
+
+---
+
+## 🗂️ Repository Map
+
+| Path | Purpose |
+|------|----------|
+| `src/` | Core modular RAG framework (`config`, `retrievers`, `graph`, `state`, `utils`) |
+| `scripts/` | Executable workflows for data ingestion, evaluation, and validation |
+| `architecture/` | **Auto-generated architecture snapshots** (Claude Agent SDK Analyzer) |
+| ├── `00_README.md` | System overview and lifecycle summary |
+| ├── `docs/` | Component inventory, data flows, and API reference |
+| └── `diagrams/` | Mermaid dependency and system diagrams |
+| `docs/` | Certification artifacts and legacy design documentation |
+| └── `initial-architecture.md` | Original hand-drawn architecture sketch *(frozen, not updated)* |
+| `data/` | Complete RAG dataset lineage and provenance chain |
+| ├── `raw/` | Original GDELT PDFs |
+| ├── `interim/` | Extracted text, Hugging Face datasets, and manifest fingerprints |
+| │   ├── `manifest.json` → Ingestion provenance manifest (dataset lineage, SHA-256 hashes) |
+| ├── `processed/` | Evaluation datasets (CSV, Parquet) |
+| └── `deliverables/` | Final evaluation evidence and signed manifests |
+|     ├── `evaluation_evidence/` | RAGAS results, raw datasets, and per-retriever outputs |
+|     │   └── `RUN_MANIFEST.json` → Evaluation provenance manifest (retrievers, models, metrics) |
+| `app/` | Lightweight LangGraph API (`graph_app.py`) and entrypoint |
+| `deliverables/` | High-level evaluation reports and comparative analyses |
+| `Makefile` | Task automation for environment setup, validation, and architecture snapshots |
+| `docker-compose.yml` | Local container configuration for LangGraph + Qdrant stack |
+
+---
+
+## 🧱 Architecture Snapshot Generation
+
+I created a **Claude Agent SDK** based multi-agent process to create reproducible architecture snapshots.  (Still a prototype, but has already helped refine my architectural workflow)
+
+### Architecture Analysis
 
 ```bash
-# Launch Jupyter
-jupyter notebook
-
-# Open and run notebooks/task5_baseline_evaluation.ipynb
-# This evaluates the naive retriever with RAGAS metrics
+python -m ra_orchestrators.architecture_orchestrator "GDELT architecture"
 ```
 
-**Output**: `data/processed/baseline_ragas_results.csv`
+Generates comprehensive repository analysis in `ra_output/`:
+- Component inventory
+- Architecture diagrams
+- Data flow analysis
+- API documentation
+- Final synthesis
 
-### Step 2: Comparative Evaluation (Task 7)
+## 🤖 Claude Agent SDK Architecture
 
-```bash
-# Open and run notebooks/task7_comparative_evaluation.ipynb
-# This evaluates all 4 retrievers and generates comparison table
-```
-
-**Output**: `data/processed/comparative_ragas_results.csv`
-
-### Evaluation Metrics Explained
-
-- **Faithfulness**: Are answers grounded in retrieved context? (no hallucinations)
-- **Answer Relevancy**: Does the answer address the user's question?
-- **Context Precision**: Are relevant contexts ranked higher than irrelevant ones?
-- **Context Recall**: Is all necessary information from ground truth retrieved?
+| Path | Purpose |
+|------|----------|
+| `ra_agents/` | Individual agent definitions for design and architecture workflows |
+| `ra_orchestrators/` | Multi-agent orchestration logic coordinating Claude SDK agents |
+| `ra_tools/` | Tools that extend agent capabilities via MCP and external APIs |
+| `ra_output/` | Generated artifacts and agentic outputs (documentation drafts, diagrams, etc.) |
 
 ---
 
-## Project Structure
+## 🧩 Key Design Patterns
 
-```
-cert-challenge/
-├── app/                          # Main application code
-│   ├── baseline_rag.py          # Naive RAG implementation (Task 4)
-│   ├── retriever_registry.py    # All retrieval strategies (Task 6)
-│   └── streamlit_ui.py          # Interactive UI (demo)
-├── notebooks/                    # Jupyter notebooks for evaluation
-│   ├── task5_baseline_evaluation.ipynb      # RAGAS baseline metrics
-│   ├── task7_comparative_evaluation.ipynb   # Retriever comparison
-│   └── pdf_ingestion_pipeline*.ipynb        # Data processing
-├── scripts/                      # Utility and reference scripts
-│   ├── upload_to_hf.py          # Dataset uploader
-│   ├── session08-ragas-rag-evals.py         # RAGAS patterns
-│   └── session09-adv-retrieval*.py          # Advanced retrieval patterns
-├── data/
-│   ├── raw/                     # Source PDFs
-│   ├── interim/                 # Intermediate processing (manifest, HF datasets)
-│   └── processed/               # Evaluation results (CSV tables)
-├── docs/
-│   ├── deliverables.md          # Complete certification answers
-│   └── certification-challenge-task-list.md # Rubric
-├── pyproject.toml               # Dependencies (uv/pip)
-├── .env.example                 # Environment template
-└── README.md                    # This file
-```
+| Pattern       | Purpose                         | Example                                 |
+| ------------- | ------------------------------- | --------------------------------------- |
+| **Factory**   | Deferred initialization         | `create_retrievers()` / `build_graph()` |
+| **Singleton** | Cached resources (`@lru_cache`) | `get_llm()`, `get_qdrant()`             |
+| **Strategy**  | Swap retrieval algorithms       | 4 retrievers share `.invoke()` API      |
 
 ---
 
-## Key Implementation Patterns
+## 🧾 License & Contact
 
-### Loading Documents from HuggingFace
+Apache 2.0 — see `LICENSE`
 
-```python
-from datasets import load_dataset
-from langchain_core.documents import Document
-
-dataset = load_dataset("dwb2023/gdelt-rag-sources", split="train")
-
-documents = []
-for item in dataset:
-    doc = Document(
-        page_content=item["page_content"],
-        metadata=item["metadata"]
-    )
-    documents.append(doc)
-```
-
-### Creating a RAG Chain
-
-```python
-from langchain_qdrant import QdrantVectorStore
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from qdrant_client import QdrantClient
-
-# Create Qdrant client and vector store
-client = QdrantClient(host="localhost", port=6333)
-vectorstore = QdrantVectorStore(
-    client=client,
-    collection_name="gdelt_rag",
-    embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
-)
-
-retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-
-# Build chain
-from langchain.prompts import ChatPromptTemplate
-from operator import itemgetter
-
-prompt = ChatPromptTemplate.from_template(
-    "Context: {context}\n\nQuestion: {question}\n\nAnswer:"
-)
-
-chain = (
-    {"context": itemgetter("question") | retriever, "question": itemgetter("question")}
-    | prompt
-    | ChatOpenAI(model="gpt-4.1-mini")
-)
-```
-
-### Running RAGAS Evaluation
-
-```python
-from ragas import evaluate
-from ragas.metrics import Faithfulness, ResponseRelevancy
-
-result = evaluate(
-    dataset=ragas_dataset,
-    metrics=[Faithfulness(), ResponseRelevancy()],
-)
-
-print(result.to_pandas())
-```
+**Contact:** Don Brown (`dwb2023`) – AI Engineering Bootcamp Cohort 8
 
 ---
 
-## Development Notes
+### 🧩 About This Documentation
 
-### Environment Variables
+This repository distinguishes between **historical design artifacts** and **current architecture snapshots**:
 
-```bash
-# Required
-OPENAI_API_KEY=sk-...
+* `docs/initial-architecture.md` → conceptual blueprint (frozen)
+* `architecture/` → live system documentation (auto-generated)
 
-# Optional (for advanced features)
-COHERE_API_KEY=...              # Reranking
-LANGCHAIN_API_KEY=...           # LangSmith tracing
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_PROJECT=cert-challenge
-```
-
-### Python Package Requirements
-
-Key dependencies (see `pyproject.toml` for complete list):
-- `langchain>=0.3.19`
-- `langchain-openai>=0.3.7`
-- `langchain-cohere==0.4.4`
-- `qdrant-client>=1.13.2`
-- `ragas==0.2.10`
-- `datasets>=3.2.0`
-- `huggingface-hub>=0.26.0`
-- `streamlit>=1.40.0`
-
-### Common Issues
-
-**Issue**: `AttributeError: 'str' object has no attribute 'metadata'`
-- **Cause**: Chain output format mismatch
-- **Solution**: Use `retriever_registry.py` which follows correct LCEL patterns
-
-**Issue**: `COHERE_API_KEY not set`
-- **Cause**: Cohere rerank retriever requires API key
-- **Solution**: Set env var or skip Cohere rerank (3 other retrievers still work)
-
----
-
-## References
-
-- [GDELT Project](https://www.gdeltproject.org/)
-- [LangChain Documentation](https://python.langchain.com/)
-- [RAGAS Documentation](https://docs.ragas.io/)
-- [HuggingFace Datasets](https://huggingface.co/docs/datasets/)
-- Myers, A., et al. (2025). "Talking to GDELT Through Knowledge Graphs." arXiv:2503.07584v3
-
----
-
-## License
-
-Apache 2.0 (see LICENSE file)
-
-## Contact
-
-Don Brown (dwb2023) - AI Engineering Bootcamp Cohort 8
+This separation ensures long-term clarity and traceability of architectural evolution.
