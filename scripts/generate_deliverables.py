@@ -76,21 +76,8 @@ def main():
     )
     print(f"   ✅ Converted {count} evaluation metric files")
 
-    # 3. Convert raw datasets (Parquet → keep as Parquet)
-    print("\n3️⃣  Copying raw datasets...")
-    count = 0
-    for retriever in RETRIEVERS:
-        src = PROCESSED_DIR / f"{retriever}_raw_dataset.parquet"
-        dst = DELIVERABLES_DIR / f"{retriever}_raw_dataset.parquet"
-
-        if src.exists():
-            shutil.copy2(src, dst)
-            print(f"   ✓ {src.name} → {dst.name}")
-            count += 1
-    print(f"   ✅ Copied {count} raw dataset files")
-
-    # 4. Convert comparative results (Parquet → CSV)
-    print("\n4️⃣  Converting comparative results...")
+    # 3. Convert comparative results (Parquet → CSV)
+    print("\n3️⃣  Converting comparative results...")
     comp_parquet = PROCESSED_DIR / "comparative_ragas_results.parquet"
     comp_csv = DELIVERABLES_DIR / "comparative_ragas_results.csv"
 
@@ -102,8 +89,8 @@ def main():
     else:
         print(f"   ⚠️  {comp_parquet.name} not found")
 
-    # 5. Copy RUN_MANIFEST.json
-    print("\n5️⃣  Copying manifest...")
+    # 4. Copy RUN_MANIFEST.json
+    print("\n4️⃣  Copying manifest...")
     manifest_src = PROCESSED_DIR / "RUN_MANIFEST.json"
     manifest_dst = DELIVERABLES_DIR / "RUN_MANIFEST.json"
 

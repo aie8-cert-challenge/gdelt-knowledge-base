@@ -192,12 +192,6 @@ for name, graph in graphs.items():
 
     print(f"   ✓ Processed {len(df)} questions")
 
-    # Save raw outputs immediately (6 columns: user_input, reference_contexts,
-    # reference, synthesizer_name, response, retrieved_contexts)
-    raw_file = OUT_DIR / f"{name}_raw_dataset.parquet"
-    df.to_parquet(raw_file, index=False)
-    print(f"   💾 Saved: {raw_file.name}")
-
     datasets[name] = df
 
 print(f"\n✓ All inference complete! Results saved to {OUT_DIR}")
@@ -222,9 +216,9 @@ for name, df in datasets.items():
     # Create RAGAS evaluation dataset
     eval_ds = EvaluationDataset.from_pandas(df)
 
-    # Save evaluation dataset
+    # Save evaluation inputs (RAG outputs before RAGAS scoring)
     ds_file = OUT_DIR / f"{name}_evaluation_inputs.parquet"
-    eval_ds.to_parquet(str(ds_file), compression="zstd", index=False)
+    df.to_parquet(str(ds_file), compression="zstd", index=False)
     print(f"   💾 Saved evaluation inputs: {ds_file.name}")
 
     # Run RAGAS evaluation
@@ -322,10 +316,10 @@ Retrievers Evaluated:
   {', '.join(datasets.keys())}
 
 Output Files ({OUT_DIR}):
-  - Raw datasets: {len(datasets)} × *_raw_dataset.parquet (6 columns each)
-  - Evaluation inputs: {len(datasets)} × *_evaluation_inputs.parquet (RAGAS format)
-  - Evaluation metrics: {len(datasets)} × *_evaluation_metrics.parquet (with scores)
+  - Evaluation inputs: {len(datasets)} × *_evaluation_inputs.parquet (6 columns: RAG outputs)
+  - Evaluation metrics: {len(datasets)} × *_evaluation_metrics.parquet (10 columns: RAG + RAGAS)
   - Comparative summary: comparative_ragas_results.parquet
+  - Provenance manifest: RUN_MANIFEST.json
 
 Metrics Computed:
   - Faithfulness (answer grounded in context)

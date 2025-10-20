@@ -370,11 +370,6 @@ for retriever_name, graph in retrievers_config.items():
 
     print(f"   ✓ {retriever_name}: {len(datasets[retriever_name])} questions processed")
 
-    # 💾 PERSIST IMMEDIATELY - Don't wait until Step 9 to prevent data loss
-    raw_file = output_dir / f"{retriever_name}_raw_dataset.parquet"
-    datasets[retriever_name].to_parquet(raw_file, index=False)
-    print(f"   💾 Saved: {raw_file.name}")
-
 print("\n   ✓ All retriever datasets populated!")
 
 # 8. Create RAGAS EvaluationDatasets
@@ -413,9 +408,9 @@ for retriever_name, eval_dataset in evaluation_datasets.items():
     print(f"   ✓ {retriever_name} evaluation complete")
 
     # 💾 SAVE IMMEDIATELY - Don't wait until end to prevent data loss!
-    # Save evaluation inputs
+    # Save evaluation inputs (RAG outputs before RAGAS scoring)
     dataset_file = output_dir / f"{retriever_name}_evaluation_inputs.parquet"
-    eval_dataset.to_parquet(str(dataset_file), compression="zstd", index=False)
+    datasets[retriever_name].to_parquet(str(dataset_file), compression="zstd", index=False)
     print(f"   💾 Saved: {dataset_file.name}")
 
     # Save evaluation metrics
@@ -517,9 +512,9 @@ print("✅ COMPREHENSIVE EVALUATION COMPLETE!")
 print("="*80)
 print(f"\nOutputs saved to: {output_dir}")
 print(f"   - comparative_ragas_results.parquet (summary table)")
-print(f"   - [retriever]_evaluation_inputs.parquet (RAGAS datasets)")
-print(f"   - [retriever]_evaluation_metrics.parquet (per-question metrics)")
-print(f"   - [retriever]_raw_dataset.parquet (raw inference outputs)")
+print(f"   - [retriever]_evaluation_inputs.parquet (6 columns: RAG outputs)")
+print(f"   - [retriever]_evaluation_metrics.parquet (10 columns: RAG + RAGAS metrics)")
+print(f"   - RUN_MANIFEST.json (provenance and reproducibility)")
 
 # 13. Generate Run Manifest for Reproducibility
 print("\n13. Generating RUN_MANIFEST.json for reproducibility...")
