@@ -370,7 +370,12 @@ for retriever_name, graph in retrievers_config.items():
 
     print(f"   ✓ {retriever_name}: {len(datasets[retriever_name])} questions processed")
 
-print("\n   ✓ All retriever datasets populated!")
+    # Save inference results immediately (before RAGAS evaluation)
+    inference_file = output_dir / f"{retriever_name}_evaluation_inputs.parquet"
+    datasets[retriever_name].to_parquet(str(inference_file), compression="zstd", index=False)
+    print(f"   💾 Saved inference results: {inference_file.name}")
+
+print("\n   ✓ All retriever datasets populated and saved!")
 
 # 8. Create RAGAS EvaluationDatasets
 print("\n8. Creating RAGAS EvaluationDatasets...")
@@ -407,13 +412,8 @@ for retriever_name, eval_dataset in evaluation_datasets.items():
     evaluation_results[retriever_name] = result
     print(f"   ✓ {retriever_name} evaluation complete")
 
-    # 💾 SAVE IMMEDIATELY - Don't wait until end to prevent data loss!
-    # Save evaluation inputs (RAG outputs before RAGAS scoring)
-    dataset_file = output_dir / f"{retriever_name}_evaluation_inputs.parquet"
-    datasets[retriever_name].to_parquet(str(dataset_file), compression="zstd", index=False)
-    print(f"   💾 Saved: {dataset_file.name}")
-
-    # Save evaluation metrics
+    # NOTE: evaluation_inputs already saved in Step 7 (after inference)
+    # Save evaluation metrics only
     detailed_file = output_dir / f"{retriever_name}_evaluation_metrics.parquet"
     result.to_pandas().to_parquet(detailed_file, compression="zstd", index=False)
     print(f"   💾 Saved: {detailed_file.name}")

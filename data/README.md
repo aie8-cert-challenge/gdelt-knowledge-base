@@ -16,10 +16,10 @@ data/
 │   ├── golden_testset.parquet
 │   ├── golden_testset.hfds/
 │   └── manifest.json            # Provenance + checksums
-└── processed/           # (DEPRECATED) Old evaluation results
+└── processed/           # Evaluation results (Parquet, source of truth)
 ```
 
-**Note**: Current evaluation results are in `deliverables/evaluation_evidence/`.
+**Note**: Human-readable CSV files are derived in `deliverables/evaluation_evidence/` via `make deliverables`.
 
 ## Data Flow
 
@@ -49,8 +49,16 @@ dwb2023/gdelt-rag-golden-testset (HuggingFace)
     - Run 4 retrievers × 12 questions = 48 queries
     - RAGAS evaluation (4 metrics)
     ↓
+data/processed/
+    ├── naive_evaluation_inputs.parquet
+    ├── naive_evaluation_metrics.parquet
+    ├── (same for bm25, ensemble, cohere_rerank)
+    ├── comparative_ragas_results.parquet
+    └── RUN_MANIFEST.json
+    ↓
+[make deliverables] (converts Parquet → CSV)
+    ↓
 deliverables/evaluation_evidence/
-    ├── naive_raw_dataset.parquet
     ├── naive_evaluation_dataset.csv
     ├── naive_detailed_results.csv
     ├── (same for bm25, ensemble, cohere_rerank)
@@ -139,16 +147,25 @@ ds = load_from_disk("data/interim/sources.hfds")
 
 ## Evaluation Output Files
 
-### deliverables/evaluation_evidence/
+### data/processed/ (Source of Truth)
 
-**Per-Retriever Files** (12 files total):
-- `<retriever>_raw_dataset.parquet` - Raw results (pre-RAGAS)
-- `<retriever>_evaluation_dataset.csv` - Full RAGAS dataset
-- `<retriever>_detailed_results.csv` - Per-question breakdown
+**Per-Retriever Files** (8 Parquet files total):
+- `<retriever>_evaluation_inputs.parquet` - RAG outputs (6 columns: question, contexts, reference, etc.)
+- `<retriever>_evaluation_metrics.parquet` - RAGAS scores (10 columns: RAG outputs + 4 metric scores)
 
 **Summary Files**:
-- `comparative_ragas_results.csv` - Main comparison table
+- `comparative_ragas_results.parquet` - Main comparison table
 - `RUN_MANIFEST.json` - Complete provenance
+
+### deliverables/evaluation_evidence/ (Derived, Regenerable)
+
+**Per-Retriever Files** (8 CSV files total):
+- `<retriever>_evaluation_dataset.csv` - Human-readable evaluation inputs (converted from *_inputs.parquet)
+- `<retriever>_detailed_results.csv` - Human-readable metrics (converted from *_metrics.parquet)
+
+**Summary Files**:
+- `comparative_ragas_results.csv` - Human-readable comparison table
+- `RUN_MANIFEST.json` - Copied from processed/
 
 Example comparative results:
 ```csv
@@ -229,9 +246,9 @@ This enables **bit-perfect reproducibility**.
 
 ### DON'T:
 ❌ Modify files in `data/raw/` (immutable source)
-❌ Manually edit JSONL/Parquet (regenerate via `ingest_raw_pdfs.py`)
+❌ Manually edit JSONL/Parquet (regenerate via scripts)
 ❌ Delete `manifest.json` (breaks provenance)
-❌ Use `data/processed/` for new evaluations (deprecated)
+❌ Write directly to `deliverables/` (always use `make deliverables`)
 
 ## Troubleshooting
 

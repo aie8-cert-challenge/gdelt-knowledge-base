@@ -186,32 +186,29 @@ print(ds.info.download_checksums)  # Shows revision info
 
 ### Output Files
 
-Both evaluation scripts generate the same 16 files:
+Both evaluation scripts generate files in `data/processed/` (10 files total):
 
 ```
-deliverables/evaluation_evidence/
-├── naive_raw_dataset.parquet              # Immediate save (pre-RAGAS)
-├── naive_evaluation_dataset.csv           # Full RAGAS dataset
-├── naive_detailed_results.csv             # Per-question metrics
-├── bm25_raw_dataset.parquet
-├── bm25_evaluation_dataset.csv
-├── bm25_detailed_results.csv
-├── ensemble_raw_dataset.parquet
-├── ensemble_evaluation_dataset.csv
-├── ensemble_detailed_results.csv
-├── cohere_rerank_raw_dataset.parquet
-├── cohere_rerank_evaluation_dataset.csv
-├── cohere_rerank_detailed_results.csv
-├── comparative_ragas_results.csv          # Main summary table
+data/processed/
+├── naive_evaluation_inputs.parquet        # RAG outputs (6 columns)
+├── naive_evaluation_metrics.parquet       # RAGAS scores (10 columns)
+├── bm25_evaluation_inputs.parquet
+├── bm25_evaluation_metrics.parquet
+├── ensemble_evaluation_inputs.parquet
+├── ensemble_evaluation_metrics.parquet
+├── cohere_rerank_evaluation_inputs.parquet
+├── cohere_rerank_evaluation_metrics.parquet
+├── comparative_ragas_results.parquet      # Summary table
 └── RUN_MANIFEST.json                      # Reproducibility metadata
 ```
 
 **File Descriptions**:
-- **`*_raw_dataset.parquet`**: Raw retrieval results (questions + contexts) saved immediately before RAGAS evaluation
-- **`*_evaluation_dataset.csv`**: Full RAGAS-compatible dataset with all fields
-- **`*_detailed_results.csv`**: Per-question breakdown of all RAGAS metrics
+- **`*_evaluation_inputs.parquet`**: RAG outputs before RAGAS scoring (6 columns: question, contexts, reference, etc.)
+- **`*_evaluation_metrics.parquet`**: Per-question RAGAS metrics (10 columns: RAG outputs + 4 metric scores)
 - **`comparative_ragas_results.csv`**: Summary table comparing all 4 retrievers (the "money shot")
 - **`RUN_MANIFEST.json`**: Complete provenance (models, datasets, checksums, versions)
+
+**Note**: Human-readable CSV files are generated separately via `make deliverables` (see `generate_deliverables.py` below)
 
 ---
 
@@ -383,14 +380,12 @@ make deliverables
 **Input** (reads from `data/processed/`):
 - `*_evaluation_inputs.parquet` (4 retrievers)
 - `*_evaluation_metrics.parquet` (4 retrievers)
-- `*_raw_dataset.parquet` (4 retrievers)
 - `comparative_ragas_results.parquet`
 - `RUN_MANIFEST.json`
 
 **Output** (writes to `deliverables/evaluation_evidence/`):
 - `*_evaluation_dataset.csv` (human-readable evaluation inputs)
 - `*_detailed_results.csv` (human-readable metrics)
-- `*_raw_dataset.parquet` (copied, kept as Parquet)
 - `comparative_ragas_results.csv` (human-readable summary)
 - `RUN_MANIFEST.json` (copied)
 

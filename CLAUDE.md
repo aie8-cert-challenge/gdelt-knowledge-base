@@ -279,18 +279,14 @@ data/interim/
 └── manifest.json          # Checksums, versions, provenance
 
 data/processed/            # Working data (Parquet-first, ZSTD compressed)
-├── naive_evaluation_inputs.parquet       # RAGAS input datasets
+├── naive_evaluation_inputs.parquet       # RAGAS input datasets (RAG outputs)
 ├── naive_evaluation_metrics.parquet      # RAGAS metric scores
-├── naive_raw_dataset.parquet             # Raw inference outputs
 ├── bm25_evaluation_inputs.parquet
 ├── bm25_evaluation_metrics.parquet
-├── bm25_raw_dataset.parquet
 ├── ensemble_evaluation_inputs.parquet
 ├── ensemble_evaluation_metrics.parquet
-├── ensemble_raw_dataset.parquet
 ├── cohere_rerank_evaluation_inputs.parquet
 ├── cohere_rerank_evaluation_metrics.parquet
-├── cohere_rerank_raw_dataset.parquet
 ├── comparative_ragas_results.parquet
 └── RUN_MANIFEST.json                     # Provenance manifest
 

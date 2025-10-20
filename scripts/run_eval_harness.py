@@ -192,6 +192,11 @@ for name, graph in graphs.items():
 
     print(f"   ✓ Processed {len(df)} questions")
 
+    # Save inference results immediately (before RAGAS evaluation)
+    inference_file = OUT_DIR / f"{name}_evaluation_inputs.parquet"
+    df.to_parquet(str(inference_file), compression="zstd", index=False)
+    print(f"   💾 Saved inference results: {inference_file.name}")
+
     datasets[name] = df
 
 print(f"\n✓ All inference complete! Results saved to {OUT_DIR}")
@@ -214,12 +219,8 @@ for name, df in datasets.items():
     print(f"\n🔍 Evaluating {name}...")
 
     # Create RAGAS evaluation dataset
+    # NOTE: evaluation_inputs.parquet already saved in Step 3 (after inference)
     eval_ds = EvaluationDataset.from_pandas(df)
-
-    # Save evaluation inputs (RAG outputs before RAGAS scoring)
-    ds_file = OUT_DIR / f"{name}_evaluation_inputs.parquet"
-    df.to_parquet(str(ds_file), compression="zstd", index=False)
-    print(f"   💾 Saved evaluation inputs: {ds_file.name}")
 
     # Run RAGAS evaluation
     res = evaluate(
