@@ -10,8 +10,8 @@ This script:
 5. Uploads to Hugging Face Hub with dataset cards
 
 Datasets Created:
-- dwb2023/gdelt-rag-evaluation-datasets: RAGAS input datasets (questions, contexts, responses)
-- dwb2023/gdelt-rag-detailed-results: RAGAS evaluation results with metric scores
+- dwb2023/gdelt-rag-evaluation-inputs: RAGAS input datasets (questions, contexts, responses)
+- dwb2023/gdelt-rag-evaluation-metrics: RAGAS evaluation results with metric scores
 """
 
 import os
@@ -23,8 +23,8 @@ from huggingface_hub import HfApi, login
 
 # Configuration
 HF_USERNAME = "dwb2023"
-EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-datasets"
-DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-detailed-results"
+EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-inputs"
+DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-metrics"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -107,7 +107,7 @@ This dataset contains consolidated RAGAS evaluation input datasets from 5 differ
 
 ### Performance Results
 
-Based on RAGAS evaluation metrics (see `gdelt-rag-detailed-results` dataset):
+Based on RAGAS evaluation metrics (see `gdelt-rag-evaluation-metrics` dataset):
 
 ### Data Splits
 
@@ -156,7 +156,7 @@ This dataset was created as part of the AI Engineering Bootcamp Cohort 8 certifi
 
 ### Related Datasets
 
-- **Evaluation Results**: `dwb2023/gdelt-rag-detailed-results` (RAGAS metric scores)
+- **Evaluation Results**: `dwb2023/gdelt-rag-evaluation-metrics` (RAGAS metric scores)
 - **Golden Testset**: `dwb2023/gdelt-rag-golden-testset-v2` (ground truth QA pairs)
 - **Source Documents**: `dwb2023/gdelt-rag-sources-v2` (knowledge base)
 
@@ -317,7 +317,7 @@ Created as part of AI Engineering Bootcamp Cohort 8 certification challenge (Jan
 
 ### Related Datasets
 
-- **Evaluation Inputs**: dwb2023/gdelt-rag-evaluation-datasets (without metric scores)
+- **Evaluation Inputs**: dwb2023/gdelt-rag-evaluation-inputs (without metric scores)
 - **Golden Testset**: dwb2023/gdelt-rag-golden-testset-v2
 - **Source Documents**: dwb2023/gdelt-rag-sources-v2
 
