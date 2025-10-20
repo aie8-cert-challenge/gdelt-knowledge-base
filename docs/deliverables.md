@@ -547,6 +547,13 @@ All evaluation results are publicly available on HuggingFace Hub for reproducibi
 - `scripts/publish_interim_datasets.py` - Publishes raw sources and golden testset
 - `scripts/publish_processed_datasets.py` - Publishes consolidated evaluation results
 
+**Deliverables Workflow** (Parquet-first architecture):
+1. Evaluation scripts write Parquet files to `data/processed/` (machine-readable, compressed)
+2. Run `scripts/generate_deliverables.py` (or `make deliverables`) to generate CSV files in `deliverables/evaluation_evidence/` (human-readable)
+3. The `deliverables/` directory is **derived only** and regenerable - never a working sink
+
+**See also**: [docs/data-ingestion-and-processing.md](data-ingestion-and-processing.md) for architecture details
+
 ### Per-Question Performance Sample
 
 Example from `baseline_detailed_results.csv` (anonymized for brevity):

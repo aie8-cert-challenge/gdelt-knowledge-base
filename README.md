@@ -254,14 +254,14 @@ naive                0.9351          0.9335           0.9459            0.9410
 | └── `diagrams/` | Mermaid dependency and system diagrams |
 | `docs/` | Certification artifacts and legacy design documentation |
 | └── `initial-architecture.md` | Original hand-drawn architecture sketch *(frozen, not updated)* |
-| `data/` | Complete RAG dataset lineage and provenance chain |
+| `data/` | Complete RAG dataset lineage and provenance chain (Parquet-first) |
 | ├── `raw/` | Original GDELT PDFs |
 | ├── `interim/` | Extracted text, Hugging Face datasets, and manifest fingerprints |
 | │   ├── `manifest.json` → Ingestion provenance manifest (dataset lineage, SHA-256 hashes) |
-| ├── `processed/` | Evaluation datasets (CSV, Parquet) |
-| └── `deliverables/` | Final evaluation evidence and signed manifests |
-|     ├── `evaluation_evidence/` | RAGAS results, raw datasets, and per-retriever outputs |
-|     │   └── `RUN_MANIFEST.json` → Evaluation provenance manifest (retrievers, models, metrics) |
+| ├── `processed/` | **Working data** (Parquet, ZSTD compressed) - evaluation results + RUN_MANIFEST.json |
+| └── `deliverables/` | **Derived data** (CSV for human review, regenerable via `make deliverables`) |
+|     ├── `evaluation_evidence/` | Human-readable CSV files generated from data/processed/ |
+|     │   └── `RUN_MANIFEST.json` → Copied from data/processed/ |
 | `app/` | Lightweight LangGraph API (`graph_app.py`) and entrypoint |
 | `deliverables/` | High-level evaluation reports and comparative analyses |
 | `Makefile` | Task automation for environment setup, validation, and architecture snapshots |
