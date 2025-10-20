@@ -103,9 +103,9 @@ print(result['response'])
 **Layer 1: Scripts** (`scripts/`)
 - `single_file.py` - Complete standalone evaluation (508 LOC, works without src/)
 - `run_eval_harness.py` - Modular evaluation using src/ modules
-- `validate_langgraph.py` - Validation script (100% pass required before deployment)
-- `ingest.py` - PDF extraction + RAGAS testset generation
-- `upload_to_hf.py` - HuggingFace dataset publisher
+- `run_app_validation.py` - Application validation (100% pass required before deployment)
+- `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
+- `publish_interim_datasets.py` - Upload interim datasets to HuggingFace Hub
 
 **Layer 2: Core Modules** (`src/`)
 - `config.py` - Cached singletons: `get_llm()`, `get_embeddings()`, `get_qdrant()`, `create_vector_store()`
@@ -884,82 +884,56 @@ make validate
 
 ## Documentation
 
-### Project Documentation
+### Documentation Guide
 
-- [README.md](README.md) - Project overview and quick start (348 lines)
-- [docs/deliverables.md](docs/deliverables.md) - Complete certification answers
+This project has comprehensive documentation organized across multiple files. Use this guide to find what you need:
 
-### Architecture Documentation Summary
+**Core Documentation**:
+- **[README.md](README.md)** - Project overview, quick start, installation (356 lines)
+- **[CLAUDE.md](CLAUDE.md)** (this file) - Complete technical reference for AI assistants (965 lines)
+- **[docs/deliverables.md](docs/deliverables.md)** - Certification challenge answers (1,152 lines)
+- **[docs/architecture.md](docs/architecture.md)** - System design patterns and decisions (18KB)
+- **[docs/certification-challenge-task-list.md](docs/certification-challenge-task-list.md)** - Scoring rubric
 
-**Total**: 5,375 lines across 5 comprehensive architecture documents.
+**Directory-Specific Guides** (for detailed module/script reference):
+- **scripts/** - See inline docstrings in each script, or run `python <script> --help`
+- **src/** - Factory pattern documentation in this file (lines 95-215)
+- **data/** - Data flow documented in this file (lines 216-269)
 
-#### [architecture/README.md](architecture/README.md) (1,073 lines)
-**Purpose**: Complete system architecture overview and design philosophy
+**Quick Navigation**:
+- Want to run evaluations? → See "Common Development Tasks" (lines 42-62)
+- Want to add a new retriever? → See "Adding New Retrievers" (lines 271-302)
+- Want to understand factory pattern? → See "Factory Pattern Philosophy" (lines 97-99)
+- Want API reference? → See "Key Implementation Files" (lines 827-849)
 
-**Key Sections**:
-- **Design Patterns**: Factory Pattern (component creation), Strategy Pattern (retrievers), Singleton Pattern (@lru_cache)
-- **Layered Architecture**: Scripts → Application (src/) → Data Layer (external services)
-- **Component Interaction**: How retrievers, graphs, and state management work together
-- **Quick Start Examples**: First query in 2 minutes, evaluation in 30 minutes
-- **Deployment Considerations**: Docker, scaling, cost ($5-6 per eval run), latency benchmarks
+### Module Inventory (src/)
 
-**When to Use**: Starting point for understanding system design, deployment planning, or architectural decisions.
+**Core Modules**:
+- `config.py` - Cached singletons for LLM, embeddings, Qdrant client
+- `retrievers.py` - Factory for 4 retriever strategies (naive, BM25, ensemble, Cohere rerank)
+- `graph.py` - LangGraph workflow builders
+- `state.py` - TypedDict schema for graph state
+- `utils/loaders.py` - HuggingFace dataset loaders
+- `utils/manifest.py` - RUN_MANIFEST.json generation
+- `prompts.py` - RAG prompt templates
 
-#### [architecture/docs/01_component_inventory.md](architecture/docs/01_component_inventory.md) (521 lines)
-**Purpose**: Catalog of all system modules, scripts, and external dependencies
+### Script Inventory (scripts/)
 
-**Key Sections**:
-- **Core Modules** (`src/`):
-  - `config.py` - Cached singletons for LLM, embeddings, Qdrant client
-  - `retrievers.py` - Factory for 4 retriever strategies (naive, BM25, ensemble, Cohere rerank)
-  - `graph.py` - LangGraph workflow builders
-  - `state.py` - TypedDict schema for graph state
-  - `utils.py` - HuggingFace dataset loaders
-  - `prompts.py` - RAG prompt templates
-- **Scripts** (`scripts/`):
-  - `single_file.py` - Standalone evaluation (508 LOC, works without src/)
-  - `run_eval_harness.py` - Modular evaluation using src/ modules
-  - `validate_langgraph.py` - Validation harness (100% pass required)
-  - `ingest.py` - PDF extraction + RAGAS testset generation
-- **External Dependencies**: OpenAI, Cohere, Qdrant, HuggingFace Hub
+**Evaluation Scripts**:
+- `run_app_validation.py` - Validate src/ modules + environment (2 min, $0, must pass 100%)
+- `run_eval_harness.py` - Modular RAGAS evaluation (20-30 min, $5-6)
+- `run_full_evaluation.py` - Standalone RAGAS evaluation (20-30 min, $5-6)
 
-**When to Use**: Finding specific module functionality, understanding what each file does, dependency auditing.
+**Data Pipeline Scripts**:
+- `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
+- `publish_interim_datasets.py` - Upload interim datasets to HuggingFace Hub
 
-#### [architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md) (786 lines)
-**Purpose**: Visual representation of system architecture using Mermaid diagrams
+### External Dependencies
 
-**Key Diagrams**:
-- **System Architecture Diagram**: Three-layer design (Scripts → Application → Data)
-- **Component Hierarchy**: Class relationships and inheritance
-- **Data Flow Diagrams**: Document loading → Embedding → Retrieval → Generation
-- **Retriever Strategy Comparison**: Visual comparison of 4 retrieval approaches
-- **LangGraph State Machine**: Node transitions (START → retrieve → generate → END)
-- **Evaluation Pipeline Flow**: 12 questions × 4 retrievers = 48 queries → RAGAS metrics
-
-**When to Use**: Visual learners, onboarding new developers, architecture presentations, debugging flow issues.
-
-#### [architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md) (947 lines)
-**Purpose**: Detailed sequence diagrams and state management explanations
-
-**Key Sections**:
-- **Query Flow Sequence**: Step-by-step message passing from user question to generated answer
-- **State Updates**: How LangGraph merges partial state updates from each node
-- **Retriever Comparison Flow**: How 4 retrievers process the same question differently
-- **Evaluation Pipeline Sequence**: RAGAS metric calculation across all queries
-- **Data Persistence**: Multi-format saving (CSV, JSON, manifests)
-- **Error Handling**: Incremental result saving to prevent data loss
-
-**When to Use**: Understanding state management, debugging evaluation issues, optimizing data flows.
-
-#### [architecture/docs/04_api_reference.md](architecture/docs/04_api_reference.md) (3,121 lines)
-**Purpose**: Complete API documentation for all modules, functions, and classes
-
-**Coverage**:
-- **All `src/` modules**: Function signatures, parameters, return types, usage examples
-- **Factory Functions**: `create_vector_store()`, `create_retrievers()`, `build_graph()`, `build_all_graphs()`
-- **Cached Singletons**: `get_llm()`, `get_embeddings()`, `get_qdrant()`
-- **Data Loaders**: `load_documents_from_huggingface()`, `load_golden_testset_from_huggingface()`
-- **State Schema**: TypedDict field descriptions and constraints
-- **Script Entry Points**: Command-line arguments, environment variables, expected outputs
-
-**When to Use**: API integration, writing new retrievers, extending the system, code review.
+- **OpenAI**: gpt-4.1-mini (LLM), text-embedding-3-small (embeddings)
+- **Cohere**: rerank-v3.5 (contextual compression)
+- **Qdrant**: Vector database (localhost:6333)
+- **HuggingFace Hub**: Dataset hosting and versioning
+- **RAGAS**: RAG evaluation framework (v0.2.10)
+- **LangChain**: RAG abstractions and orchestration
+- **LangGraph**: Stateful graph workflows

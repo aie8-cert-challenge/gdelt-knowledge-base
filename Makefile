@@ -27,7 +27,7 @@ help:
 # Validate src/ module implementation
 validate:
 	@echo "🔍 Validating src/ module implementation..."
-	@PYTHONPATH=. python scripts/run_validation.py
+	@PYTHONPATH=. python scripts/run_app_validation.py
 
 # Run full RAGAS evaluation (same as single_file.py but uses src/ modules)
 # Usage: make eval              (reuses existing Qdrant collection)
