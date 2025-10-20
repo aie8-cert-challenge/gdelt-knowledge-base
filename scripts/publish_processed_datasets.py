@@ -109,15 +109,6 @@ This dataset contains consolidated RAGAS evaluation input datasets from 5 differ
 
 Based on RAGAS evaluation metrics (see `gdelt-rag-detailed-results` dataset):
 
-| Retriever | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Overall |
-|-----------|--------------|------------------|-------------------|----------------|---------|
-| Cohere Rerank | 0.98 | 0.97 | 0.99 | 0.91 | 96.47% |
-| BM25 | 0.95 | 0.96 | 0.95 | 0.91 | 94.14% |
-| Ensemble | 0.95 | 0.96 | 0.94 | 0.91 | 93.96% |
-| Naive | 0.92 | 0.94 | 0.92 | 0.89 | 91.60% |
-
-**Key Finding**: Cohere Rerank outperforms all other strategies by +2.33% over BM25 and +4.87% over naive baseline.
-
 ### Data Splits
 
 This dataset contains a single split with all evaluation records from all 5 retrievers.
@@ -245,6 +236,8 @@ This dataset contains detailed RAGAS evaluation results with per-question metric
 
 ### Aggregate Performance Results
 
+- based on prior evaluation results and experience what we expect to see
+
 | Retriever | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Overall |
 |-----------|--------------|------------------|-------------------|----------------|---------|
 | Cohere Rerank | 0.9844 | 0.9717 | 0.9999 | 0.9136 | 96.47% |
@@ -252,7 +245,7 @@ This dataset contains detailed RAGAS evaluation results with per-question metric
 | Ensemble | 0.9520 | 0.9582 | 0.9442 | 0.9056 | 93.96% |
 | Naive | 0.9249 | 0.9432 | 0.9152 | 0.8904 | 91.60% |
 
-**Key Insights**:
+**Key Insights - from prior evaluations**:
 - Cohere Rerank achieves near-perfect context precision (99.99%)
 - All retrievers score >0.89 on context recall (good coverage)
 - Cohere Rerank leads in faithfulness (98.44%, fewest hallucinations)
