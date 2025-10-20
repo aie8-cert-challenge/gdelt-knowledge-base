@@ -15,7 +15,7 @@ Results: Identical to single_file.py
 
 Only difference: Uses factory functions from src/ instead of duplicating code.
 
-See scripts/README_eval_harness.md for details.
+See scripts/README.md for details.
 
 Usage:
     make eval
