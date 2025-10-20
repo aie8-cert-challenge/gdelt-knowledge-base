@@ -1,6 +1,6 @@
 # Makefile for GDELT RAG Evaluation System
 
-.PHONY: help validate eval clean env docker-up docker-down test
+.PHONY: help validate eval deliverables clean clean-deliverables clean-processed clean-all env docker-up docker-down test
 
 # Default target
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "Development:"
 	@echo "  make validate    - Validate src/ module implementation (100% pass required)"
 	@echo "  make eval        - Run full RAGAS evaluation harness (~20-30 min)"
+	@echo "  make deliverables - Generate human-friendly CSV files from Parquet data"
 	@echo "  make test        - Run quick validation test"
 	@echo ""
 	@echo "Infrastructure:"
@@ -16,9 +17,14 @@ help:
 	@echo "  make docker-down - Stop all infrastructure services"
 	@echo "  make qdrant-up   - Start only Qdrant (minimal requirement)"
 	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean       - Clean Python cache and temporary files"
+	@echo "  make clean-deliverables - Clean derived deliverables (regenerable)"
+	@echo "  make clean-processed    - Clean processed data (requires re-eval)"
+	@echo "  make clean-all   - Full cleanup (cache + interim + processed + deliverables)"
+	@echo ""
 	@echo "Environment:"
 	@echo "  make env         - Show environment variables"
-	@echo "  make clean       - Clean Python cache and temporary files"
 	@echo ""
 	@echo "Jupyter:"
 	@echo "  make notebook    - Start Jupyter notebook server"
@@ -103,6 +109,35 @@ clean:
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✅ Clean complete"
+
+# Generate human-friendly deliverables from Parquet data
+deliverables:
+	@echo "📂 Generating deliverables from data/processed/..."
+	uv run python scripts/generate_deliverables.py
+
+# Clean derived deliverables (can be regenerated)
+clean-deliverables:
+	@echo "🧹 Cleaning deliverables/evaluation_evidence/..."
+	@rm -f deliverables/evaluation_evidence/*.csv 2>/dev/null || true
+	@rm -f deliverables/evaluation_evidence/*.parquet 2>/dev/null || true
+	@rm -f deliverables/evaluation_evidence/RUN_MANIFEST.json 2>/dev/null || true
+	@echo "✅ Deliverables cleaned (regenerate with 'make deliverables')"
+
+# Clean processed data (requires re-running evaluation)
+clean-processed:
+	@echo "🧹 Cleaning data/processed/..."
+	@rm -f data/processed/*.parquet 2>/dev/null || true
+	@rm -f data/processed/*.csv 2>/dev/null || true
+	@rm -f data/processed/RUN_MANIFEST.json 2>/dev/null || true
+	@echo "⚠️  Processed data cleaned (re-run evaluation with 'make eval')"
+
+# Full clean (interim + processed + deliverables + cache)
+clean-all: clean clean-deliverables clean-processed
+	@echo "🧹 Cleaning data/interim/..."
+	@rm -f data/interim/*.parquet 2>/dev/null || true
+	@rm -f data/interim/*.jsonl 2>/dev/null || true
+	@rm -f data/interim/manifest.json 2>/dev/null || true
+	@echo "✅ Full cleanup complete (cache + interim + processed + deliverables)"
 
 # Start Jupyter notebook
 notebook:
