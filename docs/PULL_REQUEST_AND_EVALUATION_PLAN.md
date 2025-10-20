@@ -230,6 +230,7 @@ make validate  # Should pass 100%
 1. ✅ Renamed scripts work correctly:
    - `scripts/ingest_raw_pdfs.py` (was `ingest.py`)
    - `scripts/run_eval_harness.py` (imports from refactored `src/`)
+   - `scripts/publish_interim_datasets.py` (pushes interim dataset to Hugging Face)
 
 2. ✅ Refactored `src/` modules function correctly:
    - Factory patterns in `src/retrievers.py`, `src/graph.py`

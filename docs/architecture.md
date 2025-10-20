@@ -196,7 +196,7 @@ graph TB
 
 **✅ Core RAG Engine** (`src/` modules):
 - `src/config.py` - Cached singletons for LLM, embeddings, Qdrant client
-- `src/utils.py` - HuggingFace dataset loaders
+- `src/utils/loaders.py` - HuggingFace dataset loaders
 - `src/retrievers.py` - 4 retrieval strategies (naive, BM25, ensemble, Cohere rerank)
 - `src/graph.py` - LangGraph workflow factories
 - `src/state.py` - TypedDict schema for state management
@@ -209,16 +209,16 @@ graph TB
 - Supports all 4 retrieval strategies
 
 **✅ Evaluation Pipeline**:
-- `scripts/single_file.py` - Self-contained evaluation (reference implementation)
+- `scripts/run_full_evaluation` - Self-contained evaluation (reference implementation)
 - `scripts/run_eval_harness.py` - Modular evaluation using src/ modules
 - Both scripts generate RUN_MANIFEST.json with data provenance
 - RAGAS integration for 4 metrics (faithfulness, answer relevancy, context precision, context recall)
 
 **✅ LangGraph Platform Deployment**:
 - `app/graph_app.py` - Deployment entrypoint
-- Local development: `uv run langgraph dev` (in-memory runtime, no Docker required)
+- Local development: `uv run langgraph dev --allow-blocking` (in-memory runtime, no Docker required)
 - Interactive UI: LangGraph Studio at http://localhost:2024
-- Production deployment: Docker Compose with Redis + Postgres
+    - Current deployment approach: Docker Compose with Redis + Postgres
 
 **✅ Interactive UI**:
 - LangGraph Studio (http://localhost:2024)
@@ -399,20 +399,20 @@ graph TB
 ## Task Alignment
 
 ### Task 4: End-to-End Prototype
-**Current Implementation**: [app/baseline_rag.py](../app/baseline_rag.py:1-1)
+**Reference Implementation**: [simple graph implementations from session08-ragas-rag-evals](https://github.com/don-aie-cohort8/aie8-s09-adv-retrieval/blob/main/notebooks/session08-ragas-rag-evals.py)
 - Baseline RAG with Qdrant in-memory vector store
 - OpenAI embeddings + GPT-4.1-mini
 - LangChain LCEL orchestration
-- Local deployment via Streamlit
+- Local deployment via Docker - see additional information on LangGraph studio in [CLAUDE.md](../CLAUDE.md) file
 
 ### Task 5: RAGAS Evaluation Baseline
-**Implementation**: [scripts/session08-ragas-rag-evals.py](../scripts/session08-ragas-rag-evals.py:1-1)
+**Reference Implementation**: [session08-ragas-rag-evals](https://github.com/don-aie-cohort8/aie8-s09-adv-retrieval/blob/main/notebooks/session08-ragas-rag-evals.py)
 - Synthetic test dataset generation
 - RAGAS metrics: faithfulness, response relevancy, context precision/recall
 - Baseline performance benchmarking
 
 ### Task 6: Advanced Retrieval
-**Reference**: [sample_code/adv-rag/src/rag/retriever.py](../sample_code/adv-rag/src/rag/retriever.py:1-1)
+**Reference Implementation**: [session09-adv-retrieval](https://github.com/don-aie-cohort8/aie8-s09-adv-retrieval/blob/main/notebooks/session09-adv-retrieval.py)
 - Hybrid search (BM25 + dense vectors)
 - Cohere reranking
 - Query expansion
@@ -420,7 +420,7 @@ graph TB
 - Ensemble retrievers
 
 ### Task 7: Performance Assessment
-**Evaluation Framework**: [sample_code/rag-eval-foundations/](../sample_code/rag-eval-foundations/:1-1)
+**Evaluation Framework - Reference Implementation**: [session08-ragas-rag-evals](https://github.com/don-aie-cohort8/aie8-s09-adv-retrieval/blob/main/notebooks/session08-ragas-rag-evals.py)
 - Comparative RAGAS benchmarks (baseline vs. advanced)
 - Golden test dataset versioning
 - A/B testing framework
