@@ -42,9 +42,11 @@
 
 **Goal**: Identify data sources, external APIs, and implement chunking strategy
 
-**Evidence**: `docs/deliverables.md` lines 227-256
+**Evidence**:
+- `docs/deliverables.md` lines 227-256
+- **Public Dataset**: [gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2) (38 documents, publicly verifiable)
 
-**Result**: Page-level chunking strategy using PyMuPDFLoader with metadata preservation, yielding 38 documents from GDELT research paper with SHA-256 fingerprints for data integrity, plus Tavily Search API integration for external knowledge augmentation.
+**Result**: Page-level chunking strategy using PyMuPDFLoader with metadata preservation, yielding 38 documents from GDELT research paper with SHA-256 fingerprints for data integrity, plus Tavily Search API integration for external knowledge augmentation. All source documents published to HuggingFace with complete provenance tracking.
 
 **Next Step**: Implement graph-based retrieval using Neo4j to leverage GDELT entity relationships for enhanced context retrieval.
 
@@ -66,9 +68,13 @@
 
 **Goal**: Create golden test dataset and evaluate pipeline using RAGAS framework
 
-**Evidence**: `deliverables/evaluation_evidence/RUN_MANIFEST.json` lines 92-121
+**Evidence**:
+- `deliverables/evaluation_evidence/RUN_MANIFEST.json` lines 92-121
+- **Public Datasets**:
+  - [gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2) (12 QA pairs, publicly verifiable)
+  - [gdelt-rag-evaluation-inputs](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-inputs) (60 evaluation records)
 
-**Result**: Complete RAGAS evaluation with 4 metrics (faithfulness, answer_relevancy, context_precision, context_recall) across 4 retrievers using 12 golden test questions generated with RAGAS 0.2.10 synthetic data generation.
+**Result**: Complete RAGAS evaluation with 4 metrics (faithfulness, answer_relevancy, context_precision, context_recall) across 4 retrievers using 12 golden test questions generated with RAGAS 0.2.10 synthetic data generation. All evaluation inputs published to HuggingFace for reproducibility.
 
 **Next Step**: Expand golden test set to 50+ questions covering more diverse GDELT use cases and edge cases.
 
@@ -78,9 +84,12 @@
 
 **Goal**: Implement and test advanced retrieval techniques
 
-**Evidence**: `src/retrievers.py` lines 20-89, `deliverables/evaluation_evidence/comparative_ragas_results.csv`
+**Evidence**:
+- `src/retrievers.py` lines 20-89
+- **Public Dataset**: [gdelt-rag-evaluation-metrics](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics) (60 results with RAGAS scores)
+- **Interactive SQL Console**: [Live Metrics Explorer](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics/sql-console/LI3hpFs)
 
-**Result**: Factory function implementing 4 retrieval strategies: naive (dense vector), BM25 (sparse keyword), ensemble (hybrid 50/50), and Cohere Rerank (contextual compression), with comprehensive evaluation infrastructure.
+**Result**: Factory function implementing 4 retrieval strategies: naive (dense vector), BM25 (sparse keyword), ensemble (hybrid 50/50), and Cohere Rerank (contextual compression), with comprehensive evaluation infrastructure. All evaluation results publicly queryable via HuggingFace SQL console.
 
 **Next Step**: Implement learning-to-rank models using RAGAS scores as quality labels for further retrieval optimization.
 
@@ -90,9 +99,11 @@
 
 **Goal**: Compare performance and articulate future improvements
 
-**Evidence**: `deliverables/evaluation_evidence/comparative_ragas_results.csv`, `docs/deliverables.md` lines 1110-1155
+**Evidence**:
+- **Interactive SQL Console**: [Live Metrics Explorer](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics/sql-console/LI3hpFs) (query all 60 evaluation results)
+- `docs/deliverables.md` lines 1110-1155
 
-**Result**: Cohere Rerank achieved 94.4% average vs 92.6% naive baseline, with Context Precision showing largest improvement (+6.3%), plus detailed comparative analysis and future improvement roadmap.
+**Result**: Cohere Rerank achieved 94.4% average vs 92.6% naive baseline, with Context Precision showing largest improvement (+6.3%), plus detailed comparative analysis and future improvement roadmap. **All results publicly verifiable via SQL console** - anyone can validate these claims.
 
 **Next Step**: Implement fine-tuned embeddings for GDELT domain terminology and deploy production monitoring with LangSmith for continuous evaluation.
 
@@ -100,17 +111,22 @@
 
 ## Slide 9: Conclusion / Reflection
 
-**Key Results**: 
+**Key Results**:
 1. **Advanced retrieval significantly outperformed naive approach** - Cohere Rerank achieved 94.4% average performance vs 92.6% baseline, with Context Precision improving by 6.3%
 2. **Complete production-ready RAG system** - End-to-end LangGraph deployment with 4 retrieval strategies, comprehensive evaluation framework, and full provenance tracking
-3. **Scientific contribution** - Published 4 HuggingFace datasets enabling reproducible RAG evaluation research
+3. **Scientific contribution** - Published **first publicly available GDELT RAG evaluation suite** with 4 HuggingFace datasets enabling reproducible research:
+   - [sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2) - 38 source documents
+   - [golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2) - 12 QA pairs
+   - [evaluation-inputs](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-inputs) - 60 evaluation records
+   - [evaluation-metrics](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics) - 60 RAGAS results ([**query live**](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics/sql-console/LI3hpFs))
 
-**Lessons Learned**: 
+**Lessons Learned**:
 - Context Precision is the most challenging metric to optimize
 - Cohere Rerank provides best quality but at higher cost
 - Page-level chunking preserves document structure better than character splitting
+- Public datasets enable transparent validation of claims
 
-**Next Iteration Plan**: 
+**Next Iteration Plan**:
 1. Implement fine-tuned embeddings for GDELT domain
 2. Add graph-based retrieval with Neo4j
 3. Deploy production monitoring with LangSmith
@@ -118,4 +134,4 @@
 5. Implement learning-to-rank models
 6. Add user authentication and multi-tenant support
 
-**Call to Action**: The system is ready for production deployment and can be extended to other knowledge graph domains beyond GDELT.
+**Call to Action**: The system is ready for production deployment and can be extended to other knowledge graph domains beyond GDELT. All evaluation data is publicly available for validation and research.

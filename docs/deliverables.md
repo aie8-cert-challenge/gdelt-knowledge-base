@@ -348,7 +348,7 @@ uv run langgraph dev --allow-blocking
 # Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
 # CLI testing with self-contained evaluation
-python scripts/single_file.py
+python scripts/run_full_evaluation.py
 
 # Modular evaluation (uses src/ modules)
 python scripts/run_eval_harness.py
@@ -1089,7 +1089,7 @@ This section provides a comprehensive catalog of all artifacts demonstrating com
   - Generates all baseline + comparative results
   - Exports to 16 files (12 CSVs + manifest)
 - `scripts/run_eval_harness.py` (370 lines) - Modular evaluation using src/ modules
-  - Same functionality as single_file.py but uses factory pattern
+  - Same functionality as run_full_evaluation.py but uses factory pattern
   - Now generates RUN_MANIFEST.json with data provenance
 
 **Data Processing** (Task 3):

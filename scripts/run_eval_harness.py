@@ -2,7 +2,7 @@
 """
 RAGAS Evaluation Harness
 
-THIS IS THE SAME AS single_file.py BUT USES src/ MODULES INSTEAD OF INLINE CODE.
+THIS IS THE SAME AS run_full_evaluation.py BUT USES src/ MODULES INSTEAD OF INLINE CODE.
 
 What it does:
 - Runs 12 test questions through 4 retrievers (naive, bm25, ensemble, cohere_rerank)
@@ -11,7 +11,7 @@ What it does:
 
 Time: 20-30 minutes
 Cost: ~$5-6 in OpenAI API calls
-Results: Identical to single_file.py
+Results: Identical to run_full_evaluation.py
 
 Only difference: Uses factory functions from src/ instead of duplicating code.
 
@@ -51,7 +51,7 @@ from src.graph import build_all_graphs
 # ==============================================================================
 
 parser = argparse.ArgumentParser(
-    description="RAGAS Evaluation Harness - Same as single_file.py but uses src/ modules"
+    description="RAGAS Evaluation Harness - Same as run_full_evaluation.py but uses src/ modules"
 )
 parser.add_argument(
     "--recreate",
@@ -72,7 +72,7 @@ RECREATE_COLLECTION = args.recreate.lower() == "true"
 
 DATASET_SOURCES = "dwb2023/gdelt-rag-sources"
 DATASET_GOLDEN = "dwb2023/gdelt-rag-golden-testset"
-K = 5  # Number of documents to retrieve (matches single_file.py)
+K = 5  # Number of documents to retrieve (matches run_full_evaluation.py)
 OUT_DIR = Path(__file__).parent.parent / "data" / "processed"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

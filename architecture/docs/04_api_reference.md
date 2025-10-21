@@ -910,7 +910,7 @@ deliverables/evaluation_evidence/
 
 **Notes**:
 - Uses src/ modules (not inline code)
-- Results identical to single_file.py
+- Results identical to run_full_evaluation.py
 - Intermediate results saved immediately (fault tolerance)
 - Links to ingestion manifest via data_provenance
 

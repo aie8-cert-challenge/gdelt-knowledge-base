@@ -6,7 +6,7 @@ Purpose:
 - Validate the LangGraph implementation in src/ directory
 - Identify issues preventing src/ module from being importable
 - Demonstrate correct initialization patterns (factory pattern vs module-level)
-- Serve as reference for migrating single_file.py to use src/ modules
+- Serve as reference for migrating run_full_evaluation.py to use src/ modules
 
 This script validates:
 1. Environment configuration (API keys, Qdrant connectivity)
@@ -14,7 +14,7 @@ This script validates:
 3. Retriever factory pattern (correct way to create retrievers)
 4. Graph compilation (all 4 LangGraph workflows)
 5. Functional execution (test queries through each graph)
-6. Configuration consistency (comparing src/ vs single_file.py)
+6. Configuration consistency (comparing src/ vs run_full_evaluation.py)
 
 Exit codes:
 - 0: All validations passed
@@ -430,7 +430,7 @@ def generate_diagnostic_report(
    2. Create src/loader.py with document loading utilities
    3. Update src/retrievers.py to export factory function (not instances)
    4. Update src/graph.py to use factories
-   5. Refactor scripts/single_file.py to import from src/
+   5. Refactor scripts/run_full_evaluation.py to import from src/
 
    See section 3 output above for working factory pattern example.
 """)

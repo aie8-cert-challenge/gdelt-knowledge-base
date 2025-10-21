@@ -12,13 +12,13 @@ Certification challenge project for AI Engineering Bootcamp Cohort 8: a producti
 
 **Current Implementation**: This project has evolved through multiple refactoring cycles. The canonical implementation is:
 - **Core library**: `src/` modules (config, utils, retrievers, graph, state, prompts)
-- **Scripts**: `scripts/single_file.py` (self-contained reference) and `scripts/run_eval_harness.py` (modular)
+- **Scripts**: `scripts/run_full_evaluation.py` (self-contained reference) and `scripts/run_eval_harness.py` (modular)
 - **Deployment**: `app/graph_app.py` (LangGraph Platform entrypoint only)
 - **UI**: LangGraph Studio (`uv run langgraph dev`)
 
 **Documentation Drift**: Some documentation (initial-initial-architecture.m, deliverables.md) may reference prototype files that were refactored into `src/` modules. When in doubt, trust the code in `src/` and the commands in this CLAUDE.md file.
 
-**Reference Implementation**: Use `scripts/single_file.py` as the learning reference - it shows the full evaluation pipeline in one file without abstractions.
+**Reference Implementation**: Use `scripts/run_full_evaluation.py` as the learning reference - it shows the full evaluation pipeline in one file without abstractions.
 
 ## Essential Commands
 
@@ -76,8 +76,8 @@ make help
 # Interactive query via main entry point
 python main.py
 
-# Run single-file evaluation pipeline
-python scripts/single_file.py
+# Run standalone evaluation pipeline
+python scripts/run_full_evaluation.py
 
 # Validate LangGraph implementation
 PYTHONPATH=. python scripts/validate_langgraph.py
@@ -110,7 +110,7 @@ print(result['response'])
 ### Three-Layer Design
 
 **Layer 1: Scripts** (`scripts/`)
-- `single_file.py` - Complete standalone evaluation (508 LOC, works without src/)
+- `run_full_evaluation.py` - Complete standalone evaluation (530 LOC, works without src/)
 - `run_eval_harness.py` - Modular evaluation using src/ modules
 - `run_app_validation.py` - Application validation (100% pass required before deployment)
 - `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
@@ -224,7 +224,7 @@ def get_qdrant():
 
 ## Data Flow
 
-### Evaluation Pipeline (scripts/single_file.py)
+### Evaluation Pipeline (scripts/run_full_evaluation.py)
 
 ```
 1. Load golden testset (12 QA pairs) from HuggingFace
@@ -575,7 +575,7 @@ def create_retrievers(documents, vector_store, k=5):
     }
 
 # 2. Re-run evaluation - automatically includes new retriever
-python scripts/single_file.py
+python scripts/run_full_evaluation.py
 ```
 
 **The system automatically**:
@@ -611,7 +611,7 @@ from ragas.metrics import (
 }
 ```
 
-**Common Error**: Passing `List[Document]` instead of `List[str]` for `retrieved_contexts` causes RAGAS validation failure. Use `validate_and_normalize_ragas_schema()` in `single_file.py` to prevent this.
+**Common Error**: Passing `List[Document]` instead of `List[str]` for `retrieved_contexts` causes RAGAS validation failure. Use `validate_and_normalize_ragas_schema()` in `run_full_evaluation.py` to prevent this.
 
 ## Environment Variables
 
@@ -666,7 +666,7 @@ docker-compose up -d
 ### Overview: Local vs Platform Deployment
 
 **Local Development** (Scripts):
-- Runs Python scripts directly (`python scripts/single_file.py`)
+- Runs Python scripts directly (`python scripts/run_full_evaluation.py`)
 - Only requires Qdrant
 - No API server
 
@@ -1123,7 +1123,7 @@ When working with the code, reference these locations:
 - [src/prompts.py:4-12](src/prompts.py) - `BASELINE_PROMPT` template
 
 **Evaluation Pipeline**:
-- [scripts/single_file.py](scripts/single_file.py) - Standalone evaluation (works without src/)
+- [scripts/run_full_evaluation.py](scripts/run_full_evaluation.py) - Standalone evaluation (works without src/)
 - [scripts/run_eval_harness.py](scripts/run_eval_harness.py) - Modular evaluation (uses src/)
 - [scripts/validate_langgraph.py](scripts/validate_langgraph.py) - Validation harness (must pass 100%)
 

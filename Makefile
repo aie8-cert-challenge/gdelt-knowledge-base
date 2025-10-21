@@ -35,14 +35,14 @@ validate:
 	@echo "🔍 Validating src/ module implementation..."
 	@PYTHONPATH=. python scripts/run_app_validation.py
 
-# Run full RAGAS evaluation (same as single_file.py but uses src/ modules)
+# Run full RAGAS evaluation (same as run_full_evaluation.py but uses src/ modules)
 # Usage: make eval              (reuses existing Qdrant collection)
 #        make eval recreate=true (recreates Qdrant collection)
 recreate ?= false
 eval:
 	@echo "🚀 Running RAGAS evaluation harness..."
 	@echo ""
-	@echo "This does the SAME thing as scripts/single_file.py:"
+	@echo "This does the SAME thing as scripts/run_full_evaluation.py:"
 	@echo "  - 12 questions × 4 retrievers = 48 queries"
 	@echo "  - RAGAS evaluation with 4 metrics"
 	@echo "  - Saves to deliverables/evaluation_evidence/"
