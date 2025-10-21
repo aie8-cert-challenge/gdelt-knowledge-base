@@ -362,7 +362,7 @@ The prototype is designed for evaluation-first development:
 - Batch processing for efficiency
 - Results exported to CSV for analysis
 
-**Running Evaluations**:
+**Running Evaluations**: (this broke due to ipykernel issues)
 1. **Baseline** (Task 5): `jupyter notebook` → `task5_baseline_evaluation.ipynb`
 2. **Comparative** (Task 7): `jupyter notebook` → `task7_comparative_evaluation.ipynb`
 
@@ -524,22 +524,107 @@ The **Context Precision (81.10%)** bottleneck suggests that while we retrieve th
 All evaluation results are publicly available on HuggingFace Hub for reproducibility and benchmarking:
 
 #### Interim Datasets (Raw Data)
-- **[dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)** - 38 GDELT documentation pages
-- **[dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)** - 12 QA pairs for evaluation
+
+**1. [dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)**
+- **Purpose**: Source documents extracted from GDELT research paper for RAG knowledge base
+- **Size**: 38 document pages
+- **Format**: Parquet (auto-converted)
+- **License**: Apache 2.0
+- **Schema**:
+  - `page_content` (string): Extracted text from each page (1.48k-5.24k characters)
+  - `metadata` (object): Nested metadata including:
+    - `author`, `creator`, `creation_date`, `modification_date`
+    - `file_path`, `source`, `format` (PDF 1.5/1.6)
+    - `title`: "Talking to GDELT Through Knowledge Graphs"
+    - `page`, `total_pages`
+    - `subject`, `keywords`
+- **Use Cases**:
+  - RAG system knowledge base for GDELT Q&A
+  - Vector store population for retrieval systems
+  - Research on event data analysis and knowledge graphs
+  - Document chunking and embedding experimentation
+- **Citation**: Myers, A., et al. (2025). arXiv:2503.07584v3
+
+**2. [dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)**
+- **Purpose**: Evaluation dataset for benchmarking RAG systems on GDELT domain questions
+- **Size**: 12 question-answer pairs
+- **Format**: Parquet (45.4 kB)
+- **License**: Apache 2.0
+- **Generation Method**: RAGAS 0.2.10 synthetic test data generation
+- **Schema**:
+  - `user_input` (string): Query or question
+  - `reference_contexts` (list): Ground truth passages containing answers (avg 1.67 contexts per question)
+  - `reference` (string): Expected answer
+  - `synthesizer_name` (string): RAGAS synthesizer type (single-hop or multi-hop)
+- **Topics Covered**:
+  - GDELT data formats (CSV vs JSON)
+  - Translingual features (65 languages)
+  - Date extraction methods
+  - Proximity context in GKG 2.1
+  - Multilingual emotion measurement
+- **Use Cases**:
+  - Evaluating RAG systems using RAGAS metrics (Faithfulness, Context Precision, Context Recall, Answer Relevancy)
+  - Benchmarking retrieval strategies
+  - Training and validation for GDELT Q&A systems
+- **Citation**: Derived from arXiv:2503.07584v3, AI Engineering Bootcamp Cohort 8 certification project
 
 #### Processed Datasets (Evaluation Results)
-- **[dwb2023/gdelt-rag-evaluation-datasets](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-datasets)** - 60 RAGAS evaluation inputs
-  - **Purpose**: Consolidated RAGAS input datasets from 5 retriever strategies (baseline, naive, bm25, ensemble, cohere_rerank)
-  - **Rows**: 60 (12 questions × 5 retrievers)
-  - **Key Column**: `retriever` - identifies source strategy
-  - **Schema**: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
-  - **Use Cases**: Benchmarking new retrievers, analyzing retrieval quality, reproducing evaluation results
 
-- **[dwb2023/gdelt-rag-detailed-results](https://huggingface.co/datasets/dwb2023/gdelt-rag-detailed-results)** - 60 RAGAS metric scores with per-question analysis
-  - **Purpose**: Detailed RAGAS evaluation results with all 4 metric scores per question
-  - **Rows**: 60 (12 questions × 5 retrievers)
-  - **Schema**: All evaluation dataset fields PLUS `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
-  - **Use Cases**: Performance analysis, error analysis, training retrieval models using RAGAS scores as quality labels
+**3. [dwb2023/gdelt-rag-evaluation-inputs](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-inputs)**
+- **Purpose**: Consolidated RAGAS evaluation inputs from 5 retrieval strategies tested on GDELT RAG system
+- **Size**: ~1,400+ evaluation records (60 visible in train split)
+- **Format**: Parquet (auto-converted)
+- **License**: Apache 2.0
+- **Schema**:
+  - `split` (string): Dataset split identifier (train)
+  - `retriever` (string): Retrieval strategy name (Naive, BM25, Baseline, Ensemble, Cohere)
+  - `user_input` (string): Question from evaluation testset
+  - `reference_contexts` (list): Ground truth context documents
+  - `reference` (string): Expected reference answer
+  - `synthesizer_name` (string): Answer generation model name
+  - `response` (string): Generated response from RAG system
+  - `retrieved_contexts` (list): Contexts retrieved by the system
+- **Retrieval Strategies Evaluated**:
+  1. **Baseline/Naive**: Dense vector search (OpenAI text-embedding-3-small)
+  2. **BM25**: Sparse keyword matching (TF-IDF-based)
+  3. **Ensemble**: Hybrid search (50% dense + 50% sparse)
+  4. **Cohere Rerank**: Contextual compression with rerank-v3.5
+- **Use Cases**:
+  - Benchmarking new retrieval strategies against established baselines
+  - Analyzing retrieval quality across different approaches
+  - Reproducing evaluation results from certification challenge
+  - Training retrieval models using RAGAS inputs as examples
+- **Related**: arXiv:2503.07584, RAGAS evaluation framework
+
+**4. [dwb2023/gdelt-rag-evaluation-metrics](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics)**
+- **Purpose**: Detailed RAGAS evaluation results with per-question metric scores for 5 retrieval strategies
+- **Size**: ~1,400+ evaluation records (48 visible in train split)
+- **Format**: Parquet (auto-converted)
+- **License**: Apache 2.0
+- **Schema**: All fields from evaluation-inputs PLUS:
+  - `faithfulness` (float64): Factual consistency of response with retrieved context (0-1)
+  - `answer_relevancy` (float64): Relevance of answer to user question (0-1)
+  - `context_precision` (float64): Quality of retrieved contexts ranking (0-1)
+  - `context_recall` (float64): Coverage of reference information in retrieval (0-1)
+- **Key Findings** (Per Certification Challenge):
+  - **Winner**: Cohere Rerank (95.08% average)
+  - **Baseline**: Naive retriever (93.92% average)
+  - **Dramatic Improvement**: Context Precision (Cohere: 93.06% vs Baseline: 88.51% = +4.55%)
+- **Use Cases**:
+  - Comparing retrieval strategy performance on GDELT domain
+  - Error analysis and failure case identification
+  - Training retrieval models using RAGAS scores as quality labels
+  - Question-answering system benchmarking
+  - Research on RAG evaluation methodologies
+- **Evaluation Framework**: RAGAS 0.2.10
+- **Models Used**:
+  - LLM: GPT-4.1-mini
+  - Embeddings: text-embedding-3-small
+  - Reranker: Cohere rerank-v3.5
+- **Related Resources**:
+  - Source data: dwb2023/gdelt-rag-sources-v2
+  - Test set: dwb2023/gdelt-rag-golden-testset-v2
+  - Inputs: dwb2023/gdelt-rag-evaluation-inputs
 
 **Loading Examples** (see [README.md](../README.md#-huggingface-datasets) for Python code)
 

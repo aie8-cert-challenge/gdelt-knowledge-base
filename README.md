@@ -176,34 +176,57 @@ By preserving SHA-256 fingerprints and HF lineage, this mechanism “signs” th
 
 ## 📦 HuggingFace Datasets
 
-This project publishes **4 datasets** to HuggingFace Hub for reproducibility and benchmarking:
+This project publishes **4 datasets** to HuggingFace Hub for reproducibility and benchmarking.
+
+> **Scientific Value**: These datasets provide the first publicly available evaluation suite for GDELT-focused RAG systems, enabling reproducible benchmarking of retrieval strategies with complete evaluation transparency.
 
 ### Interim Datasets (Raw Data)
 
-These datasets contain the source documents and golden testset used for evaluation:
+**1. [dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)** - 38 GDELT documentation pages
+  - **Content**: GDELT GKG 2.1 architecture docs, knowledge graph construction guides, Baltimore Bridge Collapse case study
+  - **Format**: Parquet (analytics), JSONL (human-readable), HF Datasets (fast loading)
+  - **Schema**: `page_content` (1.5k-5.2k chars), `metadata` (author, title, page, creation_date, etc.)
+  - **Use**: Populate vector stores, document chunking experiments, GDELT research
+  - **License**: Apache 2.0
 
-- **[dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)** - 38 GDELT documentation pages
-  - GDELT GKG 2.1 architecture documentation
-  - Knowledge graph construction guides
-  - Baltimore Bridge Collapse case study
-  - Format: Multiple formats (JSONL, Parquet, HuggingFace Dataset)
-
-- **[dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)** - 12 QA pairs
-  - Synthetically generated questions using RAGAS
-  - Ground truth answers and reference contexts
-  - Single-hop and multi-hop questions
+**2. [dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)** - 12 QA pairs
+  - **Content**: Synthetically generated questions (RAGAS 0.2.10), ground truth answers, reference contexts
+  - **Topics**: GDELT data formats, Translingual features (65 languages), date extraction, proximity context, emotions
+  - **Schema**: `user_input` (question), `reference_contexts` (ground truth passages), `reference` (answer), `synthesizer_name`
+  - **Use**: Benchmark RAG systems using RAGAS metrics, validate retrieval performance
+  - **License**: Apache 2.0
 
 ### Processed Datasets (Evaluation Results)
 
-These datasets contain consolidated evaluation results from all 5 retriever strategies:
+**3. [dwb2023/gdelt-rag-evaluation-inputs](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-inputs)** - 60 evaluation records
+  - **Content**: Consolidated RAGAS inputs from 5 retrieval strategies (baseline, naive, BM25, ensemble, cohere_rerank)
+  - **Schema**: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`, `synthesizer_name`
+  - **Use**: Benchmark new retrievers, analyze retrieval quality, reproduce certification results, debug RAG pipelines
+  - **License**: Apache 2.0
 
-- **[dwb2023/gdelt-rag-evaluation-datasets](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-datasets)** - 60 RAGAS evaluation inputs
-  - Schema: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
-  - Use cases: Benchmarking retriever strategies, analyzing retrieval quality, reproducing evaluation results
+**4. [dwb2023/gdelt-rag-evaluation-metrics](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics)** - 60 evaluation records with RAGAS scores
+  - **Content**: Detailed RAGAS evaluation results with per-question metric scores
+  - **Schema**: All evaluation-inputs fields PLUS `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall` (float64, 0-1)
+  - **Key Findings**: Cohere Rerank winner (95.08% avg), Baseline (93.92% avg), Best Precision: Cohere (+4.55% vs baseline)
+  - **Use**: Performance analysis, error analysis, train retrieval models with RAGAS scores as quality labels, RAG evaluation research
+  - **License**: Apache 2.0
 
-- **[dwb2023/gdelt-rag-detailed-results](https://huggingface.co/datasets/dwb2023/gdelt-rag-detailed-results)** - 60 RAGAS metric scores
-  - Schema: All evaluation dataset fields PLUS `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
-  - Use cases: Performance analysis, error analysis, training retrieval models with quality labels
+### Scientific Value & Research Impact
+
+**Why These Datasets Matter:**
+
+1. **Reproducibility**: Complete evaluation pipeline with versioned datasets and SHA-256 checksums
+2. **Benchmarking**: Standard testset for comparing retrieval strategies across 4 RAGAS metrics
+3. **Quality Labels**: RAGAS scores serve as training labels for learning-to-rank models
+4. **Domain-Specific**: GDELT knowledge graph QA pairs rare in existing RAG datasets
+5. **Evaluation Transparency**: Full evaluation inputs + metrics for analysis and debugging
+6. **Multi-Format**: Parquet (analytics), JSONL (human-readable), HF Datasets (fast loading)
+
+**Research Applications:**
+- RAG Researchers: Benchmark retrieval strategies, analyze failure modes, validate hypotheses
+- GDELT Analysts: Build Q&A systems, train domain-specific embeddings, extend to other GDELT resources
+- Evaluation Researchers: Study RAGAS behavior, compare automatic vs human metrics, develop new methodologies
+- Educators: Teach RAG best practices, demonstrate comparative analysis, illustrate data provenance
 
 ### Loading Examples
 
@@ -239,6 +262,60 @@ cohere_rerank        0.9508          0.9321           0.9670            0.9668
 ensemble             0.9424          0.9542           0.9477            0.9486
 naive                0.9351          0.9335           0.9459            0.9410
 ```
+
+### Citation
+
+If you use these datasets in your research, please cite:
+
+```bibtex
+@misc{branson2025gdelt-rag-datasets,
+  author = {Branson, Don},
+  title = {GDELT RAG Evaluation Datasets: Benchmarking Retrieval Strategies for Knowledge Graph Q\&A},
+  year = {2025},
+  publisher = {HuggingFace},
+  howpublished = {\url{https://huggingface.co/dwb2023}},
+  note = {Datasets: gdelt-rag-sources-v2, gdelt-rag-golden-testset-v2, gdelt-rag-evaluation-inputs, gdelt-rag-evaluation-metrics}
+}
+
+@article{myers2025gdelt,
+  title={Talking to GDELT Through Knowledge Graphs},
+  author={Myers, A. and Vargas, M. and Aksoy, S. G. and Joslyn, C. and Wilson, B. and Burke, L. and Grimes, T.},
+  journal={arXiv preprint arXiv:2503.07584v3},
+  year={2025}
+}
+```
+
+### Dataset Provenance & Quality Assurance
+
+**Provenance Chain:**
+1. Source: arXiv:2503.07584v3 "Talking to GDELT Through Knowledge Graphs" (PDF)
+2. Extraction: PyMuPDFLoader (page-level chunking)
+3. Testset Generation: RAGAS 0.2.10 synthetic data generation
+4. Evaluation: GPT-4.1-mini (LLM), text-embedding-3-small (embeddings), Cohere rerank-v3.5
+5. Validation: SHA-256 checksums in `data/interim/manifest.json`
+
+**Quality Guarantees:**
+- ✅ RAGAS 0.2.10 schema validation
+- ✅ SHA-256 fingerprints for data integrity
+- ✅ Manifest tracking (timestamps, model versions, package versions)
+- ✅ 100% validation pass rate (`make validate`)
+- ✅ Apache 2.0 licensed (open access)
+
+**Versioning:** `-v2` suffix indicates second iteration after fresh ingestion. Pin to specific revision for reproducibility: `load_dataset("dwb2023/gdelt-rag-sources-v2", revision="abc123")`
+
+**Known Limitations:**
+- Domain-specific (GDELT documentation), may not generalize to other domains
+- Synthetic questions (RAGAS-generated, not human-authored)
+- English-only (despite GDELT's multilingual capabilities)
+- Small scale (12 evaluation questions - sufficient for comparative analysis, not large-scale benchmarking)
+- Model bias (RAGAS metrics computed using GPT-4, inherits model biases)
+- Temporal snapshot (based on GDELT documentation as of January 2025)
+
+**Dataset Cards:** See HuggingFace for complete metadata and schemas
+- [sources-v2 card](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)
+- [golden-testset-v2 card](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)
+- [evaluation-inputs card](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-inputs)
+- [evaluation-metrics card](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics)
 
 ---
 

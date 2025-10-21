@@ -256,15 +256,261 @@ Cost: ~$5.65 per full run
 
 **Processed Datasets** (evaluation results):
 
-**Evaluation Datasets**: `dwb2023/gdelt-rag-evaluation-datasets` (60 evaluation inputs)
+**Evaluation Inputs**: `dwb2023/gdelt-rag-evaluation-inputs` (60 evaluation inputs)
 - Schema: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
 - Consolidated RAGAS inputs from 5 retrievers (baseline, naive, bm25, ensemble, cohere_rerank)
 - Use: Benchmarking retriever strategies, analyzing retrieval quality
 
-**Detailed Results**: `dwb2023/gdelt-rag-detailed-results` (60 results with RAGAS scores)
+**Evaluation Metrics**: `dwb2023/gdelt-rag-evaluation-metrics` (60 results with RAGAS scores)
 - Schema: Same as above + `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
 - Per-question RAGAS metric scores for all 5 retrievers
 - Use: Performance analysis, error analysis, training retrieval models
+
+## HuggingFace Dataset Documentation
+
+### Scientific Value Proposition
+
+These 4 datasets provide the **first publicly available evaluation suite** for GDELT-focused RAG systems, enabling:
+
+1. **Reproducible Research**: Complete evaluation pipeline with versioned datasets and SHA-256 checksums
+2. **Retrieval Benchmarking**: Standard testset for comparing retrieval strategies (naive, BM25, ensemble, reranking)
+3. **Quality-Labeled Training Data**: RAGAS metric scores serve as quality labels for training retrieval models
+4. **Evaluation Transparency**: Full evaluation inputs + metrics for analysis and debugging
+5. **Domain-Specific QA**: GDELT knowledge graph questions rare in existing RAG datasets
+6. **Multi-Format Access**: Parquet (analytics), JSONL (human-readable), HF Datasets (fast loading)
+
+### Dataset Schemas
+
+#### 1. gdelt-rag-sources-v2 (38 documents)
+
+**Purpose**: Source documents for RAG knowledge base
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `page_content` | string | Extracted text from PDF page (1,480-5,240 chars) |
+| `metadata.author` | string | Paper authors |
+| `metadata.creator` | string | PDF creator tool |
+| `metadata.creation_date` | string | Document creation timestamp |
+| `metadata.file_path` | string | Source PDF file path |
+| `metadata.source` | string | Source document identifier |
+| `metadata.format` | string | PDF version (1.5/1.6) |
+| `metadata.title` | string | "Talking to GDELT Through Knowledge Graphs" |
+| `metadata.page` | int | Current page number (0-indexed) |
+| `metadata.total_pages` | int | Total pages in document |
+| `metadata.subject` | string | Document subject |
+| `metadata.keywords` | string | Document keywords |
+
+**Use Cases**:
+- Populate vector stores for RAG systems
+- Document chunking strategy experimentation
+- GDELT knowledge graph research
+- Event analysis methodology studies
+
+#### 2. gdelt-rag-golden-testset-v2 (12 QA pairs)
+
+**Purpose**: Evaluation testset for GDELT RAG benchmarking
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `user_input` | string | Question from synthetic generation |
+| `reference_contexts` | list[string] | Ground truth passages (avg 1.67 per question) |
+| `reference` | string | Expected answer |
+| `synthesizer_name` | string | RAGAS synthesizer type (single-hop/multi-hop) |
+
+**Topics Covered**:
+- GDELT data formats (CSV vs JSON)
+- Translingual features (65 languages)
+- Date extraction methods
+- Proximity context in GKG 2.1
+- Multilingual emotion measurement
+
+**Use Cases**:
+- Benchmark retrieval strategies using RAGAS metrics
+- Validate RAG system performance on GDELT domain
+- Compare against baseline (93.92% average)
+
+#### 3. gdelt-rag-evaluation-inputs (60 evaluation records)
+
+**Purpose**: Consolidated RAGAS evaluation inputs from 5 retrieval strategies
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `split` | string | Dataset split (train) |
+| `retriever` | string | Strategy name (Naive, BM25, Baseline, Ensemble, Cohere) |
+| `user_input` | string | Question from golden testset |
+| `reference_contexts` | list[string] | Ground truth passages |
+| `reference` | string | Expected answer |
+| `synthesizer_name` | string | Answer generation model |
+| `response` | string | Generated RAG response |
+| `retrieved_contexts` | list[string] | Retrieved passages from RAG system |
+
+**Use Cases**:
+- Analyze retrieval quality across strategies
+- Debug RAG pipeline failures
+- Train context selection models
+- Reproduce certification challenge results
+
+#### 4. gdelt-rag-evaluation-metrics (60 evaluation records with scores)
+
+**Purpose**: Detailed RAGAS evaluation results with per-question metric scores
+
+| Field | Type | Description |
+|-------|------|-------------|
+| *(all fields from evaluation-inputs)* | - | Complete evaluation context |
+| `faithfulness` | float64 | Factual consistency score (0-1) |
+| `answer_relevancy` | float64 | Question relevance score (0-1) |
+| `context_precision` | float64 | Retrieval ranking quality (0-1) |
+| `context_recall` | float64 | Ground truth coverage (0-1) |
+
+**Key Findings**:
+- **Winner**: Cohere Rerank (95.08% average)
+- **Baseline**: Naive retriever (93.92% average)
+- **Best Precision**: Cohere Rerank (93.06% vs 88.51% baseline = +4.55%)
+
+**Use Cases**:
+- Performance analysis by retriever
+- Error analysis and failure mode identification
+- Training retrieval models with RAGAS scores as quality labels
+- RAG evaluation methodology research
+
+### Loading and Usage Examples
+
+```python
+from datasets import load_dataset
+import pandas as pd
+
+# 1. Load source documents for RAG
+sources = load_dataset("dwb2023/gdelt-rag-sources-v2")
+print(f"Loaded {len(sources['train'])} documents")
+# Output: Loaded 38 documents
+
+# 2. Load golden testset for evaluation
+testset = load_dataset("dwb2023/gdelt-rag-golden-testset-v2")
+questions = [ex['user_input'] for ex in testset['train']]
+print(f"Evaluation questions: {len(questions)}")
+# Output: Evaluation questions: 12
+
+# 3. Load evaluation inputs and filter by retriever
+eval_inputs = load_dataset("dwb2023/gdelt-rag-evaluation-inputs")
+cohere_evals = eval_inputs['train'].filter(lambda x: x['retriever'] == 'Cohere')
+print(f"Cohere evaluations: {len(cohere_evals)}")
+# Output: Cohere evaluations: 12
+
+# 4. Load metrics and analyze performance by retriever
+metrics = load_dataset("dwb2023/gdelt-rag-evaluation-metrics")
+df = metrics['train'].to_pandas()
+
+# Calculate average performance per retriever
+performance = df.groupby('retriever')[
+    ['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']
+].mean()
+print(performance)
+
+# Output:
+#                 faithfulness  answer_relevancy  context_precision  context_recall
+# retriever
+# Baseline             0.9397          0.9439           0.8851            0.9881
+# BM25                 0.9417          0.9479           0.8582            0.9881
+# Cohere               0.9577          0.9478           0.9306            0.9673
+# Ensemble             0.9340          0.9456           0.8746            0.9881
+# Naive                0.9397          0.9439           0.8851            0.9881
+
+# 5. Find best and worst performing questions
+df['avg_score'] = df[['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']].mean(axis=1)
+best_q = df.loc[df['avg_score'].idxmax()]
+worst_q = df.loc[df['avg_score'].idxmin()]
+print(f"Best question: {best_q['user_input'][:50]}... (score: {best_q['avg_score']:.2%})")
+print(f"Worst question: {worst_q['user_input'][:50]}... (score: {worst_q['avg_score']:.2%})")
+
+# 6. Analyze which retriever wins on each metric
+for metric in ['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']:
+    winner = performance[metric].idxmax()
+    score = performance[metric].max()
+    print(f"{metric}: {winner} ({score:.2%})")
+
+# Output:
+# faithfulness: Cohere (95.77%)
+# answer_relevancy: BM25 (94.79%)
+# context_precision: Cohere (93.06%)
+# context_recall: BM25 (98.81%)
+```
+
+### Citation Guidelines
+
+If you use these datasets in your research, please cite:
+
+```bibtex
+@misc{branson2025gdelt-rag-datasets,
+  author = {Branson, Don},
+  title = {GDELT RAG Evaluation Datasets: Benchmarking Retrieval Strategies for Knowledge Graph Q\&A},
+  year = {2025},
+  publisher = {HuggingFace},
+  howpublished = {\url{https://huggingface.co/dwb2023}},
+  note = {Datasets: gdelt-rag-sources-v2, gdelt-rag-golden-testset-v2, gdelt-rag-evaluation-inputs, gdelt-rag-evaluation-metrics}
+}
+
+@article{myers2025gdelt,
+  title={Talking to GDELT Through Knowledge Graphs},
+  author={Myers, A. and Vargas, M. and Aksoy, S. G. and Joslyn, C. and Wilson, B. and Burke, L. and Grimes, T.},
+  journal={arXiv preprint arXiv:2503.07584v3},
+  year={2025}
+}
+```
+
+### Dataset Provenance and Versioning
+
+**Provenance Chain**:
+1. **Source**: arXiv:2503.07584v3 "Talking to GDELT Through Knowledge Graphs" (PDF)
+2. **Extraction**: PyMuPDFLoader (page-level chunking)
+3. **Testset Generation**: RAGAS 0.2.10 synthetic data generation
+4. **Evaluation**: gpt-4.1-mini (LLM), text-embedding-3-small (embeddings), rerank-v3.5 (reranker)
+5. **Validation**: SHA-256 checksums in `data/interim/manifest.json`
+
+**Versioning Strategy**:
+- `-v2` suffix indicates second iteration after fresh ingestion
+- Dataset revisions tracked via HuggingFace Hub commit history
+- Pin to specific revision for reproducibility: `load_dataset("dwb2023/gdelt-rag-sources-v2", revision="abc123")`
+
+**Quality Assurance**:
+- ✅ RAGAS 0.2.10 validation (schema compliance)
+- ✅ SHA-256 fingerprints for data integrity
+- ✅ Manifest tracking (timestamps, model versions, package versions)
+- ✅ 100% validation pass rate (`make validate`)
+- ✅ Apache 2.0 licensed (open access)
+
+**Known Limitations**:
+1. **Domain-Specific**: Optimized for GDELT documentation, may not generalize to other domains
+2. **Synthetic Questions**: Golden testset generated by RAGAS, not human-authored
+3. **English-Only**: All questions and answers in English despite GDELT's multilingual capabilities
+4. **Small Scale**: 12 evaluation questions (sufficient for comparative analysis, not large-scale benchmarking)
+5. **Model Bias**: RAGAS metrics computed using GPT-4 (inherits model biases)
+6. **Temporal Snapshot**: Based on GDELT documentation as of January 2025
+
+### Research Use Cases
+
+**For RAG Researchers**:
+- Benchmark your retrieval strategy against 4 baselines (naive, BM25, ensemble, Cohere rerank)
+- Use RAGAS metric scores as training labels for learning-to-rank models
+- Analyze failure modes across different retrieval paradigms
+- Validate hypotheses about hybrid retrieval (dense + sparse)
+
+**For GDELT Analysts**:
+- Build Q&A systems for GDELT documentation
+- Train domain-specific embedding models
+- Generate additional synthetic questions using RAGAS
+- Extend evaluation to other GDELT resources (GKG codebook, API docs)
+
+**For Evaluation Researchers**:
+- Study RAGAS metric behavior on domain-specific datasets
+- Compare automatic metrics (RAGAS) vs human judgments
+- Investigate retrieval strategy impact on answer quality
+- Develop new RAG evaluation methodologies
+
+**For Educators**:
+- Teach RAG evaluation best practices
+- Demonstrate comparative retrieval analysis
+- Illustrate data provenance and reproducibility
+- Provide hands-on experience with production RAG systems
 
 ### Multi-Format Persistence (Parquet-First Architecture)
 
