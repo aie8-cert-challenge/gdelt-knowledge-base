@@ -1,0 +1,264 @@
+{
+  "id": "ragas_pipeline_b640f536-ee15-4db6-86c1-ddb955157875",
+  "generated_at": "2025-10-20T02:04:36.475894Z",
+  "run": {
+    "random_seed": 42
+  },
+  "env": {
+    "python": "3.11.13",
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2",
+    "langchain": "0.3.27",
+    "ragas": "0.2.10",
+    "datasets": "4.2.0",
+    "pyarrow": "21.0.0",
+    "huggingface_hub": "0.35.3"
+  },
+  "params": {
+    "OPENAI_MODEL": "gpt-4.1-mini",
+    "OPENAI_EMBED_MODEL": "text-embedding-3-small",
+    "TESTSET_SIZE": 10,
+    "MAX_DOCS": null
+  },
+  "paths": {
+    "sources": {
+      "jsonl": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.jsonl",
+      "parquet": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.parquet",
+      "hfds": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.hfds"
+    },
+    "golden_testset": {
+      "jsonl": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.jsonl",
+      "parquet": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.parquet",
+      "hfds": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.hfds"
+    }
+  },
+  "fingerprints": {
+    "sources": {
+      "jsonl_sha256": "a89a81a053b3c691690feb646ab8b9887890fcb4c5bc2f7ff6c4d4a07e84a8d3",
+      "parquet_sha256": "a00f7c9c9d66aa320847924b1280645fbc1af76bed4a93adc6a3a268c4259673"
+    },
+    "golden_testset": {
+      "jsonl_sha256": "4380d82c9bec2036249ba32799b3aee0529727ec3463117bf396b138885e1329",
+      "parquet_sha256": "e7b5f11801611130434f2a51337bf85c3740f10f30b414e993ceb69b6389b201"
+    }
+  },
+  "quick_schema": {
+    "sources_jsonl": {
+      "columns": [
+        "metadata",
+        "metadata.author",
+        "metadata.creationDate",
+        "metadata.creationdate",
+        "metadata.creator",
+        "metadata.file_path",
+        "metadata.format",
+        "metadata.keywords",
+        "metadata.modDate",
+        "metadata.moddate",
+        "metadata.page",
+        "metadata.producer",
+        "metadata.source",
+        "metadata.subject",
+        "metadata.title",
+        "metadata.total_pages",
+        "metadata.trapped",
+        "page_content"
+      ],
+      "sample": [
+        {
+          "page_content": "arXiv:2503.07584v3  [cs.IR]  24 Jun 2025\nTalking to GDELT Through Knowledge Graphs\nAudun Myers, Max Vargas, Sinan G. Aksoy, Cliff Joslyn, Benjamin Wilson,\nLee Burke, Tom Grimes\nAbstract\nIn this work we study various Retrieval Augmented Regeneration (RAG) approaches to gain an\nunderstanding of the strengths and weaknesses of each approach in a question-answering analysis. To\ngain this understanding we use a case-study subset of the Global Database of Events, Language, and\nTone (GDELT) dataset as well as a corpus of raw text scraped from the online news articles. To retrieve\ninformation from the text corpus we implement a traditional vector store RAG as well as state-of-the-art\nlarge language model (LLM) based approaches for automatically constructing KGs and retrieving the\nrelevant subgraphs. In addition to these corpus approaches, we develop a novel ontology-based framework\nfor constructing knowledge graphs (KGs) from GDELT directly which leverages the underlying schema\nof GDELT to create structured representations of global events. For retrieving relevant information from\nthe ontology-based KGs we implement both direct graph queries and state-of-the-art graph retrieval\napproaches. We compare the performance of each method in a question-answering task. We find that\nwhile our ontology-based KGs are valuable for question-answering, automated extraction of the relevant\nsubgraphs is challenging. Conversely, LLM-generated KGs, while capturing event summaries, often lack\nconsistency and interpretability. Our findings suggest benefits of a synergistic approach between ontology\nand LLM-based KG construction, with proposed avenues toward that end.\n1\nIntroduction\nIn this work we study several approaches for communicating with a corpus of text via relevant text and\nknowledge graph (KG) representation and retrieval facilitated by Large Language Models (LLMs). Our\ngoal is to understand the benefits and drawbacks of Retrieval Augmented Generation (RAG) approaches to\ncorpus management and anlysis when combined with an LLM. Throughout we use as a case study a novel\nKG derived from the Global Data on Events, Location, and Tone (GDELT)1 [13] dataset.\nAs a way to enhance LLM outputs, researchers and practitioners have been quick in applying LLMs to\nquery and understand proprietary data through retrieval-augmented-generation (RAG) [14]. It has been\nshown that reasoning over the typical RAG framework, which only takes advantage of the unstructured text\narticles, fails to capture global information about the provided data [5, 27].\nMotivated by this limitation, there has been recent interest in adapting these techniques to the case where\nour data has a graph structure, so that the LLM can directly ingest important relationships in the knowledge\nbase [5, 7, 15, 31]. More specifically, KGs [8] are graph structures which are richly attributed with typing\nand semantic information on both nodes and edges. KG techniques provide ways to automatically query\nand extract information stored in a KG without the user explicitly needing to understand query languages\nto probe their knowledge base. Typically, these AI-based search algorithms find subgraphs that can be used\nto answer a user-provided query.\nThe interactions between KGs and LLMs have potential beyond merely question-answering and knowledge\nextraction (see different research directions outlined by Pan et al. [18]). In particular, reflective of KGs\nbeing used to enhance LLM outputs, LLMs can be used to enhance existing KGs or create new ones entirely\nfrom scratch. However, exploration of techniques to this end either (1) do not deal with imposing different\nontological structures in graph creation or (2) only focus on extracting ontological structures using LLMs\n1https://www.gdeltproject.org/\n1",
+          "metadata": {
+            "producer": "pikepdf 8.15.1",
+            "creator": "arXiv GenPDF (tex2pdf:)",
+            "creationdate": "",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "total_pages": 12,
+            "format": "PDF 1.5",
+            "title": "Talking to GDELT Through Knowledge Graphs",
+            "author": "Audun Myers; Max Vargas; Sinan G. Aksoy; Cliff Joslyn; Benjamin Wilson; Lee Burke; Tom Grimes",
+            "subject": "",
+            "keywords": "",
+            "moddate": "",
+            "trapped": "",
+            "modDate": "",
+            "creationDate": "",
+            "page": 0
+          }
+        },
+        {
+          "page_content": "[23, 28].\nThroughout this work we use the GDELT dataset as a case study.\nGDELT is a massive collection of\nnews reports that provide a real-time computational record of global events that is published every 15\nminutes. It aggregates information from various news sources, blogs, and social media platforms to construct\na large collection of data including information on people, organizations, locations, themes, and emotions.\nEssentially, GDELT offers a snapshot of the world\u2019s collective events, enabling researchers and analysts to\nexplore complex patterns and relationships within global society. By analyzing this data, it\u2019s possible to\nidentify emerging trends, assess risks, understand public sentiment, and track the evolution of various issues\nover time. The applications of GDELT are diverse and far-reaching. Some of the most common use cases\nincluding event monitoring [16, 17, 29], risk assessment and prediction [6, 19, 20, 24, 26, 30], and social\nscience research [2, 3, 4, 12].\nGDELT describes its structure as a Global Knowledge Graph (GKG, specifically, we use the the Global\nKnowledge Graph edition 2 (GKG2) of GDELT). But in fact GDELT-GKG2 is implemented as multiple\nlinked tables recording information about the relationship between articles and events, and thus effectively\nhas the structure of a relational database. Another important contribution of this paper is to actually realize\nGKG2 properly in the mathematical form of a KG, effectively a graph database, derived from and consistent\nwith its native relational database form. To facilitate this effort, we have identified a lightweight ontology\nfor GDELT in the form of its graph schema, realizing its relational database schema in a KG form.\nUsing the KG that we construct from the GDELT-GKG2 dataset, we provide a case study to explore the\nutility of LLM-based tools to extract information and confirm that the KG can be used for question-answering\nin cases where traditional RAG fails. As part of our analysis, we compare to KGs produced from processing\nvarious news articles with an LLM, prompting it to try and adhere to a reduced version of the same ontology.\nThe current state of neurosymbolic work is noted for the plethora of experimental architectures available.\nWhile details are explicated below in Section 3.2, we preview ours in Figure 1, including the five method-\nological pathways which are quantitatively compared: 1) graph queries on the KG (called the DKG) derived\n\u201cdirectly\u201d from GKG2; 2) use of G-Retriever2 [7] against the same DKG; 3) RAG against a vector store\nrepresentation of GKG2; 4) G-Retriever against a second KG (called the LKG) derived from using Llamain-\ndex3 [1] against the GDELT source articles; and 5) GraphRAG4 Q&A deployed against a third KG (called\nGRKG) using Microsoft\u2019s open-source GraphRAG package with default configuration parameters.\nFigure 1: Pipeline of different experiments ran to analyze the GDELT database using an LLM.\n2https://github.com/XiaoxinHe/G-Retriever\n3https://www.llamaindex.ai/\n4https://microsoft.github.io/graphrag/\n2",
+          "metadata": {
+            "producer": "pikepdf 8.15.1",
+            "creator": "arXiv GenPDF (tex2pdf:)",
+            "creationdate": "",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "total_pages": 12,
+            "format": "PDF 1.5",
+            "title": "Talking to GDELT Through Knowledge Graphs",
+            "author": "Audun Myers; Max Vargas; Sinan G. Aksoy; Cliff Joslyn; Benjamin Wilson; Lee Burke; Tom Grimes",
+            "subject": "",
+            "keywords": "",
+            "moddate": "",
+            "trapped": "",
+            "modDate": "",
+            "creationDate": "",
+            "page": 1
+          }
+        },
+        {
+          "page_content": "2\nConstructing a Knowledge Graph for GDELT\nAs previously mentioned, while the GDELT-GKG2 dataset is not actually natively in the form of a knowledge\ngraph, it is advertised and frequently cited as being one. We believe that we are making a distinct contribution\nto the research community by converting the very popular GKG2 database into a proper KG.\nGKG2 is natively a database of three related tables:\n\u2022 expert.csv captures event information;\n\u2022 GKG.csv captures article information; and\n\u2022 mentions.csv relates which articles mention which events.\nFigure 2: GDELT GKG 2.0 schema relating articles (GKG), mentions, and events (Export).\nThe database schema for these three CSV files is shown in Fig. 2 (see also [9]). The key characteristics of\nthis database relational schema should be interpreted as follows:\n\u2022 The three tables are color-coded by Events (green), Mentions (pink), and Articles (blue).\n\u2022 The single table of Events is shown in multiple green sub-tables, simply for clarity and convenience to\nlayout a long record structure.\n\u2022 Single-headed arrows represent one-to-many relationships between the tables. Specifically:\n\u2013 Each Event maps to multiple Mentions via the shared GLOBALEVENTID field.\n\u2013 Each Article maps to multiple Mentions via the DocumentIdentifer field on the Article side\nmatching to the MentionIdentifier field on the Mention side.\n\u2022 In this way, the Mentions table acts as a \u201cpairs file\u201d recording a many-many relation between Events\nand Articles: each event can be mentioned in multiple articles, and dually each article can men-\ntion many events. Each Article also has both a unique identifier through the GKGRECORDID or the\nDocumentIdentifer fields, since each row in the GKG data represents a single article.\n3",
+          "metadata": {
+            "producer": "pikepdf 8.15.1",
+            "creator": "arXiv GenPDF (tex2pdf:)",
+            "creationdate": "",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "total_pages": 12,
+            "format": "PDF 1.5",
+            "title": "Talking to GDELT Through Knowledge Graphs",
+            "author": "Audun Myers; Max Vargas; Sinan G. Aksoy; Cliff Joslyn; Benjamin Wilson; Lee Burke; Tom Grimes",
+            "subject": "",
+            "keywords": "",
+            "moddate": "",
+            "trapped": "",
+            "modDate": "",
+            "creationDate": "",
+            "page": 2
+          }
+        },
+        {
+          "page_content": "Figure 3: GDELT GKG 2.0 ontology relating articles and events..\nMethods to automatically determine the graphical form of a relational database are widely known [21]. Most\nnaturally, consider a table T with m rows T[j], 1 \u2264j \u2264m and n columns T.i, 1 \u2264i \u2264n. Then each of the\nm rows T[j] is represented as a node in one meta-class labeled by the primary keys. This node then has n\noutgoing edges, each connecting to a node in another meta-class representing the field value T[j].i, and labeled\nby the column name. The resulting \u201cstar\u201d bipartite graphs are then linked over shared values, including\nacross multiple tables. This method straightforwardly produces a graph schema consistent with a given\nRDB, which may or may not be of sufficient complexity to warrant the lofty description of \u201contology\u201d. In\nour case, such a straightforward approach is mostly warranted, although as we will see additional constraints\nin the event table will argue for a somewhat more specific and idosyncratic graph structure.\nAfter understanding the GDELT database schema, we developed a capability to convert (portions of) the\nGDELT database to a KG using an ontology as a graph typing schema, derived from the above relational\nschema. This is shown in Fig. 3, to be interpreted as follows:\n\u2022 Nodes in the ontology indicate the types of nodes possible in the KG.\n\u2022 Nodes are color-coded to indicate their source relational table.\n\u2022 Fields in \u27e8angled brackets\u27e9indicate the field name in the schema.\n4",
+          "metadata": {
+            "producer": "pikepdf 8.15.1",
+            "creator": "arXiv GenPDF (tex2pdf:)",
+            "creationdate": "",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "total_pages": 12,
+            "format": "PDF 1.5",
+            "title": "Talking to GDELT Through Knowledge Graphs",
+            "author": "Audun Myers; Max Vargas; Sinan G. Aksoy; Cliff Joslyn; Benjamin Wilson; Lee Burke; Tom Grimes",
+            "subject": "",
+            "keywords": "",
+            "moddate": "",
+            "trapped": "",
+            "modDate": "",
+            "creationDate": "",
+            "page": 3
+          }
+        },
+        {
+          "page_content": "\u2022 Solid edges indicate a field in a relational table and are labeled with the type of semantic relation.\n\u2022 Dashed and bold edges indicate the structural, one-to-many relations in the relational schema.\nThe naming convention also captures the unique identifier for these csv files, so that \u27e8GLOBALEVENTID\u27e9\nidentifies unique Events, the pair (\u27e8GLOBALEVENTID\u27e9, \u27e8MentionIdentifier\u27e9) identifies unique Mentions, as\ndoes \u27e8DocumentIdentifier\u27e9for Articles. We again note that the document and mention identifiers are the\nsame field, but have different field names (e.g., a URL is typically used for the document identifier and the\nsame URL is used for the mention identifier).\n3\nCase Study - Baltimore Bridge Collapse\nHere we will provide an analysis of data collected over a recent and short period of time to do question-\nanswering based analysis. The point of collecting recent data is that the LLMs used have not yet been\ntrained on these events (at the time of this study) and thus the knowledge systems are needed to supply\nthe LLM with relevant information. Specifically, this analysis uses a subset of the GDELT data collected\non March 26th of 2024 from 12:00 AM to 10:00 AM during and after the collapse of the Francis Scott Key\nBridge in Baltimore, Maryland, which occurred at approximately 1:29 AM. This 10 hour window of time\ncaptures the media response to this disaster. We filtered down the collected mentions data to only include\nrows in any of the related data if it included any of the keywords \u201cBaltimore\u201d, \u201cbridge\u201d, \u201ccollapse\u201d, or\n\u201cship\u201d. We then used all GLOBALEVENTIDs and MentionIdentifiers in this reduced mentions file to collect\nthe relevant events and articles. This filtration resulted in using approximately 1.33% of the available data\nwith 371 events, 2047 mentions, and 209 articles.\n3.1\nGDELT Knowledge Graphs\nUsing the GDELT data directly and the scraped text we can construct a total of three KGs:\nDirect KG (DKG): The first KG was simply a direct conversion of the subset of the original GDELT data\ninto an equivalent KG as specified by our ontology in Fig. 3. This KG is shown in Fig. 4a.\nLlamaIndex KG (LKG): The second KG was generated by an LLM deployed against a text corpus con-\nsisting of the source articles collected by scraping URLs of the 209 articles included in our GDELT\nsubset, and enriched with knowledge of the ontology. This KG is shown in Fig. 4b.\nGraphRAG KG (GRKG): The final KG was generated using the same articles as the LKG, using Mi-\ncrosoft\u2019s open-source GraphRAG package with default configuration parameters. This KG is shown in\nFig. 4c.\nThe example KG constructed using our ontology (DKG) is shown in a reduced form in Fig. 4a. The nodes\nare color coded based on their source. Note that node and edge labels are not shown in order to facilitate\nclarity. This KG is one component and has 3,469 nodes and 18,052 edges.\nTo construct a KG directly from the corpus of source document text (LKG) shown in Fig. 4b, we used\nMixtral-8x7B [11] as our base model, following the procedure outlined by the LlamaIndex package developers\n[1]. The LLM is prompted to extract triples from the news articles according to a prompt provided in the\nparameter kg triplet prompt. Using the default prompt, the ontology does not get incorporated and the\nresulting KG is a star-shaped graph with a single central node and all other nodes connected to this center,\nthere being no other edges. When we change the prompt to consider the entire ontology, we again get a\nstar-shaped graph. Nontrivial graph structure arose when we prompted the language model with a reduced\nversion of the ontology with adaptation for unstructured text. In particular, our prompt asked for:\n\u2022 Vertices of one of the following types: \u201cEvent\u201d, \u201cArticle\u201d, \u201cMention\u201d, \u201cPerson\u201d, \u201cQuotation\u201d, \u201cOrga-\nnization\u201d, \u201cLocation\u201d, and \u201cOther\u201d, with the last type serving as a catch-all.\n5",
+          "metadata": {
+            "producer": "pikepdf 8.15.1",
+            "creator": "arXiv GenPDF (tex2pdf:)",
+            "creationdate": "",
+            "source": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "file_path": "/home/donbr/don-aie-cohort8/cert-challenge/data/raw/2503.07584v3.pdf",
+            "total_pages": 12,
+            "format": "PDF 1.5",
+            "title": "Talking to GDELT Through Knowledge Graphs",
+            "author": "Audun Myers; Max Vargas; Sinan G. Aksoy; Cliff Joslyn; Benjamin Wilson; Lee Burke; Tom Grimes",
+            "subject": "",
+            "keywords": "",
+            "moddate": "",
+            "trapped": "",
+            "modDate": "",
+            "creationDate": "",
+            "page": 4
+          }
+        }
+      ]
+    },
+    "golden_jsonl": {
+      "columns": [
+        "reference",
+        "reference_contexts",
+        "synthesizer_name",
+        "user_input"
+      ],
+      "sample": [
+        {
+          "user_input": "Can you explane the main differnces between GKG 1.0 and the newer versions in terms of data format and usage?",
+          "reference_contexts": [
+            "INTRODUCTION This codebook introduces the GDELT Global Knowledge Graph (GKG) Version 2.1, which expands GDELT\u2019s ability to quantify global human society beyond cataloging physical occurrences towards actually representing all of the latent dimensions, geography, and network structure of the global news. It applies an array of highly sophisticated natural language processing algorithms to each document to compute a range of codified metadata encoding key latent and contextual dimensions of the document. To sum up the GKG in a single sentence, it connects every person, organization, location, count, theme, news source, and event across the planet into a single massive network that captures what\u2019s happening around the world, what its context is and who\u2019s involved, and how the world is feeling about it, every single day. It has been just short of sixteen months since the original prototype introduction of the GKG 1.0 system on November 3, 2013 and in those fourteen months the GKG system has found application in an incredible number and diversity of fields. The uniqueness of the GKG indicators in capturing the latent dimensions of society that precede physical unrest and their global scope has enabled truly unimaginable new applications. We\u2019ve learned a lot over the past year in terms of the features and capabilities of greatest interest to the GKG community, and with this Version 2.1 release of the GKG, we are both integrating those new features and moving the GKG into production status (from its original alpha status) in recognition of the widespread production use of the system today. Due to the vast number of use cases articulated for the GKG, a decision was made at its release to create a raw output format that could be processed into the necessary refined formats for a wide array of software packages and analysis needs and that would support a diverse assortment of extremely complex analytic needs in a single file. Unlike the primary GDELT event stream, which is designed for direct import into major statistical packages like R, the GKG file format requires more sophisticated preprocessing and users will likely want to make use of a scripting language like PERL or Python to extract and reprocess the data for import into a statistical package. Thus, users may require more advanced text processing and scripting language skills to work with the GKG data and additional nuance may be required when thinking about how to incorporate these indicators into statistical models and network and geographic constructs, as outlined in this codebook. Encoding the GKG in XML, JSON, RDF, or other file formats significantly increases the on-disk footprint of the format due to its complexity and size (thus why the GKG is only available in CSV format), though users requiring access to the GKG in these formats can easily write a PERL or Python or similar script to translate the GKG format to any file format needed. The GKG is optimized for fast scanning, storing one record per line and using a tab- delimited format to separate the fields. This makes it possible to use highly optimized fully parallelized streamed parsing to rapidly process the GKG. Similar to the 1.0 format, the files have a \u201c.csv\u201d ending, despite being tab-delimited, to address issues with some software packages that cannot handle \u201c.txt\u201d or \u201c.tsv\u201d endings for parsing tasks. The new GKG format preserves most of the previous fields in their existing format for backwards compatibility (and we will continue to generate the daily Version 1.0 files in parallel into the future), but"
+          ],
+          "reference": "The GKG 1.0 system was the original prototype introduced on November 3, 2013, and it has been used in a wide variety of fields due to its unique indicators capturing latent dimensions of society. The newer GKG Version 2.1 expands on this by integrating new features and moving the system into production status from its original alpha status. While the new format preserves most of the previous fields for backwards compatibility and continues to generate daily Version 1.0 files in parallel, the GKG 2.1 format is optimized for fast scanning using a tab-delimited CSV format with one record per line, enabling highly parallelized streamed parsing. Unlike the primary GDELT event stream, the GKG file format requires more sophisticated preprocessing, often needing scripting languages like PERL or Python to extract and reprocess data for statistical packages. Encoding the GKG in XML, JSON, RDF, or other formats significantly increases file size, so the GKG is only available in CSV format, though users can write scripts to convert it if needed.",
+          "synthesizer_name": "single_hop_specifc_query_synthesizer"
+        },
+        {
+          "user_input": "Can you explane how RID is used in the GDELT GCAM module for emotion analysis?",
+          "reference_contexts": [
+            "adds a series of new capabilities that greatly enhance what can be done with the GKG data, opening entirely new analytic opportunities. Some of the most significant changes: \uf0b7 Realtime Measurement of 2,300 Emotions and Themes. The GDELT Global Content Analysis Measures (GCAM) module represents what we believe is the largest deployment of sentiment analysis in the world: bringing together 24 emotional measurement packages that together assess more than 2,300 emotions and themes from every article in realtime, multilingual dimensions natively assessing the emotions of 15 languages (Arabic, Basque, Catalan, Chinese, French, Galician, German, Hindi, Indonesian, Korean, Pashto, Portuguese, Russian, Spanish, and Urdu). GCAM is designed to enable unparalleled assessment of the emotional undercurrents and reaction at a planetary scale by bringing together an incredible array of dimensions, from LIWC\u2019s \u201cAnxiety\u201d to Lexicoder\u2019s \u201cPositivity\u201d to WordNet Affect\u2019s \u201cSmugness\u201d to RID\u2019s \u201cPassivity\u201d. \uf0b7 Realtime Translation of 65 Languages. GDELT 2.0 brings with it the public debut of GDELT Translingual, representing what we believe is the largest realtime streaming news machine translation deployment in the world: all global news that GDELT monitors in 65 languages, representing 98.4% of its daily non-English monitoring volume, is translated in realtime into English for processing through the entire GDELT Event and GKG/GCAM pipelines. GDELT Translingual is designed to allow GDELT to monitor the entire planet at full volume, creating the very first glimpses of a world without language barriers. The GKG system now processes every news report monitored by GDELT across these 65 languages, making it possible to trace people, organizations, locations, themes, and emotions across languages and media systems. \uf0b7 Relevant Imagery, Videos, and Social Embeds. A large fraction of the world\u2019s news outlets now specify a hand-selected image for each article to appear when it is shared via social media that represents the core focus of the article. GDELT identifies this imagery in a wide array of formats including Open Graph, Twitter Cards, Google+, IMAGE_SRC, and SailThru formats. In addition, GDELT also uses a set of highly specialized algorithms to analyze the article content itself to identify inline imagery of high likely relevance to the story, along with videos and embedded social media posts (such as embedded Tweets or YouTube or Vine videos), a list of which is compiled. This makes it possible to gain a unique ground-level view into emerging situations anywhere in the world, even in those areas with very little social media penetration, and to act as a kind of curated list of social posts in those areas with strong social use. \uf0b7 Quotes, Names, and Amounts. The world\u2019s news contains a wealth of information on food prices, aid promises, numbers of troops, tanks, and protesters, and nearly any other countable item. GDELT 2.0 now attempts to compile a list of all \u201camounts\u201d expressed in each article to offer numeric context to global events. In parallel, a new Names engine augments the existing Person and Organization names engines by identifying an array of other kinds of proper names, such as named events (Orange Revolution / Umbrella Movement), occurrences like the World Cup, named dates like Holocaust Remembrance Day, on through named legislation like Iran Nuclear Weapon Free Act, Affordable Care Act and Rouge National Urban Park Initiative. Finally, GDELT also identifies attributable quotes from each article, making it possible to see the evolving language used by political leadership across the world. \uf0b7"
+          ],
+          "reference": "RID is one of the 24 emotional measurement packages integrated into the GDELT Global Content Analysis Measures (GCAM) module, which together assess more than 2,300 emotions and themes from every article in realtime. Specifically, RID contributes to measuring emotions such as \"Passivity\" within this large-scale sentiment analysis system.",
+          "synthesizer_name": "single_hop_specifc_query_synthesizer"
+        },
+        {
+          "user_input": "Could you elaborate on the significant changes introduced in version 1.0, particularly focusing on the new Proximity Context capability and its impact on encoding date mentions in news articles and documents?",
+          "reference_contexts": [
+            "Date Mentions. We\u2019ve heard from many of you the desire to encode the list of date references found in news articles and documents in order to identify repeating mentions of specific dates as possible \u201canniversary violence\u201d indicators. All day, month, and year dates are now extracted from each document. \uf0b7 Proximity Context. Perhaps the greatest change to the overall format from version 1.0 is the introduction of the new Proximity Context capability. The GKG records an enormously rich array"
+          ],
+          "reference": "Version 1.0 introduced a major change with the addition of the Proximity Context capability, which represents the greatest change to the overall format. This version also enhanced the extraction of date mentions by encoding all day, month, and year dates found in news articles and documents. This allows for the identification of repeating mentions of specific dates, which can serve as potential indicators of \"anniversary violence.\" The Proximity Context capability enriches the Global Knowledge Graph (GKG) by recording a highly detailed array of contextual information around these date references.",
+          "synthesizer_name": "single_hop_specifc_query_synthesizer"
+        },
+        {
+          "user_input": "How does the GKG 2.1 system improve the association of John Kerry with his functional role and geographic context compared to the previous GKG system?",
+          "reference_contexts": [
+            "of contextual details from the news, encoding not only the people, organizations, locations and events driving the news, but also functional roles and underlying thematic context. However, with the previous GKG system it was difficult to associate those various data points together. For example, an article might record that Barack Obama, John Kerry, and Vladimir Putin all appeared somewhere in an article together and that the United States and Russia appeared in that article and that the roles of President and Secretary of State were mentioned in that article, but there was no way to associate each person with the corresponding location and functional roles. GKG 2.1 addresses this by providing the approximate character offset of each reference to an object in the original article. While not allowing for deeper semantic association, this new field allows for simple proximity-based contextualization. In the case of the example article above, the mention of United States likely occurs much closer to Barack Obama and John Kerry than to Vladimir Putin, while Secretary of State likely occurs much closer to John Kerry than to the others. In this way, critical information on role, geographic, thematic association, and other connectivity can be explored. Pilot tests have already demonstrated that these proximity indicators can be highly effective at recovering these kinds of functional, thematic, and geographic affiliations. \uf0b7 Over 100 New GKG Themes. There are more than 100 new themes in the GDELT Global Knowledge Graph, ranging from economic indicators like price gouging and the price of heating oil to infrastructure topics like the construction of new power generation capacity to social issues like marginalization and burning in effigy. The list of recognized infectious diseases, ethnic groups, and terrorism organizations has been considerably expanded, and more than 600 global humanitarian and development aid organizations have been added, along with global currencies and massive new taxonomies capturing global animals and plants to aid with tracking species migration and poaching. \uf0b7 Extensible XML Block. GDELT has historically relied primarily on mainstream news coverage for its source material. Whether from print, broadcast, or web-based mediums, news coverage across the world is relatively consistent in the kinds of information it captures. As GDELT encodes an ever-increasing range of materials, including academic journal articles and government reports, additional types of information are available to codify. As a first example of this, Leetaru, Perkins and Rewerts (2014) 1 apply the GKG to encode more than 21 billion words of academic literature, including the entire contents of JSTOR, DTIC, CORE, CireSeerX, and the Internet Archive\u2019s 1.6 billion PDFs relevant to Africa and the Middle East. Academic literature contains a list of cited references at the bottom of each article that indicate the papers cited within that paper. This citation list is extremely valuable in constructing citation graphs over the literature to better understand trends and experts. Yet, such citation lists are unique to this class of literature and will not be found in ordinary news material and thus it would be cumbersome to add additional fields to the GKG file format to handle each of these kinds of specialized data types. Instead, the GKG now includes a special field called V2EXTRASXML that is XML formatted and includes these kinds of specialized data types that are applicable only to subsets of the collection. Moving forward, this will allow the GKG to encode highly specialized enhanced information from specialized input streams. \uf0b7"
+          ],
+          "reference": "The GKG 2.1 system improves the association of John Kerry with his functional role and geographic context by providing the approximate character offset of each reference to an object in the original article. This allows for simple proximity-based contextualization, enabling the system to determine that mentions of the United States likely occur much closer to Barack Obama and John Kerry than to Vladimir Putin, and that the role of Secretary of State likely occurs much closer to John Kerry than to the others. While it does not allow for deeper semantic association, this proximity information helps explore critical details on role, geographic, thematic association, and other connectivity that were difficult to associate in the previous GKG system.",
+          "synthesizer_name": "single_hop_specifc_query_synthesizer"
+        },
+        {
+          "user_input": "how the GDELT Event Database integration improved by adding unique record identifiers to the GKG and why they remove the counts-only file in the GDELT Event Database context?",
+          "reference_contexts": [
+            "<1-hop>\n\n\uf0b7 Single Data File. Previously there were two separate GKG data files, one containing Counts only and one containing the full GKG file. The original rationale for having two separate files was that users interested only in counts could download a much smaller daily file, but in practice nearly all applications use the full GKG file in order to make use of its thematic and other data fields to contextualize those counts and to tie them into the GDELT Event Database. Thus, we are eliminating the separate counts-only file to simplify the GKG data environment. \uf0b7 Production Status. The GKG has now moved out of Alpha Experimental Release status and into production status. This means that the file format is now stabilized and will not change.",
+            "<2-hop>\n\nUnique Record Identifiers. To bring the GKG in line with the practices of the GDELT Event Database, every GKG record is now assigned a unique identifier. As with the event database, sequential identifiers do not indicate sequential events, but an identifier uniquely identifies a record across the entire collection. The addition of unique record identifiers to the GKG will make it easier to uniquely refer to a particular GKG record. 1 http://dlib.org/dlib/september14/leetaru/09leetaru.html"
+          ],
+          "reference": "The GDELT Event Database integration improved by adding unique record identifiers to the GKG, aligning it with the event database practices. Each GKG record now has a unique identifier that allows for easy and unambiguous reference to particular records across the entire collection, even though the identifiers do not indicate sequential events. Additionally, the counts-only file was removed because most applications use the full GKG file to access thematic and other data fields that help contextualize counts and link them to the GDELT Event Database. Removing the separate counts-only file simplifies the GKG data environment.",
+          "synthesizer_name": "multi_hop_abstract_query_synthesizer"
+        }
+      ]
+    }
+  },
+  "artifacts": {
+    "sources": {
+      "jsonl": {
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.jsonl",
+        "bytes": 168076
+      },
+      "parquet": {
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.docs.parquet",
+        "bytes": 91815
+      },
+      "hfds": {
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/sources.hfds"
+      }
+    },
+    "golden_testset": {
+      "jsonl": {
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.jsonl",
+        "bytes": 67852
+      },
+      "parquet": {
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.parquet",
+        "bytes": 46008
+      },
+      "hfds": {
+        "path": "/home/donbr/don-aie-cohort8/cert-challenge/data/interim/golden_testset.hfds"
+      }
+    }
+  },
+  "lineage": {
+    "hf": {
+      "dataset_repo_id": {
+        "sources": "dwb2023/gdelt-rag-sources-v2",
+        "golden_testset": "dwb2023/gdelt-rag-golden-testset-v2"
+      },
+      "pending_upload": false,
+      "uploaded_at": "2025-10-20T02:36:56.430363+00:00"
+    }
+  }
+}

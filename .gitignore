@@ -8,3 +8,23 @@ wheels/
 
 # Virtual environments
 .venv
+# sample_code/
+
+.env
+!.env.example
+
+ra_output/
+ra_orchestrators/
+ra_agents/
+ra_tools/
+
+# python cache files
+*.pyc
+
+# LangGraph runtime files
+.langgraph_api/
+
+# ignore pickle files
+*.pkl
+*.pckl
+.langgraph_api/.langgraph_ops.pckl

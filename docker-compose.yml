@@ -1,0 +1,127 @@
+networks:
+  gdelt-network:
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+  qdrant_data:
+  minio_data:
+  langgraph-data:
+services:
+  langgraph-redis:
+    image: redis:6
+    container_name: langgraph-redis
+    networks: [gdelt-network]
+    healthcheck:
+      test: redis-cli ping
+      interval: 5s
+      timeout: 1s
+      retries: 5
+  langgraph-postgres:
+    image: postgres:16
+    container_name: langgraph-postgres
+    networks: [gdelt-network]
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - langgraph-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U postgres
+      start_period: 10s
+      timeout: 1s
+      retries: 5
+      interval: 5s
+  langgraph-api:
+    image: gdelt-image
+    container_name: langgraph-api
+    networks: [gdelt-network]
+    ports:
+      - "8123:8000"
+    depends_on:
+      langgraph-redis:
+        condition: service_healthy
+      langgraph-postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?missing OPENAI_API_KEY}
+      COHERE_API_KEY: ${COHERE_API_KEY:?missing COHERE_API_KEY}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:?missing LANGSMITH_API_KEY}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      REDIS_URI: "${REDIS_URI:-redis://langgraph-redis:6379}"
+      DATABASE_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable
+
+  neo4j:
+    image: neo4j:latest
+    container_name: neo4j
+    networks: [gdelt-network]
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/neo4jpassword
+      NEO4J_dbms_memory_pagecache_size: 1G
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    networks: [gdelt-network]
+    restart: always
+    ports:
+      - "6333:6333"   # HTTP
+      - "6334:6334"   # gRPC
+    expose:
+      - 6333
+      - 6334
+      - 6335
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    networks: [gdelt-network]
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3
+      - "9001:9001"   # Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
