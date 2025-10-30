@@ -66,10 +66,10 @@ make test
 ### Evaluation & Analysis
 
 ```bash
-# Run full RAGAS evaluation (THIS CREATES AND POPULATES QDRANT)
+# Run full RAGAS evaluation (DEFAULT: Reuses existing Qdrant collection)
 # Scope:
 #   1. Loads 38 documents from HuggingFace
-#   2. Creates/reuses Qdrant collection "gdelt_comparative_eval" with embeddings
+#   2. Creates OR reuses Qdrant collection "gdelt_comparative_eval"
 #      (configurable via QDRANT_COLLECTION env var)
 #   3. Creates 4 retrievers (naive, bm25, ensemble, cohere_rerank)
 #   4. Runs 48 RAG queries (12 questions × 4 retrievers)
@@ -82,15 +82,23 @@ make test
 #   - data/processed/RUN_MANIFEST.json
 # Duration: 20-30 minutes
 # Cost: ~$5-6 in OpenAI API calls
-# Vector Store: REUSES existing Qdrant collection if present (faster)
+# Vector Store: REUSES existing collection if present (FASTER, but may use old embeddings)
+# Note: This is the default behavior - fine for testing, but see recreate=true below
 make eval
 # or
-PYTHONPATH=. python scripts/run_eval_harness.py
+PYTHONPATH=. uv run python scripts/run_eval_harness.py
 
-# Force recreate Qdrant collection (slower, ensures fresh embeddings)
-# Scope: Same as above BUT deletes and recreates Qdrant collection from scratch
-# Duration: 25-35 minutes (extra time for re-embedding)
-# Use When: Documents changed, embeddings model changed, or collection corrupted
+# Force recreate Qdrant collection (REQUIRED after make ingest)
+# Scope: Same as above BUT DELETES and recreates Qdrant collection from scratch
+# Duration: 25-35 minutes (extra time for re-embedding all 38 documents)
+# Cost: ~$5-6 in OpenAI API calls (same as default)
+# Use When:
+#   - After running 'make ingest' (to use fresh data)
+#   - Documents changed, embeddings model changed
+#   - Collection corrupted or using wrong data
+#   - Starting evaluation from completely fresh state
+# Important: If you just ran 'make ingest', you MUST use recreate=true
+#            to ensure new documents/testset are used
 make eval recreate=true
 
 # Generate human-readable CSV deliverables from Parquet data
