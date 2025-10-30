@@ -1,0 +1,130 @@
+{
+  "ragas_version": "0.2.10",
+  "python_version": "3.11",
+  "llm": {
+    "model": "gpt-4.1-mini",
+    "temperature": 0,
+    "provider": "openai",
+    "purpose": "RAG generation and RAGAS evaluation"
+  },
+  "embeddings": {
+    "model": "text-embedding-3-small",
+    "dimensions": 1536,
+    "provider": "openai",
+    "purpose": "Document and query embeddings"
+  },
+  "retrievers": [
+    {
+      "name": "naive",
+      "type": "dense_vector_search",
+      "description": "Baseline dense vector search with OpenAI embeddings",
+      "k": 5,
+      "distance_metric": "cosine",
+      "rerank": false
+    },
+    {
+      "name": "bm25",
+      "type": "sparse_keyword",
+      "description": "BM25 sparse keyword matching (lexical)",
+      "k": 5,
+      "rerank": false
+    },
+    {
+      "name": "cohere_rerank",
+      "type": "contextual_compression",
+      "description": "Cohere rerank-v3.5 with contextual compression",
+      "initial_k": 20,
+      "top_n": 3,
+      "rerank_model": "rerank-v3.5",
+      "rerank_provider": "cohere",
+      "rerank": true
+    },
+    {
+      "name": "ensemble",
+      "type": "hybrid",
+      "description": "Ensemble combining dense vector + sparse keyword",
+      "dense_k": 5,
+      "sparse_k": 5,
+      "weights": [
+        0.5,
+        0.5
+      ],
+      "components": [
+        "naive_dense",
+        "bm25_sparse"
+      ],
+      "rerank": false
+    }
+  ],
+  "evaluation": {
+    "golden_testset": "dwb2023/gdelt-rag-golden-testset",
+    "golden_testset_size": 12,
+    "source_dataset": "dwb2023/gdelt-rag-sources",
+    "source_dataset_size": 38,
+    "metrics": [
+      "faithfulness",
+      "answer_relevancy",
+      "context_precision",
+      "context_recall"
+    ],
+    "timeout_seconds": 360,
+    "ragas_run_config": {
+      "timeout": 360,
+      "max_workers": 4
+    }
+  },
+  "vector_store": {
+    "type": "qdrant",
+    "collection_name": "gdelt_comparative_eval",
+    "host": "localhost",
+    "port": 6333,
+    "distance": "cosine",
+    "vector_size": 1536
+  },
+  "skipped": [],
+  "notes": [
+    "All LLM calls use temperature=0 for determinism",
+    "Fine-tuned embeddings out of scope per instructor guidance",
+    "Evaluation follows RAGAS 0.2.10 API patterns from session08"
+  ],
+  "generated_at": "2025-10-30T22:45:59.935180Z",
+  "generated_by": "scripts/generate_run_manifest.py",
+  "results_summary": {
+    "naive": {
+      "faithfulness": 0.9575492312334416,
+      "answer_relevancy": 0.9473514986978371,
+      "context_precision": 0.8425925925525387,
+      "context_recall": 0.9880952380952381,
+      "average": 0.9338971401447639
+    },
+    "bm25": {
+      "faithfulness": 0.9592193792331621,
+      "answer_relevancy": 0.9457929893285049,
+      "context_precision": 0.8582175925534443,
+      "context_recall": 0.9880952380952381,
+      "average": 0.9378312998025874
+    },
+    "ensemble": {
+      "faithfulness": 0.9564027672386368,
+      "answer_relevancy": 0.9473050044577467,
+      "context_precision": 0.8391369047294238,
+      "context_recall": 1.0,
+      "average": 0.9357111691064518
+    },
+    "cohere_rerank": {
+      "faithfulness": 0.956895419941837,
+      "answer_relevancy": 0.9397163986048178,
+      "context_precision": 0.8958333332850693,
+      "context_recall": 0.9672619047619048,
+      "average": 0.9399267641484073
+    }
+  },
+  "data_provenance": {
+    "ingest_manifest_id": "ragas_pipeline_b0c7cba5-9a85-49b5-8872-a3bf689f54a7",
+    "ingest_timestamp": "2025-10-30T22:07:38.392914Z",
+    "sources_sha256": "c39263dea5cf001f18b36e7c7c7273f4f4f4134240e288fb3256dc72b193a5fa",
+    "golden_testset_sha256": "d5f815af2fedb7703b5bd6232554ffa8c9c566bbb17e3eb1902c50833062dd7e",
+    "source_pdfs_count": "all",
+    "ragas_testset_size": 10
+  }
+}
