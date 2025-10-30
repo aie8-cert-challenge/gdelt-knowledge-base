@@ -1,3 +1,50 @@
+## A. One‑Screen Summary
+- **Project name**: GDELT Knowledge Graph RAG Assistant
+- **1‑sentence problem**: Analysts struggle to query and understand GDELT’s complex knowledge graph documentation quickly and accurately.
+- **Primary user**: Data/OSINT analysts and engineers working with GDELT.
+- **Stack summary**: LLM: OpenAI GPT‑4.1‑mini; Embeddings: text‑embedding‑3‑small; Orchestrator: LangGraph + LangChain; Vector DB: Qdrant; Logging/Eval: LangSmith + RAGAS; Validators: manifest lineage + deterministic runs; UI/Serving: LangGraph Server + Streamlit.
+- **Result summary**: Advanced retrieval (Cohere rerank) improved precision and average score vs naïve.
+
+## B. Task Compliance Table
+| Task | Status (Yes / Partial / No) | Evidence (file + section) | Scope / Clarity Note | One Improvement |
+|---|-----|---|----|-----|
+| 1. Problem & Audience | Yes | `README.md` — top lines 1–6; Docs purpose | Clear audience and problem captured | Add 1–2 paragraph narrative under `docs/` per spec |
+| 2. Solution & Stack | Yes | `README.md` — Architecture Summary + Technology Stack | Tooling choices specified per a16z layers | Link each choice to 1‑sentence rationale inline |
+| 3. Data & Chunking | Yes | `README.md` — HuggingFace Datasets; Provenance & Manifest | Describes sources, schemas, lineage | Add explicit default chunking rationale in `src/utils` docstring |
+| 4. End‑to‑End Prototype | Yes | `app/graph_app.py` get_app; `src/graph.py` build_graph | Local LangGraph Server entrypoint present | Include minimal Streamlit UI link/run note in README |
+| 5. Golden Test + RAGAS | Yes | `scripts/run_eval_harness.py` — RAGAS steps; `deliverables/evaluation_evidence/RUN_MANIFEST.json` | Metrics computed and saved | Add small table preview in `deliverables/README.md` |
+| 6. Advanced Retrieval | Yes | `src/retrievers.py` (factory via usage); `README.md` Results table | Techniques include BM25, ensemble, Cohere rerank | Brief per‑technique “why useful” bullets in README |
+| 7. Performance & Next Steps | Yes | `README.md` — Evaluation Results Summary | Winner, averages, provenance noted | Add explicit "next iteration" bullets in README |
+
+## C. Metrics Snapshot (Tasks 5 & 7)
+| Strategy | Faithfulness | Response Relevancy | Context Precision | Context Recall |
+|----|-----|-----|----|----|
+| naive | 94.0% | 94.4% | 88.5% | 98.8% |
+| advanced | 95.8% | 94.8% | 93.1% | 96.7% |
+
+- **1 Strength:** Context Precision improved most via reranking.
+- **1 Next Step:** Document per‑query error analysis to guide retriever fusion tuning.
+
+## D. Stack Alignment (a16z LLM App Stack)
+| Layer | Tool Used | Why (≤ 12 words) |
+|----|-----|---|
+| LLM | OpenAI GPT‑4.1‑mini | Deterministic, reliable RAG generation |
+| Embeddings | text‑embedding‑3‑small | Strong semantic vectors, cost‑effective |
+| Orchestrator | LangGraph + LangChain | Graph workflows and LC integrations |
+| Vector DB | Qdrant | Fast cosine search, simple local setup |
+| Logging / Eval | LangSmith + RAGAS | Tracing plus standardized RAG metrics |
+| Validators | Manifests + deterministic config | Reproducible lineage and runs |
+| UI / Serving | LangGraph Server + Streamlit | Quick local API and prototype UI |
+
+## E. Evidence Details (brief)
+- **Task 1**: `README.md` — lines 1–6. One‑line problem, audience noted.
+- **Task 2**: `README.md` — Architecture Summary, Technology Stack tables.
+- **Task 3**: `README.md` — HuggingFace datasets; `data/interim/manifest.json` lineage.
+- **Task 4**: `app/graph_app.py` get_app; `src/graph.py` build_graph/build_all_graphs.
+- **Task 5**: `scripts/run_eval_harness.py` full RAGAS pipeline; outputs under `deliverables/evaluation_evidence/`.
+- **Task 6**: `src/retrievers` usage in harness; README results comparing retrievers.
+- **Task 7**: `README.md` — Evaluation Results table; `data/processed/comparative_ragas_results.parquet`.
+
 # Certification Challenge Evidence Map
 
 ## A. One-Screen Summary

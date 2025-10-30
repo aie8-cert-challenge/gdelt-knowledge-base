@@ -23,8 +23,8 @@ from huggingface_hub import HfApi, login
 
 # Configuration
 HF_USERNAME = "dwb2023"
-EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-inputs"
-DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-metrics"
+EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-inputs-v3"
+DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-metrics-v3"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent

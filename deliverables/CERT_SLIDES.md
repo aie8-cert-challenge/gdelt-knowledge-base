@@ -1,3 +1,51 @@
+## Slide 1: Intro / Hook
+GDELT’s documentation is vast and complex; analysts need fast, precise answers. GDELT Knowledge Graph RAG Assistant uses multi‑strategy retrieval and LangGraph to deliver grounded responses.
+
+## Slide 2: Task 1 — Problem & Audience
+**Goal:** Articulate problem and target user.
+**Evidence:** `README.md` — lines 1–6.
+**Result:** One‑sentence problem and audience defined for analysts/engineers.
+**Next Step:** Add 1–2 paragraph narrative in `docs/` for completeness.
+
+## Slide 3: Task 2 — Proposed Solution & Stack
+**Goal:** Describe solution and select tools per stack layer.
+**Evidence:** `README.md` — Architecture Summary, Technology Stack.
+**Result:** LangGraph‑based RAG with OpenAI, Qdrant, RAGAS, LangSmith, Streamlit.
+**Next Step:** Add 1‑sentence rationale per tool inline in the stack table.
+
+## Slide 4: Task 3 — Data & Chunking
+**Goal:** Document data sources, APIs, and default chunking.
+**Evidence:** `README.md` — HuggingFace datasets; `data/interim/manifest.json`.
+**Result:** Sources + golden testset published with SHA‑256 lineage.
+**Next Step:** State explicit chunking rationale in `src/utils` docstrings.
+
+## Slide 5: Task 4 — End‑to‑End Prototype
+**Goal:** Local end‑to‑end Agentic RAG prototype.
+**Evidence:** `app/graph_app.py` get_app; `src/graph.py` build_graph.
+**Result:** LangGraph Server app compiles and serves default rerank graph.
+**Next Step:** Surface Streamlit UI launch instructions in `README.md`.
+
+## Slide 6: Task 5 — Golden Test Set & RAGAS
+**Goal:** Create golden dataset and evaluate with RAGAS.
+**Evidence:** `scripts/run_eval_harness.py`; outputs in `deliverables/evaluation_evidence/`.
+**Result:** Faithfulness, Answer Relevancy, Context Precision/Recall computed and stored.
+**Next Step:** Include small example table in `deliverables/` overview doc.
+
+## Slide 7: Task 6 — Advanced Retrieval
+**Goal:** Install and test advanced retrieval methods.
+**Evidence:** `README.md` results; usage of BM25, ensemble, Cohere rerank.
+**Result:** Cohere rerank improved average and precision vs naïve.
+**Next Step:** Add per‑technique “why useful” bullets tied to data properties.
+
+## Slide 8: Task 7 — Performance & Next Steps
+**Goal:** Compare naïve vs advanced and plan improvements.
+**Evidence:** `README.md` Evaluation Results; `data/processed/comparative_ragas_results.parquet`.
+**Result:** Advanced reranking wins; metrics summarized and persisted.
+**Next Step:** Deeper error analysis to tune fusion and k values.
+
+## Slide 9: Conclusion / Reflection
+Key results: reproducible pipeline, advanced retrieval lifts precision, full lineage. Lessons: orchestrator patterns, manifesting data, metric tradeoffs. Next: error analysis, rationale logging, selective rerank to optimize cost.
+
 # Certification Challenge Presentation Outline
 
 ## Slide 1: Intro / Hook

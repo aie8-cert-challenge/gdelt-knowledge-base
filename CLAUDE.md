@@ -4,208 +4,362 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-Certification challenge project for AI Engineering Bootcamp Cohort 8: a production-grade RAG system for GDELT (Global Database of Events, Language, and Tone) knowledge graphs with comparative evaluation of 4 retrieval strategies using RAGAS metrics.
+This is a production-grade RAG (Retrieval-Augmented Generation) system for GDELT (Global Database of Events, Language, and Tone) documentation, built as a certification challenge project for AI Engineering Bootcamp Cohort 8. The system implements multiple retrieval strategies with comprehensive RAGAS-based evaluation.
 
-**Project Goal**: Compare naive, BM25, ensemble, and Cohere rerank retrievers to determine optimal RAG configuration for GDELT documentation Q&A.
+## Python Environment
 
-## ⚠️ Documentation Status Notice
+**Python Version**: 3.11+ (required for modern type hints)
 
-**Current Implementation**: This project has evolved through multiple refactoring cycles. The canonical implementation is:
-- **Core library**: `src/` modules (config, utils, retrievers, graph, state, prompts)
-- **Scripts**: `scripts/run_full_evaluation.py` (self-contained reference) and `scripts/run_eval_harness.py` (modular)
-- **Deployment**: `app/graph_app.py` (LangGraph Platform entrypoint only)
-- **UI**: LangGraph Studio (`uv run langgraph dev`)
+**Package Manager**: `uv` for dependency management
 
-**Documentation Drift**: Some documentation (initial-initial-architecture.m, deliverables.md) may reference prototype files that were refactored into `src/` modules. When in doubt, trust the code in `src/` and the commands in this CLAUDE.md file.
-
-**Reference Implementation**: Use `scripts/run_full_evaluation.py` as the learning reference - it shows the full evaluation pipeline in one file without abstractions.
-
-## Essential Commands
-
-### Environment Setup
+### Setup
 
 ```bash
-# Create virtual environment (Python 3.11 required)
+# Create and activate virtual environment
 uv venv --python 3.11
-source .venv/bin/activate
+source .venv/bin/activate        # Linux/WSL/Mac
 
-# Install all dependencies
+# Install dependencies
 uv pip install -e .
+```
 
-# Start Qdrant (required for vector search)
-docker-compose up -d qdrant
+## Common Commands
 
-# Verify environment
+### Data Preparation (One-Time Setup)
+
+```bash
+# Extract raw PDFs and generate golden testset (ONE-TIME, NOT REQUIRED)
+# Scope:
+#   1. Load PDFs from data/raw/ using PyMuPDF (12 pages → 38 documents)
+#   2. Generate RAGAS golden testset via LLM synthesis (12 QA pairs)
+#   3. Persist to data/interim/ in 3 formats (JSONL, Parquet, HFDS)
+#   4. Create manifest.json with SHA-256 checksums and provenance
+# Output:
+#   - data/interim/sources.* (3 files: JSONL, Parquet, HFDS)
+#   - data/interim/golden_testset.* (3 files: JSONL, Parquet, HFDS)
+#   - data/interim/manifest.json (reproducibility metadata)
+# Duration: 5-10 minutes
+# Cost: ~$2-3 in OpenAI API calls
+# Note: This is ONLY needed if you want to recreate datasets from scratch.
+#       The eval pipeline loads pre-built datasets from HuggingFace Hub.
+make ingest
+# or
+PYTHONPATH=. python scripts/ingest_raw_pdfs.py
+```
+
+### Development & Validation
+
+```bash
+# Validate complete application stack (MUST pass 100%)
+# Scope: Checks environment, imports, factory patterns, graph compilation
+# Does NOT create vector store or run evaluations
+# Output: Terminal report (23/23 checks expected)
+# Duration: 1-2 minutes
+make validate
+# or
+PYTHONPATH=. python scripts/run_app_validation.py
+
+# Quick validation test (alias for make validate)
+make test
+```
+
+### Evaluation & Analysis
+
+```bash
+# Run full RAGAS evaluation (THIS CREATES AND POPULATES QDRANT)
+# Scope:
+#   1. Loads 38 documents from HuggingFace
+#   2. Creates/reuses Qdrant collection "gdelt_comparative_eval" with embeddings
+#      (configurable via QDRANT_COLLECTION env var)
+#   3. Creates 4 retrievers (naive, bm25, ensemble, cohere_rerank)
+#   4. Runs 48 RAG queries (12 questions × 4 retrievers)
+#   5. Evaluates with 4 RAGAS metrics
+#   6. Saves results to data/processed/ (Parquet files, source of truth)
+# Output:
+#   - data/processed/*_evaluation_inputs.parquet (4 files)
+#   - data/processed/*_evaluation_metrics.parquet (4 files)
+#   - data/processed/comparative_ragas_results.parquet
+#   - data/processed/RUN_MANIFEST.json
+# Duration: 20-30 minutes
+# Cost: ~$5-6 in OpenAI API calls
+# Vector Store: REUSES existing Qdrant collection if present (faster)
+make eval
+# or
+PYTHONPATH=. python scripts/run_eval_harness.py
+
+# Force recreate Qdrant collection (slower, ensures fresh embeddings)
+# Scope: Same as above BUT deletes and recreates Qdrant collection from scratch
+# Duration: 25-35 minutes (extra time for re-embedding)
+# Use When: Documents changed, embeddings model changed, or collection corrupted
+make eval recreate=true
+
+# Generate human-readable CSV deliverables from Parquet data
+# Scope: Converts Parquet files in data/processed/ to CSV in deliverables/
+# Input: data/processed/*.parquet (MUST exist - run make eval first)
+# Output: deliverables/evaluation_evidence/*.csv (10 files + manifest)
+# Duration: <1 minute
+# Cost: FREE (no API calls, pure file conversion)
+# Behavior: Silently skips missing Parquet files (no error thrown)
+# Dependencies: REQUIRES make eval to have run successfully first
+# Note: Deliverables are DERIVED artifacts - always regenerable from Parquet
+make deliverables
+# or
+python scripts/generate_deliverables.py
+```
+
+### Publishing (Optional)
+
+```bash
+# Publish interim datasets to HuggingFace Hub (OPTIONAL, ONE-TIME)
+# Scope: Uploads source documents and golden testset to HuggingFace Hub
+# Input: data/interim/*.parquet (must exist - run make ingest first)
+# Output:
+#   - dwb2023/gdelt-rag-sources-v2 (38 documents)
+#   - dwb2023/gdelt-rag-golden-testset-v2 (12 QA pairs)
+# Duration: 1-2 minutes (depends on upload speed)
+# Prerequisites: HF_TOKEN environment variable must be set
+# Note: Only needed if you want to share datasets publicly or update them
+make publish-interim
+# or
+PYTHONPATH=. python scripts/publish_interim_datasets.py
+
+# Publish evaluation results to HuggingFace Hub (OPTIONAL, ONE-TIME)
+# Scope: Uploads evaluation results (inputs + metrics) to HuggingFace Hub
+# Input: data/processed/*.parquet (must exist - run make eval first)
+# Output:
+#   - dwb2023/gdelt-rag-evaluation-inputs (48 records: 4 retrievers × 12 questions)
+#   - dwb2023/gdelt-rag-evaluation-metrics (48 records with RAGAS scores)
+# Duration: 1-2 minutes (depends on upload speed)
+# Prerequisites: HF_TOKEN environment variable must be set
+# Note: Only needed for public benchmarking or sharing evaluation results
+make publish-processed
+# or
+PYTHONPATH=. python scripts/publish_processed_datasets.py
+```
+
+### Infrastructure
+
+```bash
+# Start all services (Qdrant, Redis, Neo4j, MinIO, LangGraph)
+# Scope: Launches ALL Docker containers
+# Services: Qdrant (vector DB), Redis (cache), Neo4j (graph DB),
+#           MinIO (object storage), LangGraph API (web service)
+# Ports: 6333 (Qdrant), 6379 (Redis), 7474/7687 (Neo4j),
+#        9000/9001 (MinIO), 8123 (LangGraph)
+# Duration: 10-30 seconds startup
+make docker-up
+
+# Start only Qdrant (minimal requirement for this project)
+# Scope: Launches ONLY Qdrant vector database
+# Port: 6333 (HTTP), 6334 (gRPC)
+# Duration: 5-10 seconds startup
+# Note: This is all you need for make eval and make validate
+make qdrant-up
+
+# Stop all services
+# Scope: Stops and removes all Docker containers
+# Note: Volumes persist (Qdrant data retained)
+make docker-down
+
+# Check environment configuration
+# Scope: Displays API key status, Python version, Docker status
+# Output: Terminal report (no side effects)
 make env
 ```
 
-### Common Development Tasks
+### LangGraph Server
 
 ```bash
-# Validate src/ module implementation (must pass 100%)
-make validate
+# Local development server with hot reload
+uv add langgraph-cli[inmem]
+uv run langgraph dev --allow-blocking
+# Access at http://localhost:2024
+# Studio: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
-# Run full RAGAS evaluation pipeline (writes Parquet to data/processed/)
-make eval
+# Query via HTTP
+curl -X POST http://localhost:8123/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is GDELT?"}'
+```
 
-# Generate human-readable deliverables (converts Parquet → CSV)
-make deliverables
+### Architecture Analysis
 
-# Run evaluation with fresh Qdrant collection
-make eval recreate=true
+```bash
+# Generate comprehensive architecture documentation
+python -m ra_orchestrators.architecture_orchestrator "GDELT architecture"
+# Output: ra_output/architecture_{timestamp}/
+```
 
-# Clean derived deliverables (regenerable)
-make clean-deliverables
+### Jupyter
 
-# Clean processed data (requires re-eval)
-make clean-processed
-
-# Full cleanup (cache + interim + processed + deliverables)
-make clean-all
-
-# Start Jupyter for notebook work
+```bash
+# Start Jupyter notebook
 make notebook
-
-# View all available commands
-make help
 ```
 
-### Running Specific Components
+## Complete Workflow Pipeline
 
+### End-to-End Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 1: Data Preparation (ONE-TIME, Optional)                  │
+└─────────────────────────────────────────────────────────────────┘
+data/raw/*.pdf (12 pages)
+  ↓ [make ingest] ~5-10 min, $2-3
+  ├─ PyMuPDF extraction → 38 documents
+  ├─ RAGAS testset generation → 12 QA pairs
+  └─ Multi-format persistence (JSONL, Parquet, HFDS)
+  ↓
+data/interim/
+  ├─ sources.* (3 formats)
+  ├─ golden_testset.* (3 formats)
+  └─ manifest.json (provenance)
+  ↓ [make publish-interim] ~1-2 min (optional)
+  ↓
+HuggingFace Hub
+  ├─ dwb2023/gdelt-rag-sources-v2
+  └─ dwb2023/gdelt-rag-golden-testset-v2
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 2: Infrastructure Setup (Required)                        │
+└─────────────────────────────────────────────────────────────────┘
+[make qdrant-up] ~5-10 sec
+  ↓
+Qdrant running at http://localhost:6333
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 3: Validation (Recommended)                               │
+└─────────────────────────────────────────────────────────────────┘
+[make validate] ~1-2 min, FREE
+  ↓
+✅ 23/23 checks pass (environment, imports, factories)
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 4: Evaluation (Core Workflow)                             │
+└─────────────────────────────────────────────────────────────────┘
+[make eval] ~20-30 min, $5-6
+  ↓
+  1. Load 38 documents from HuggingFace Hub
+  2. CREATE Qdrant collection "gdelt_comparative_eval" + embeddings ← QDRANT POPULATED HERE
+  3. Create 4 retrievers (naive, bm25, ensemble, cohere_rerank)
+  4. Run 48 RAG queries (12 questions × 4 retrievers)
+  5. Evaluate with 4 RAGAS metrics (~150 LLM calls)
+  6. Save results to data/processed/
+  ↓
+data/processed/
+  ├─ *_evaluation_inputs.parquet (4 files)
+  ├─ *_evaluation_metrics.parquet (4 files)
+  ├─ comparative_ragas_results.parquet
+  └─ RUN_MANIFEST.json
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 5: Deliverables (Human-Readable Outputs)                  │
+└─────────────────────────────────────────────────────────────────┘
+[make deliverables] <1 min, FREE
+  ↓
+  Parquet → CSV conversion
+  ↓
+deliverables/evaluation_evidence/
+  ├─ *_evaluation_dataset.csv (4 files)
+  ├─ *_detailed_results.csv (4 files)
+  ├─ comparative_ragas_results.csv
+  └─ RUN_MANIFEST.json (copied)
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 6: Publishing (Optional)                                  │
+└─────────────────────────────────────────────────────────────────┘
+[make publish-processed] ~1-2 min (optional)
+  ↓
+HuggingFace Hub
+  ├─ dwb2023/gdelt-rag-evaluation-inputs
+  └─ dwb2023/gdelt-rag-evaluation-metrics
+```
+
+### Quick Start Workflow
+
+**For most users (evaluation only)**:
 ```bash
-# Interactive query via main entry point
-python main.py
-
-# Run standalone evaluation pipeline
-python scripts/run_full_evaluation.py
-
-# Validate LangGraph implementation
-PYTHONPATH=. python scripts/validate_langgraph.py
-
-# Run evaluation harness (modular version)
-PYTHONPATH=. python scripts/run_eval_harness.py
-
-# Test individual retriever
-python -c "
-from src.utils import load_documents_from_huggingface
-from src.config import create_vector_store
-from src.retrievers import create_retrievers
-from src.graph import build_graph
-
-documents = load_documents_from_huggingface()
-vector_store = create_vector_store(documents)
-retrievers = create_retrievers(documents, vector_store)
-graph = build_graph(retrievers['naive'])
-result = graph.invoke({'question': 'What is GDELT?'})
-print(result['response'])
-"
+make qdrant-up      # Start vector database
+make validate       # Verify environment (100% pass required)
+make eval           # Run evaluation (creates Qdrant collection)
+make deliverables   # Generate human-readable CSVs
 ```
 
-## Core Architecture
+**For dataset creators (complete pipeline)**:
+```bash
+# One-time setup
+make ingest             # Extract PDFs → interim datasets
+make publish-interim    # Upload to HuggingFace Hub
 
-### Factory Pattern Philosophy
-
-**Critical Pattern**: This codebase uses factory functions to avoid module-level initialization issues. Retrievers and graphs cannot be created at import time because they depend on runtime data (documents, vector stores).
-
-### Three-Layer Design
-
-**Layer 1: Scripts** (`scripts/`)
-- `run_full_evaluation.py` - Complete standalone evaluation (530 LOC, works without src/)
-- `run_eval_harness.py` - Modular evaluation using src/ modules
-- `run_app_validation.py` - Application validation (100% pass required before deployment)
-- `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
-- `publish_interim_datasets.py` - Upload interim datasets to HuggingFace Hub
-
-**Layer 2: Core Modules** (`src/`)
-- `config.py` - Cached singletons: `get_llm()`, `get_embeddings()`, `get_qdrant()`, `create_vector_store()`
-- `state.py` - TypedDict: `{question: str, context: List[Document], response: str}`
-- `prompts.py` - Template: `BASELINE_PROMPT`
-- `utils.py` - Loaders: `load_documents_from_huggingface()`, `load_golden_testset_from_huggingface()`
-- `retrievers.py` - Factory: `create_retrievers(documents, vector_store) -> Dict[str, Retriever]`
-- `graph.py` - Factory: `build_graph(retriever) -> CompiledGraph`, `build_all_graphs(retrievers) -> Dict[str, CompiledGraph]`
-
-**Layer 3: External Services**
-- OpenAI (gpt-4.1-mini + text-embedding-3-small)
-- Cohere (rerank-v3.5)
-- Qdrant (localhost:6333)
-- HuggingFace (dataset hosting)
-
-### LangGraph Workflow Pattern
-
-All 4 retrievers use the same two-node graph:
-
-```
-START → retrieve (updates context) → generate (updates response) → END
+# Then follow evaluation workflow above
 ```
 
-**Key Implementation**:
-```python
-from langgraph.graph import START, StateGraph
-from src.state import State
+### Key Decision Points
 
-def retrieve(state):
-    docs = retriever.invoke(state["question"])
-    return {"context": docs}  # Partial state update
+1. **Do I need `make ingest`?**
+   - ❌ NO if evaluating with existing datasets (most users)
+   - ✅ YES if recreating datasets from scratch or modifying PDFs
 
-def generate(state):
-    docs_content = "\n\n".join(d.page_content for d in state["context"])
-    messages = rag_prompt.format_messages(question=state["question"], context=docs_content)
-    response = llm.invoke(messages)
-    return {"response": response.content}  # Partial state update
+2. **When does Qdrant get populated?**
+   - Answer: During `make eval` (Step 2 of evaluation pipeline)
+   - Not during `make ingest` (that's data preparation only)
 
-graph = StateGraph(State)
-graph.add_node("retrieve", retrieve)
-graph.add_node("generate", generate)
-graph.add_edge(START, "retrieve")
-graph.add_edge("retrieve", "generate")
-graph.add_edge("generate", END)
-compiled = graph.compile()
-```
+3. **Do I need publishing commands?**
+   - ❌ NO for local development and evaluation
+   - ✅ YES if sharing datasets publicly or updating benchmarks
 
-**Why This Pattern**: Node functions return partial state updates (dicts), not complete states. LangGraph automatically merges updates into the state.
+## Key Technologies
 
-### Retriever Implementations
+### Core Stack
+- **LangChain 0.3.19+**: RAG framework, document loaders, retrievers
+- **LangGraph 0.6.7**: Graph-based workflow orchestration (pinned)
+- **RAGAS 0.2.10**: RAG evaluation metrics (pinned - API changed in 0.3.x)
+- **Qdrant**: Vector database (Docker deployment)
+- **OpenAI**: GPT-4.1-mini (LLM), text-embedding-3-small (embeddings)
+- **Cohere**: rerank-v3.5 (neural reranking)
+
+### Data & Publishing
+- **HuggingFace Hub**: Dataset hosting and versioning
+- **PyMuPDF 1.26.3+**: PDF parsing for document ingestion
+- **Datasets 3.2.0+**: Dataset loading and publishing
+
+### Development
+- **Streamlit**: Prototype chat interface
+- **Claude Agent SDK 0.1.1+**: Multi-agent architecture analysis
+
+## Architecture Patterns
+
+### 1. Factory Pattern (Critical)
+
+**All retrievers and graphs use factory functions** instead of module-level initialization. This is critical because retrievers depend on runtime-loaded data (documents, vector stores) that don't exist at import time.
 
 ```python
-# src/retrievers.py - Factory pattern
+# ❌ ANTI-PATTERN: Module-level initialization fails
+retriever = vector_store.as_retriever()  # vector_store doesn't exist yet!
+
+# ✅ CORRECT: Factory function
 def create_retrievers(documents, vector_store, k=5):
-    """Create all 4 retriever strategies"""
-
-    # 1. Naive: Dense vector search
-    naive = vector_store.as_retriever(search_kwargs={"k": k})
-
-    # 2. BM25: Sparse keyword matching
-    bm25 = BM25Retriever.from_documents(documents, k=k)
-
-    # 3. Ensemble: Hybrid (50% dense + 50% sparse)
-    ensemble = EnsembleRetriever(
-        retrievers=[naive, bm25],
-        weights=[0.5, 0.5]
-    )
-
-    # 4. Cohere Rerank: Retrieve 20 → rerank to top k
-    wide_retriever = vector_store.as_retriever(search_kwargs={"k": max(20, k)})
-    compression = ContextualCompressionRetriever(
-        base_compressor=CohereRerank(model="rerank-v3.5"),
-        base_retriever=wide_retriever
-    )
-
     return {
-        "naive": naive,
-        "bm25": bm25,
-        "ensemble": ensemble,
-        "cohere_rerank": compression,
+        "naive": vector_store.as_retriever(search_kwargs={"k": k}),
+        "bm25": BM25Retriever.from_documents(documents, k=k),
+        "ensemble": EnsembleRetriever(retrievers=[naive, bm25], weights=[0.5, 0.5]),
+        "cohere_rerank": ContextualCompressionRetriever(...)
     }
 ```
 
-**Performance Results** (96.47% Cohere > 94.14% BM25 > 93.96% Ensemble > 91.60% Naive)
+**Key Factory Functions**:
+- `src/config.py::create_vector_store()` - Qdrant vector store
+- `src/retrievers.py::create_retrievers()` - 4 retrieval strategies
+- `src/graph.py::build_graph()` - LangGraph workflow for single retriever
+- `src/graph.py::build_all_graphs()` - All retriever workflows
 
-### Configuration Management
+### 2. Singleton Pattern (Resource Caching)
 
-**Centralized in `src/config.py`**:
+Expensive resources (LLM, embeddings, Qdrant client) are cached with `@lru_cache`:
+
 ```python
 from functools import lru_cache
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 @lru_cache(maxsize=1)
 def get_llm():
@@ -214,357 +368,188 @@ def get_llm():
 @lru_cache(maxsize=1)
 def get_embeddings():
     return OpenAIEmbeddings(model="text-embedding-3-small")
-
-@lru_cache(maxsize=1)
-def get_qdrant():
-    return QdrantClient(host="localhost", port=6333)
 ```
 
-**Why `lru_cache`**: Ensures singleton behavior - single LLM/embeddings instance across application lifecycle.
+**Benefits**: Single instance per process, thread-safe, easy to clear for testing
 
-## Data Flow
+### 3. Strategy Pattern (Retrieval)
 
-### Evaluation Pipeline (scripts/run_full_evaluation.py)
+Four retrieval strategies implement common interface (`invoke(query)`):
 
-```
-1. Load golden testset (12 QA pairs) from HuggingFace
-2. Load source documents (38 docs) from HuggingFace
-3. Create Qdrant vector store + embed all documents
-4. Build 4 retriever strategies
-5. Execute 48 RAG queries (4 retrievers × 12 questions)
-6. Run RAGAS evaluation (4 metrics × 48 queries = 192 LLM calls)
-7. Generate comparative summary CSV
-8. Save results to deliverables/evaluation_evidence/
+| Strategy | Type | Latency | Use Case |
+|----------|------|---------|----------|
+| **naive** | Dense vector search | ~50-100ms | General semantic search |
+| **bm25** | Sparse keyword matching | ~10-20ms | Exact keywords, proper nouns |
+| **ensemble** | Hybrid (50/50 weighted) | ~60-120ms | Balanced semantic + lexical |
+| **cohere_rerank** | Two-stage neural reranking | ~200-500ms | Highest quality results |
 
-Duration: 20-30 minutes (dominated by RAGAS evaluation)
-Cost: ~$5.65 per full run
-```
+### 4. Parquet-First Data Architecture
 
-### HuggingFace Datasets
+**Working data** (source of truth) lives in `data/processed/` as Parquet files. **Deliverables** in `deliverables/evaluation_evidence/` are derived CSV files regenerated via `make deliverables`.
 
-**Interim Datasets** (raw data):
+**Critical architectural fix**: Inference results are saved immediately after Step 3 (not during RAGAS evaluation Step 4). This decouples inference from evaluation and prevents data loss if RAGAS fails mid-run.
 
-**Sources**: `dwb2023/gdelt-rag-sources-v2` (38 documents)
-- GDELT GKG 2.1 architecture docs
-- Knowledge graph construction guides
-- Baltimore Bridge Collapse case study
-
-**Golden Testset**: `dwb2023/gdelt-rag-golden-testset-v2` (12 QA pairs)
-- Synthetic questions generated via RAGAS
-- Ground truth answers for evaluation
-- Reference contexts for context recall metric
-
-**Processed Datasets** (evaluation results):
-
-**Evaluation Inputs**: `dwb2023/gdelt-rag-evaluation-inputs` (60 evaluation inputs)
-- Schema: `retriever`, `user_input`, `retrieved_contexts`, `reference_contexts`, `response`, `reference`
-- Consolidated RAGAS inputs from 5 retrievers (baseline, naive, bm25, ensemble, cohere_rerank)
-- Use: Benchmarking retriever strategies, analyzing retrieval quality
-
-**Evaluation Metrics**: `dwb2023/gdelt-rag-evaluation-metrics` (60 results with RAGAS scores)
-- Schema: Same as above + `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`
-- Per-question RAGAS metric scores for all 5 retrievers
-- Use: Performance analysis, error analysis, training retrieval models
-
-## HuggingFace Dataset Documentation
-
-### Scientific Value Proposition
-
-These 4 datasets provide the **first publicly available evaluation suite** for GDELT-focused RAG systems, enabling:
-
-1. **Reproducible Research**: Complete evaluation pipeline with versioned datasets and SHA-256 checksums
-2. **Retrieval Benchmarking**: Standard testset for comparing retrieval strategies (naive, BM25, ensemble, reranking)
-3. **Quality-Labeled Training Data**: RAGAS metric scores serve as quality labels for training retrieval models
-4. **Evaluation Transparency**: Full evaluation inputs + metrics for analysis and debugging
-5. **Domain-Specific QA**: GDELT knowledge graph questions rare in existing RAG datasets
-6. **Multi-Format Access**: Parquet (analytics), JSONL (human-readable), HF Datasets (fast loading)
-
-### Dataset Schemas
-
-#### 1. gdelt-rag-sources-v2 (38 documents)
-
-**Purpose**: Source documents for RAG knowledge base
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `page_content` | string | Extracted text from PDF page (1,480-5,240 chars) |
-| `metadata.author` | string | Paper authors |
-| `metadata.creator` | string | PDF creator tool |
-| `metadata.creation_date` | string | Document creation timestamp |
-| `metadata.file_path` | string | Source PDF file path |
-| `metadata.source` | string | Source document identifier |
-| `metadata.format` | string | PDF version (1.5/1.6) |
-| `metadata.title` | string | "Talking to GDELT Through Knowledge Graphs" |
-| `metadata.page` | int | Current page number (0-indexed) |
-| `metadata.total_pages` | int | Total pages in document |
-| `metadata.subject` | string | Document subject |
-| `metadata.keywords` | string | Document keywords |
-
-**Use Cases**:
-- Populate vector stores for RAG systems
-- Document chunking strategy experimentation
-- GDELT knowledge graph research
-- Event analysis methodology studies
-
-#### 2. gdelt-rag-golden-testset-v2 (12 QA pairs)
-
-**Purpose**: Evaluation testset for GDELT RAG benchmarking
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `user_input` | string | Question from synthetic generation |
-| `reference_contexts` | list[string] | Ground truth passages (avg 1.67 per question) |
-| `reference` | string | Expected answer |
-| `synthesizer_name` | string | RAGAS synthesizer type (single-hop/multi-hop) |
-
-**Topics Covered**:
-- GDELT data formats (CSV vs JSON)
-- Translingual features (65 languages)
-- Date extraction methods
-- Proximity context in GKG 2.1
-- Multilingual emotion measurement
-
-**Use Cases**:
-- Benchmark retrieval strategies using RAGAS metrics
-- Validate RAG system performance on GDELT domain
-- Compare against baseline (93.92% average)
-
-#### 3. gdelt-rag-evaluation-inputs (60 evaluation records)
-
-**Purpose**: Consolidated RAGAS evaluation inputs from 5 retrieval strategies
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `split` | string | Dataset split (train) |
-| `retriever` | string | Strategy name (Naive, BM25, Baseline, Ensemble, Cohere) |
-| `user_input` | string | Question from golden testset |
-| `reference_contexts` | list[string] | Ground truth passages |
-| `reference` | string | Expected answer |
-| `synthesizer_name` | string | Answer generation model |
-| `response` | string | Generated RAG response |
-| `retrieved_contexts` | list[string] | Retrieved passages from RAG system |
-
-**Use Cases**:
-- Analyze retrieval quality across strategies
-- Debug RAG pipeline failures
-- Train context selection models
-- Reproduce certification challenge results
-
-#### 4. gdelt-rag-evaluation-metrics (60 evaluation records with scores)
-
-**Purpose**: Detailed RAGAS evaluation results with per-question metric scores
-
-| Field | Type | Description |
-|-------|------|-------------|
-| *(all fields from evaluation-inputs)* | - | Complete evaluation context |
-| `faithfulness` | float64 | Factual consistency score (0-1) |
-| `answer_relevancy` | float64 | Question relevance score (0-1) |
-| `context_precision` | float64 | Retrieval ranking quality (0-1) |
-| `context_recall` | float64 | Ground truth coverage (0-1) |
-
-**Key Findings**:
-- **Winner**: Cohere Rerank (95.08% average)
-- **Baseline**: Naive retriever (93.92% average)
-- **Best Precision**: Cohere Rerank (93.06% vs 88.51% baseline = +4.55%)
-
-**Use Cases**:
-- Performance analysis by retriever
-- Error analysis and failure mode identification
-- Training retrieval models with RAGAS scores as quality labels
-- RAG evaluation methodology research
-
-### Loading and Usage Examples
-
-```python
-from datasets import load_dataset
-import pandas as pd
-
-# 1. Load source documents for RAG
-sources = load_dataset("dwb2023/gdelt-rag-sources-v2")
-print(f"Loaded {len(sources['train'])} documents")
-# Output: Loaded 38 documents
-
-# 2. Load golden testset for evaluation
-testset = load_dataset("dwb2023/gdelt-rag-golden-testset-v2")
-questions = [ex['user_input'] for ex in testset['train']]
-print(f"Evaluation questions: {len(questions)}")
-# Output: Evaluation questions: 12
-
-# 3. Load evaluation inputs and filter by retriever
-eval_inputs = load_dataset("dwb2023/gdelt-rag-evaluation-inputs")
-cohere_evals = eval_inputs['train'].filter(lambda x: x['retriever'] == 'Cohere')
-print(f"Cohere evaluations: {len(cohere_evals)}")
-# Output: Cohere evaluations: 12
-
-# 4. Load metrics and analyze performance by retriever
-metrics = load_dataset("dwb2023/gdelt-rag-evaluation-metrics")
-df = metrics['train'].to_pandas()
-
-# Calculate average performance per retriever
-performance = df.groupby('retriever')[
-    ['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']
-].mean()
-print(performance)
-
-# Output:
-#                 faithfulness  answer_relevancy  context_precision  context_recall
-# retriever
-# Baseline             0.9397          0.9439           0.8851            0.9881
-# BM25                 0.9417          0.9479           0.8582            0.9881
-# Cohere               0.9577          0.9478           0.9306            0.9673
-# Ensemble             0.9340          0.9456           0.8746            0.9881
-# Naive                0.9397          0.9439           0.8851            0.9881
-
-# 5. Find best and worst performing questions
-df['avg_score'] = df[['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']].mean(axis=1)
-best_q = df.loc[df['avg_score'].idxmax()]
-worst_q = df.loc[df['avg_score'].idxmin()]
-print(f"Best question: {best_q['user_input'][:50]}... (score: {best_q['avg_score']:.2%})")
-print(f"Worst question: {worst_q['user_input'][:50]}... (score: {worst_q['avg_score']:.2%})")
-
-# 6. Analyze which retriever wins on each metric
-for metric in ['faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']:
-    winner = performance[metric].idxmax()
-    score = performance[metric].max()
-    print(f"{metric}: {winner} ({score:.2%})")
-
-# Output:
-# faithfulness: Cohere (95.77%)
-# answer_relevancy: BM25 (94.79%)
-# context_precision: Cohere (93.06%)
-# context_recall: BM25 (98.81%)
-```
-
-### Citation Guidelines
-
-If you use these datasets in your research, please cite:
-
-```bibtex
-@misc{branson2025gdelt-rag-datasets,
-  author = {Branson, Don},
-  title = {GDELT RAG Evaluation Datasets: Benchmarking Retrieval Strategies for Knowledge Graph Q\&A},
-  year = {2025},
-  publisher = {HuggingFace},
-  howpublished = {\url{https://huggingface.co/dwb2023}},
-  note = {Datasets: gdelt-rag-sources-v2, gdelt-rag-golden-testset-v2, gdelt-rag-evaluation-inputs, gdelt-rag-evaluation-metrics}
-}
-
-@article{myers2025gdelt,
-  title={Talking to GDELT Through Knowledge Graphs},
-  author={Myers, A. and Vargas, M. and Aksoy, S. G. and Joslyn, C. and Wilson, B. and Burke, L. and Grimes, T.},
-  journal={arXiv preprint arXiv:2503.07584v3},
-  year={2025}
-}
-```
-
-### Dataset Provenance and Versioning
-
-**Provenance Chain**:
-1. **Source**: arXiv:2503.07584v3 "Talking to GDELT Through Knowledge Graphs" (PDF)
-2. **Extraction**: PyMuPDFLoader (page-level chunking)
-3. **Testset Generation**: RAGAS 0.2.10 synthetic data generation
-4. **Evaluation**: gpt-4.1-mini (LLM), text-embedding-3-small (embeddings), rerank-v3.5 (reranker)
-5. **Validation**: SHA-256 checksums in `data/interim/manifest.json`
-
-**Versioning Strategy**:
-- `-v2` suffix indicates second iteration after fresh ingestion
-- Dataset revisions tracked via HuggingFace Hub commit history
-- Pin to specific revision for reproducibility: `load_dataset("dwb2023/gdelt-rag-sources-v2", revision="abc123")`
-
-**Quality Assurance**:
-- ✅ RAGAS 0.2.10 validation (schema compliance)
-- ✅ SHA-256 fingerprints for data integrity
-- ✅ Manifest tracking (timestamps, model versions, package versions)
-- ✅ 100% validation pass rate (`make validate`)
-- ✅ Apache 2.0 licensed (open access)
-
-**Known Limitations**:
-1. **Domain-Specific**: Optimized for GDELT documentation, may not generalize to other domains
-2. **Synthetic Questions**: Golden testset generated by RAGAS, not human-authored
-3. **English-Only**: All questions and answers in English despite GDELT's multilingual capabilities
-4. **Small Scale**: 12 evaluation questions (sufficient for comparative analysis, not large-scale benchmarking)
-5. **Model Bias**: RAGAS metrics computed using GPT-4 (inherits model biases)
-6. **Temporal Snapshot**: Based on GDELT documentation as of January 2025
-
-### Research Use Cases
-
-**For RAG Researchers**:
-- Benchmark your retrieval strategy against 4 baselines (naive, BM25, ensemble, Cohere rerank)
-- Use RAGAS metric scores as training labels for learning-to-rank models
-- Analyze failure modes across different retrieval paradigms
-- Validate hypotheses about hybrid retrieval (dense + sparse)
-
-**For GDELT Analysts**:
-- Build Q&A systems for GDELT documentation
-- Train domain-specific embedding models
-- Generate additional synthetic questions using RAGAS
-- Extend evaluation to other GDELT resources (GKG codebook, API docs)
-
-**For Evaluation Researchers**:
-- Study RAGAS metric behavior on domain-specific datasets
-- Compare automatic metrics (RAGAS) vs human judgments
-- Investigate retrieval strategy impact on answer quality
-- Develop new RAG evaluation methodologies
-
-**For Educators**:
-- Teach RAG evaluation best practices
-- Demonstrate comparative retrieval analysis
-- Illustrate data provenance and reproducibility
-- Provide hands-on experience with production RAG systems
-
-### Multi-Format Persistence (Parquet-First Architecture)
+## Repository Structure
 
 ```
+src/                           # Core modular RAG framework
+├── config.py                  # Cached singletons (LLM, embeddings, Qdrant)
+├── retrievers.py              # Factory: create_retrievers()
+├── graph.py                   # Factory: build_graph(), build_all_graphs()
+├── state.py                   # TypedDict schema for LangGraph state
+├── prompts.py                 # RAG prompt templates
+└── utils/
+    ├── loaders.py             # HuggingFace dataset loading
+    └── manifest.py            # Reproducibility tracking (RUN_MANIFEST.json)
+
+scripts/                       # Executable workflows
+├── run_app_validation.py      # Environment and module validation (100% pass required)
+├── run_eval_harness.py        # RAGAS evaluation (uses src/ modules)
+├── run_full_evaluation.py     # RAGAS evaluation (standalone reference)
+├── ingest_raw_pdfs.py         # PDF → interim datasets → golden testset
+├── publish_interim_datasets.py     # Upload interim datasets to HuggingFace
+├── publish_processed_datasets.py   # Upload evaluation results to HuggingFace
+└── generate_deliverables.py  # Parquet → CSV conversion for human review
+
+app/
+└── graph_app.py               # LangGraph Server entrypoint (get_app())
+
+data/
+├── raw/                       # Source PDFs (immutable)
+├── interim/                   # Extracted documents + golden testset + manifest.json
+├── processed/                 # Evaluation results (Parquet, source of truth)
+└── deliverables/              # Derived CSV files (regenerable via make deliverables)
+
+architecture/                  # Auto-generated architecture docs (Claude Agent SDK)
+├── 00_README.md              # System overview and lifecycle
+├── docs/                     # Component inventory, data flows, API reference
+└── diagrams/                 # Mermaid dependency and system diagrams
+
+ra_orchestrators/             # Multi-agent architecture analysis framework
+ra_agents/                    # Agent definitions (JSON)
+ra_tools/                     # Tool integrations (MCP, Figma)
+ra_output/                    # Analysis outputs (timestamped)
+
+docs/
+├── deliverables.md           # Certification submissions
+├── certification-challenge-task-list.md  # 100-point grading breakdown
+└── initial-architecture.md   # Original design sketch (frozen, not updated)
+```
+
+## Data Flow Patterns
+
+### Document Ingestion Pipeline
+
+```
+data/raw/2503.07584v3.pdf (12 pages)
+  ↓ [scripts/ingest_raw_pdfs.py]
+  ├─ PyMuPDF extraction (page-level chunking → 38 documents)
+  ├─ RAGAS synthetic testset generation (12 QA pairs)
+  └─ Multi-format persistence (JSONL, Parquet, HFDS)
+  ↓
 data/interim/
-├── sources.jsonl          # Human-readable
-├── sources.parquet        # Analytics-optimized
-├── sources.hfds/          # HuggingFace Dataset (fast loading + versioning)
-├── golden_testset.jsonl
-├── golden_testset.parquet
-├── golden_testset.hfds/
-└── manifest.json          # Checksums, versions, provenance
-
-data/processed/            # Working data (Parquet-first, ZSTD compressed)
-├── naive_evaluation_inputs.parquet       # RAGAS input datasets (RAG outputs)
-├── naive_evaluation_metrics.parquet      # RAGAS metric scores
-├── bm25_evaluation_inputs.parquet
-├── bm25_evaluation_metrics.parquet
-├── ensemble_evaluation_inputs.parquet
-├── ensemble_evaluation_metrics.parquet
-├── cohere_rerank_evaluation_inputs.parquet
-├── cohere_rerank_evaluation_metrics.parquet
-├── comparative_ragas_results.parquet
-└── RUN_MANIFEST.json                     # Provenance manifest
-
-deliverables/evaluation_evidence/  # Derived (CSV for human review, regenerable)
-├── naive_evaluation_dataset.csv          # Generated via scripts/generate_deliverables.py
-├── naive_detailed_results.csv
-├── bm25_evaluation_dataset.csv
-├── bm25_detailed_results.csv
-├── ensemble_evaluation_dataset.csv
-├── ensemble_detailed_results.csv
-├── cohere_rerank_evaluation_dataset.csv
-├── cohere_rerank_detailed_results.csv
-├── comparative_ragas_results.csv
-└── RUN_MANIFEST.json                     # Copied from data/processed/
+  ├─ sources.{jsonl,parquet,hfds}
+  ├─ golden_testset.{jsonl,parquet,hfds}
+  └─ manifest.json (SHA-256 checksums + provenance)
+  ↓ [scripts/publish_interim_datasets.py]
+  ↓
+HuggingFace Hub
+  ├─ dwb2023/gdelt-rag-sources-v2
+  └─ dwb2023/gdelt-rag-golden-testset-v2
 ```
 
-**Key Principle**: `deliverables/` is **derived only**. Evaluation scripts write to `data/processed/` (Parquet), then run `make deliverables` to generate human-readable CSV files.
+### RAG Query Processing
 
-## Adding New Retrievers
+```
+User Question
+  ↓ Graph.invoke({"question": "..."})
+Retrieve Node
+  ↓ retriever.invoke(question)
+  ├─ Naive: Qdrant similarity search (k=5)
+  ├─ BM25: In-memory lexical matching (k=5)
+  ├─ Ensemble: 50/50 weighted merge
+  └─ Cohere Rerank: Qdrant (k=20) → rerank → top 5
+Retrieved Documents
+  ↓ state["context"] = docs
+Generate Node
+  ↓ Format prompt with context
+  ↓ llm.invoke(prompt)
+Generated Response
+  ↓ state["response"] = answer
+Final State {question, context, response}
+```
 
-### Step-by-Step Pattern
+**Latency**: 1.5-3.5 seconds end-to-end (retrieval: 10-500ms, generation: 1-3s)
+
+### Evaluation Pipeline
+
+```
+HuggingFace Datasets
+  ├─ dwb2023/gdelt-rag-sources-v2 (38 docs)
+  └─ dwb2023/gdelt-rag-golden-testset-v2 (12 questions)
+  ↓ Load into memory
+Build RAG Stack
+  ↓ create_vector_store() → create_retrievers() → build_all_graphs()
+Inference Loop (4 retrievers × 12 questions = 48 invocations)
+  ↓ graph.invoke({"question": q}) for each
+  ↓ Save *_evaluation_inputs.parquet immediately (fault tolerance)
+RAGAS Evaluation (4 metrics × 12 questions × 4 retrievers)
+  ├─ Faithfulness (answer grounded in context)
+  ├─ Answer Relevancy (answer addresses question)
+  ├─ Context Precision (relevant contexts ranked higher)
+  └─ Context Recall (ground truth coverage)
+  ↓ ~100-150 LLM calls for metric computation
+  ↓ Save *_evaluation_metrics.parquet
+Comparative Summary
+  ├─ comparative_ragas_results.parquet
+  └─ RUN_MANIFEST.json (reproducibility metadata)
+  ↓ [make deliverables]
+  ↓ Convert Parquet → CSV
+deliverables/evaluation_evidence/
+  ├─ *_evaluation_dataset.csv (human-readable inputs)
+  ├─ *_detailed_results.csv (human-readable metrics)
+  ├─ comparative_ragas_results.csv
+  └─ RUN_MANIFEST.json (copied)
+```
+
+**Runtime**: 20-30 minutes | **Cost**: ~$5-6 in OpenAI API calls
+
+## Environment Variables
+
+```bash
+# Required
+OPENAI_API_KEY="sk-..."
+
+# Optional (Cohere reranking)
+COHERE_API_KEY="..."
+
+# Vector store (URL-first convention)
+QDRANT_URL="http://localhost:6333"
+# OR
+QDRANT_HOST="localhost"
+QDRANT_PORT="6333"
+
+# HuggingFace datasets
+HF_TOKEN="..."              # For private datasets
+HF_SOURCES_REV="abc123"     # Pin source dataset revision
+HF_GOLDEN_REV="def456"      # Pin test set revision
+
+# LangSmith (optional but recommended)
+LANGSMITH_API_KEY="..."
+LANGSMITH_PROJECT="certification-challenge"
+LANGSMITH_TRACING="true"
+```
+
+## Adding a New Retriever
+
+The system automatically evaluates new retrievers when added to the factory:
 
 ```python
-# 1. Add retriever to src/retrievers.py
+# 1. Edit src/retrievers.py
 def create_retrievers(documents, vector_store, k=5):
     # ... existing retrievers ...
 
-    # Add your new retriever
-    your_retriever = YourRetrieverClass(
-        vectorstore=vector_store,
-        k=k
-    )
+    your_retriever = YourRetrieverClass(vectorstore=vector_store, k=k)
 
     return {
         "naive": naive,
@@ -574,712 +559,303 @@ def create_retrievers(documents, vector_store, k=5):
         "your_method": your_retriever,  # <-- Add here
     }
 
-# 2. Re-run evaluation - automatically includes new retriever
-python scripts/run_full_evaluation.py
-```
-
-**The system automatically**:
-- Evaluates your new retriever against all 12 test questions
-- Computes 4 RAGAS metrics
-- Includes results in comparative_ragas_results.csv
-- Calculates performance vs baseline
-
-## RAGAS Evaluation
-
-### Metrics (all scored 0-1)
-
-```python
-from ragas.metrics import (
-    Faithfulness,           # Answer grounded in context? (detects hallucinations)
-    ResponseRelevancy,      # Answer addresses question?
-    ContextPrecision,       # Relevant contexts ranked higher?
-    LLMContextRecall,       # Ground truth information retrieved?
-)
-```
-
-### Schema Requirements (RAGAS 0.2.10)
-
-**Critical**: RAGAS expects specific column names and types.
-
-```python
-# Required schema for evaluation
-{
-    "user_input": str,              # Question (NOT "question")
-    "response": str,                # Answer (NOT "answer")
-    "retrieved_contexts": List[str], # Retrieved doc.page_content (NOT List[Document]!)
-    "reference": str                # Ground truth (NOT "ground_truth")
-}
-```
-
-**Common Error**: Passing `List[Document]` instead of `List[str]` for `retrieved_contexts` causes RAGAS validation failure. Use `validate_and_normalize_ragas_schema()` in `run_full_evaluation.py` to prevent this.
-
-## Environment Variables
-
-```bash
-# Required
-OPENAI_API_KEY=sk-proj-...
-
-# Optional but recommended
-COHERE_API_KEY=...              # For rerank retriever (otherwise skipped)
-LANGCHAIN_API_KEY=...           # For LangSmith tracing
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_PROJECT=cert-challenge
-HF_TOKEN=hf_...                 # For dataset upload
-
-# Optional for dataset versioning
-HF_SOURCES_REV=abc123           # Pin dwb2023/gdelt-rag-sources revision
-HF_GOLDEN_REV=abc123            # Pin dwb2023/gdelt-rag-golden-testset revision
-```
-
-## Infrastructure Services
-
-### Required Service
-
-```bash
-# Start Qdrant (required for vector search)
-docker-compose up -d qdrant
-
-# Verify Qdrant is running
-docker-compose ps qdrant
-```
-
-### Full Service Stack (optional)
-
-```bash
-# Start all services
-docker-compose up -d
-
-# Available services:
-# - Qdrant (6333/6334) - Vector database
-# - Redis (6379) - Caching layer
-# - Neo4j (7474/7687) - Graph database
-# - Phoenix (6006) - Arize observability
-# - MinIO (9000/9001) - S3-compatible storage
-# - Postgres (5432) - Relational database
-# - Adminer (8080) - Database admin UI
-```
-
-**Note**: Only Qdrant is required for local development (running scripts directly). For LangGraph Platform deployment, see section below.
-
-## LangGraph Platform Deployment
-
-### Overview: Local vs Platform Deployment
-
-**Local Development** (Scripts):
-- Runs Python scripts directly (`python scripts/run_full_evaluation.py`)
-- Only requires Qdrant
-- No API server
-
-**LangGraph Platform** (API Server):
-- Deploys graphs as REST API endpoints
-- Requires: Qdrant + Redis + Postgres
-- Containerized deployment with Docker
-
-### Prerequisites
-
-```bash
-# Install LangGraph CLI (required for building)
-pip install langgraph-cli
-
-# Verify installation
-langgraph --version
-```
-
-**Required Files**:
-- `langgraph.json` - LangGraph configuration (defines graphs, dependencies, environment)
-- `app/graph_app.py` - Graph entrypoint with `get_app()` function
-- `docker-compose.yml` - Infrastructure orchestration
-
-### Local Development (No Docker)
-
-**Modern, fully self-contained workflow** - no Redis/Postgres/Docker required.
-
-```bash
-# Install LangGraph CLI with in-memory runtime
-uv add langgraph-cli[inmem]
-
-# Launch local server with Studio UI
-uv run langgraph dev --allow-blocking
-```
-
-**What happens**:
-- Installs LangGraph CLI with `inmem` runtime backend (ephemeral, no database)
-- Launches local server at `http://localhost:2024`
-- Opens Studio UI automatically in browser
-- `--allow-blocking` enables synchronous dev runs (helpful for notebooks, VS Code)
-- Supports hot-reload on graph changes
-
-**Advantages**:
-- No Docker dependencies
-- Instant iteration
-- Ideal for bootcamp demos, notebooks, quick RAG testing
-- Same runtime semantics as production
-
-**Access**:
-- **API**: `http://localhost:2024`
-- **Studio UI**: Auto-opens or visit `http://localhost:2024`
-- **API Docs**: `http://localhost:2024/docs`
-
-**Environment variables** (same as Docker):
-```bash
-export OPENAI_API_KEY=sk-...
-export COHERE_API_KEY=...
-export LANGSMITH_API_KEY=...  # Optional
-```
-
-### Building the Docker Image
-
-```bash
-# Build the LangGraph image
-langgraph build -t gdelt-image
-
-# This creates a Docker image containing:
-# - Your application code (src/, app/)
-# - All Python dependencies from langgraph.json
-# - LangGraph runtime
-```
-
-**What happens during build**:
-1. Reads `langgraph.json` for dependencies and configuration
-2. Creates Wolfi-based container (lightweight, secure)
-3. Installs Python 3.11 and all dependencies
-4. Bundles your source code
-5. Tags image as `gdelt-image`
-
-**Common build issues**:
-- `langgraph.json not found` - Must run from project root
-- Missing dependencies - Ensure all packages listed in `langgraph.json`
-
-### Starting the Platform
-
-```bash
-# Start all required services
-docker-compose up -d
-
-# Services will start in dependency order:
-# 1. langgraph-redis (healthcheck: redis-cli ping)
-# 2. langgraph-postgres (healthcheck: pg_isready)
-# 3. qdrant (healthcheck: TCP connection)
-# 4. langgraph-api (depends on above 3 services)
-```
-
-**Service Endpoints**:
-- LangGraph API: `http://localhost:8123` (port 8000 inside container)
-- Qdrant: `http://localhost:6333`
-- Redis: `localhost:6379`
-- Postgres: `localhost:5433` (5432 inside container)
-
-### Verifying Deployment
-
-```bash
-# 1. Health check
-curl http://localhost:8123/ok
-
-# Expected response: {"ok": true}
-
-# 2. Check service status
-docker-compose ps
-# All services must show "healthy" status
-
-# 3. View logs
-docker-compose logs langgraph-api --tail 50
-docker-compose logs langgraph-redis
-docker-compose logs langgraph-postgres
-```
-
-### Accessing the Deployment
-
-**Studio UI** (Visual interface):
-```
-https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
-```
-
-**Note**: The UI is hosted on LangChain's cloud domain but connects to your local backend via the `baseUrl` parameter.
-
-**API Documentation** (Swagger):
-```
-http://localhost:8123/docs
-```
-
-This provides an interactive reference for all available API endpoints.
-
-### LangGraph Configuration (`langgraph.json`)
-
-The `langgraph.json` file defines the deployment configuration:
-
-```json
-{
-  "name": "gdelt-langgraph",
-  "python_version": "3.11",
-  "image_distro": "wolfi",
-  "dependencies": [...],  // All required packages
-  "env": {
-    "QDRANT_HOST": "qdrant",      // Container hostname
-    "QDRANT_PORT": "6333",
-    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
-    "COHERE_API_KEY": "${COHERE_API_KEY}"
-  },
-  "graphs": {
-    "gdelt": "app.graph_app:get_app"  // Entrypoint function
-  }
-}
-```
-
-**Key Configuration Points**:
-- `graphs.gdelt` - Defines graph name and Python import path
-- `app.graph_app:get_app` - Must return a CompiledGraph
-- `env.QDRANT_HOST` - Uses container name `qdrant` (Docker networking)
-- Environment variables interpolated from `.env` file
-
-### Graph Entrypoint
-
-The `app/graph_app.py:get_app()` function is the deployment entrypoint:
-
-```python
-def get_app():
-    """LangGraph Server entrypoint - returns a CompiledGraph"""
-    docs = load_documents_from_huggingface()
-    vs = create_vector_store(docs, recreate_collection=False)
-    rets = create_retrievers(docs, vs, k=5)
-    graphs = build_all_graphs(rets)
-    return graphs["cohere_rerank"]  # Default retriever
-```
-
-**Important**:
-- Must return a `CompiledGraph` (not a dict of graphs)
-- Uses `recreate_collection=False` to preserve Qdrant data
-- Loads documents on startup (cached after first run)
-
-### Querying the Deployed API
-
-**Essential Endpoints**:
-
-```bash
-# 1. Health check
-curl http://localhost:8123/ok
-# Response: {"ok": true}
-
-# 2. View API documentation (open in browser)
-http://localhost:8123/docs
-
-# 3. List available assistants/graphs
-curl -X POST http://localhost:8123/assistants/search \
-  -H 'Content-Type: application/json' \
-  -d '{"limit":10,"offset":0}'
-
-# Response shows assistant_id from langgraph.json (e.g., "gdelt")
-```
-
-**Stateless Run** (no thread persistence):
-
-```bash
-# Streaming response
-curl -X POST http://localhost:8123/runs/stream \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "assistant_id": "gdelt",
-    "input": {"question": "What is GDELT?"},
-    "stream_mode": "updates"
-  }'
-
-# Blocking (wait for result)
-curl -X POST http://localhost:8123/runs/wait \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "assistant_id": "gdelt",
-    "input": {"question": "What is GDELT?"}
-  }'
-```
-
-**Stateful Run** (with thread for conversation memory):
-
-```bash
-# 1. Create a thread
-THREAD_ID=$(curl -X POST http://localhost:8123/threads \
-  -H 'Content-Type: application/json' \
-  -d '{}' | jq -r '.thread_id')
-
-echo "Created thread: $THREAD_ID"
-
-# 2. Run on thread (blocking)
-curl -X POST http://localhost:8123/threads/$THREAD_ID/runs/wait \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "assistant_id": "gdelt",
-    "input": {"question": "What is GDELT GKG 2.1?"}
-  }'
-
-# 3. Run follow-up query on same thread (maintains context)
-curl -X POST http://localhost:8123/threads/$THREAD_ID/runs/wait \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "assistant_id": "gdelt",
-    "input": {"question": "Tell me more about the themes"}
-  }'
-
-# 4. Streaming on thread
-curl -X POST http://localhost:8123/threads/$THREAD_ID/runs/stream \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "assistant_id": "gdelt",
-    "input": {"question": "How does GDELT handle events?"},
-    "stream_mode": "updates"
-  }'
-```
-
-**Note**: The `assistant_id` value ("gdelt") comes from the `graphs` section in `langgraph.json`.
-
-### Troubleshooting
-
-**API won't start**:
-```bash
-# Check service dependencies
-docker-compose ps
-
-# All services must show "healthy" status
-# If redis/postgres/qdrant are unhealthy, langgraph-api won't start
-
-# View startup logs
-docker-compose logs langgraph-api --tail 100
-```
-
-**Connection refused from langgraph-api to qdrant**:
-```bash
-# Verify network connectivity
-docker-compose exec langgraph-api ping qdrant
-
-# Should resolve to container IP
-# If fails, check that all services on same network (gdelt-network)
-```
-
-**Missing environment variables**:
-```bash
-# Check that .env file exists and contains:
-# OPENAI_API_KEY=sk-...
-# COHERE_API_KEY=...
-
-# Restart services after updating .env
-docker-compose down
-docker-compose up -d
-```
-
-**Graph not found error**:
-```bash
-# Verify langgraph.json graphs configuration
-cat langgraph.json | jq '.graphs'
-
-# Should show: {"gdelt": "app.graph_app:get_app"}
-
-# Rebuild image if langgraph.json changed
-langgraph build -t gdelt-image
-docker-compose up -d --force-recreate langgraph-api
-```
-
-**404 on endpoints**:
-```bash
-# Common mistake: trying to use /invoke instead of /runs/stream
-# ❌ Wrong: POST /invoke
-# ✅ Correct: POST /runs/stream (stateless) or POST /threads/{id}/runs/wait (stateful)
-
-# Check Swagger docs for available endpoints
-# Open in browser: http://localhost:8123/docs
-```
-
-**assistant_id not found**:
-```bash
-# The assistant_id must match the graph name in langgraph.json
-# Check your configuration:
-cat langgraph.json | jq '.graphs'
-
-# Use the key name (e.g., "gdelt") as assistant_id in API calls
-
-# Verify assistants are available:
-curl -X POST http://localhost:8123/assistants/search \
-  -H 'Content-Type: application/json' \
-  -d '{"limit":10}'
-```
-
-**Studio UI not connecting**:
-```bash
-# Ensure baseUrl parameter matches your deployment
-# For Docker: https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
-# For local dev: http://localhost:2024
-
-# Check CORS if UI can't reach backend
-docker-compose logs langgraph-api | grep -i cors
-```
-
-### Reference Documentation
-
-**Official Documentation**:
-- [Self-Hosted Docker Deployment](https://langchain-ai.github.io/langgraphjs/how-tos/deploy-self-hosted/#using-docker-compose)
-- [LangGraph Server API Reference](https://docs.langchain.com/langsmith/server-api-ref)
-- [Local Server Tutorial](https://langchain-ai.github.io/langgraph/tutorials/langgraph-platform/local-server/)
-- [Streaming API](https://docs.langchain.com/langgraph-platform/streaming)
-
-**Quick Reference**:
-- **Local dev**: `uv run langgraph dev --allow-blocking` → http://localhost:2024
-- **Docker**: `langgraph build -t gdelt-image && docker-compose up -d` → http://localhost:8123
-- **Studio UI (Docker)**: https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
-- **API Docs**: http://localhost:8123/docs (Docker) or http://localhost:2024/docs (local)
-
-## Common Development Patterns
-
-### Loading Documents from HuggingFace
-
-```python
-from src.utils import load_documents_from_huggingface
-
-# Load latest version
-documents = load_documents_from_huggingface()
-
-# Pin to specific revision for reproducibility
-documents = load_documents_from_huggingface(revision="abc123")
-
-# Or use environment variable
-# export HF_SOURCES_REV=abc123
-documents = load_documents_from_huggingface()
-```
-
-### Creating Vector Store
-
-```python
-from src.config import create_vector_store
-
-# Reuse existing collection (fast)
-vector_store = create_vector_store(documents)
-
-# Recreate collection (slow but ensures clean state)
-vector_store = create_vector_store(documents, recreate_collection=True)
-
-# Custom collection name
-vector_store = create_vector_store(
-    documents,
-    collection_name="my_custom_collection",
-    recreate_collection=True
-)
-```
-
-### Querying the RAG System
-
-```python
-from src.utils import load_documents_from_huggingface
-from src.config import create_vector_store
-from src.retrievers import create_retrievers
-from src.graph import build_all_graphs
-
-# Setup
-documents = load_documents_from_huggingface()
-vector_store = create_vector_store(documents)
-retrievers = create_retrievers(documents, vector_store)
-graphs = build_all_graphs(retrievers)
-
-# Query using compiled graph
-result = graphs["cohere_rerank"].invoke({"question": "What is GDELT GKG 2.1?"})
-print(result["response"])
-
-# Access retriever directly
-docs = retrievers["bm25"].invoke("What is GDELT?")
-for doc in docs:
-    print(doc.page_content)
-```
-
-### Reproducibility Manifest Pattern
-
-```python
-# scripts/generate_run_manifest.py creates RUN_MANIFEST.json
-{
-    "timestamp": "2025-01-17T12:00:00Z",
-    "models": {
-        "llm": "gpt-4.1-mini",
-        "embeddings": "text-embedding-3-small",
-        "reranker": "rerank-v3.5"
-    },
-    "retrievers": ["naive", "bm25", "ensemble", "cohere_rerank"],
-    "ragas_metrics": ["faithfulness", "answer_relevancy", "context_precision", "context_recall"],
-    "dataset_checksums": {
-        "sources": "sha256:...",
-        "golden_testset": "sha256:..."
-    },
-    "package_versions": {...}
-}
-```
-
-**All evaluation runs must generate manifest** for scientific reproducibility.
-
-## Key Implementation Files
-
-When working with the code, reference these locations:
-
-**Core System**:
-- [src/config.py:28-35](src/config.py) - `get_llm()` cached singleton
-- [src/config.py:39-46](src/config.py) - `get_embeddings()` cached singleton
-- [src/config.py:70-127](src/config.py) - `create_vector_store()` factory
-- [src/retrievers.py:20-89](src/retrievers.py) - `create_retrievers()` factory (all 4 strategies)
-- [src/graph.py:21-106](src/graph.py) - `build_graph()` factory (LangGraph compilation)
-- [src/graph.py:109-141](src/graph.py) - `build_all_graphs()` convenience factory
-- [src/utils.py:15-75](src/utils.py) - `load_documents_from_huggingface()`
-- [src/state.py:7-10](src/state.py) - State TypedDict schema
-- [src/prompts.py:4-12](src/prompts.py) - `BASELINE_PROMPT` template
-
-**Evaluation Pipeline**:
-- [scripts/run_full_evaluation.py](scripts/run_full_evaluation.py) - Standalone evaluation (works without src/)
-- [scripts/run_eval_harness.py](scripts/run_eval_harness.py) - Modular evaluation (uses src/)
-- [scripts/validate_langgraph.py](scripts/validate_langgraph.py) - Validation harness (must pass 100%)
-
-**Utilities**:
-- [Makefile](Makefile) - All make targets
-- [docker-compose.yml](docker-compose.yml) - Infrastructure services
-
-## Validation Requirements
-
-**Before any code changes**, run validation:
-
-```bash
+# 2. Validate (must pass 100%)
 make validate
+
+# 3. Evaluate (automatically includes your new retriever)
+make eval
 ```
 
-**Expected output**: 100% pass rate across all checks:
-1. Environment validation (API keys, Qdrant connectivity)
-2. Module import validation (all src/ modules importable)
-3. Retriever factory pattern (creates all 4 retrievers)
-4. Graph compilation (all 4 graphs compile)
-5. Functional testing (test queries work)
+Results automatically appear in `comparative_ragas_results.csv`.
 
-**Exit code 0 = ready for deployment**
-**Exit code 1 = must fix issues before proceeding**
+## Reproducibility & Provenance
 
-## Known Limitations & Future Work
+### Manifest Generation
 
-**Current Limitations**:
-1. No async execution for parallel retriever evaluation (4x speedup opportunity)
-2. No embedding cache (repeated API calls for same documents)
-3. Ensemble weights hardcoded at 50/50 (should be tunable)
-4. No query expansion or HyDE (hypothetical document embeddings)
+- **Ingestion manifest** (`data/interim/manifest.json`):
+  - SHA256 checksums for all artifacts
+  - Environment versions (Python, LangChain, RAGAS)
+  - Model configurations (LLM, embeddings)
+  - Execution ID and timestamp
 
-**Recommended Improvements** (post-certification):
-1. Implement `CacheBackedEmbeddings` for embedding reuse
-2. Async retriever evaluation with `asyncio.gather()`
-3. Tune ensemble weights via grid search
-4. Add parent document retrieval strategy
-5. Implement semantic caching with Redis
-6. Add LangSmith evaluation datasets for continuous monitoring
+- **Evaluation manifest** (`data/processed/RUN_MANIFEST.json`):
+  - RAGAS version and metrics used
+  - Retriever configurations (k values, weights, models)
+  - Links to ingestion manifest (data provenance)
+  - Aggregated evaluation results
 
-## Documentation
+### Version Pinning (Critical for Reproducibility)
 
-### Documentation Guide
+```toml
+# pyproject.toml - exact versions prevent API breakage
+ragas = "==0.2.10"              # API changed in 0.3.x
+langgraph = "==0.6.7"           # Graph compilation behavior
+langchain-cohere = "==0.4.4"    # Reranker compatibility
+cohere = "==5.12.0"             # API client
+```
 
-This project has comprehensive documentation organized across multiple files. Use this guide to find what you need:
+### Dataset Pinning (Optional)
 
-**Core Documentation**:
-- **[README.md](README.md)** - Project overview, quick start, installation (380 lines)
-- **[CLAUDE.md](CLAUDE.md)** (this file) - Complete technical reference for AI assistants (965+ lines)
-- **[docs/deliverables.md](docs/deliverables.md)** - Certification challenge answers (1,152 lines)
-- **[docs/initial-architecture.m](docs/initial-architecture.m)** - System design patterns and decisions (18KB)
-- **[docs/certification-challenge-task-list.md](docs/certification-challenge-task-list.md)** - Scoring rubric
+```bash
+# Pin to specific HuggingFace dataset commits
+export HF_SOURCES_REV=main@abc123
+export HF_GOLDEN_REV=main@def456
 
-**Architecture Documentation** (auto-generated comprehensive analysis):
-- **[architecture/README.md](architecture/README.md)** - Architecture overview and navigation guide (1,100 lines)
-- **[architecture/docs/01_component_inventory.md](architecture/docs/01_component_inventory.md)** - Module-by-module reference
-- **[architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md)** - Visual system overview
-- **[architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md)** - Sequence diagrams and pipelines
-- **[architecture/docs/04_api_reference.md](architecture/docs/04_api_reference.md)** - Comprehensive API documentation
+make eval
+```
 
-**Directory-Specific Guides**:
-- **[scripts/README.md](scripts/README.md)** - All evaluation and utility scripts (5 scripts documented)
-- **[src/README.md](src/README.md)** - Factory pattern guide, module reference, adding retrievers
-- **[data/README.md](data/README.md)** - Data flow, manifest schema, file formats, lineage
+**Without pinning**: Dataset updates can change eval scores
+**With pinning**: Same datasets every time → reproducible results
 
-**Repository Analyzer Framework** (optional, for codebase analysis):
-- **[ra_orchestrators/README.md](ra_orchestrators/README.md)** - Multi-domain agent orchestration framework
-- **[ra_orchestrators/CLAUDE.md](ra_orchestrators/CLAUDE.md)** - Framework usage guide for AI assistants
+### Deterministic Execution
 
-**Quick Navigation**:
-- 🔍 Want to understand the codebase? → Start with [architecture/README.md](architecture/README.md)
-- 🚀 Want to run evaluations? → See "Common Development Tasks" (this file)
-- 🛠️ Want to add a retriever? → See [src/README.md](src/README.md#quick-start-adding-a-new-retriever)
-- 📊 Want to understand data flow? → See [architecture/docs/03_data_flows.md](architecture/docs/03_data_flows.md)
-- ✅ Want to validate setup? → Run `make validate` (must pass 100%)
-- 📐 Want architecture diagrams? → See [architecture/diagrams/02_architecture_diagrams.md](architecture/diagrams/02_architecture_diagrams.md)
+- Temperature=0 for all LLM calls
+- Fixed random seed (42) for sampling
+- No randomness in retrieval or evaluation
 
-### Module Inventory (src/)
+### RAGAS Testset Generation Behavior
 
-**Core Modules**:
-- `config.py` - Cached singletons for LLM, embeddings, Qdrant client
-- `retrievers.py` - Factory for 4 retriever strategies (naive, BM25, ensemble, Cohere rerank)
-- `graph.py` - LangGraph workflow builders
-- `state.py` - TypedDict schema for graph state
-- `utils/loaders.py` - HuggingFace dataset loaders
-- `utils/manifest.py` - RUN_MANIFEST.json generation
-- `prompts.py` - RAG prompt templates
+**Important Note**: RAGAS may generate more questions than requested to ensure diversity and quality.
 
-### Script Inventory (scripts/)
+- **Requested size**: 10 questions (configured via `TESTSET_SIZE` parameter)
+- **Actual size**: 12 questions (generated by RAGAS 0.2.10)
+- **Why**: RAGAS overprovisioning algorithm ensures variety in question types (simple, reasoning, multi-context)
+- **Manifests**: Interim manifest records requested size (10), RUN_MANIFEST records actual size (12)
+- **SHA-256 validation**: Validates actual artifact files (12 questions), not requested size
 
-**Evaluation Scripts**:
-- `run_app_validation.py` - Validate src/ modules + environment (2 min, $0, must pass 100%)
-- `run_eval_harness.py` - Modular RAGAS evaluation (20-30 min, $5-6)
-- `run_full_evaluation.py` - Standalone RAGAS evaluation (20-30 min, $5-6)
+This behavior is **expected and documented** - always verify actual file row counts when validating results.
 
-**Data Pipeline Scripts**:
-- `ingest_raw_pdfs.py` - Extract raw PDFs → interim datasets + RAGAS testset
-- `publish_interim_datasets.py` - Upload interim datasets to HuggingFace Hub
-- `publish_processed_datasets.py` - Upload processed evaluation results to HuggingFace Hub
-- `generate_deliverables.py` - Convert Parquet → CSV for human review (derived artifacts only)
+### Manifest Validation
 
-### External Dependencies
+All manifests include SHA-256 checksums for data integrity. Validate them:
 
-- **OpenAI**: gpt-4.1-mini (LLM), text-embedding-3-small (embeddings)
-- **Cohere**: rerank-v3.5 (contextual compression)
-- **Qdrant**: Vector database (localhost:6333)
-- **HuggingFace Hub**: Dataset hosting and versioning
-- **RAGAS**: RAG evaluation framework (v0.2.10)
-- **LangChain**: RAG abstractions and orchestration
-- **LangGraph**: Stateful graph workflows
+```bash
+make validate  # Includes manifest validation
+# or
+PYTHONPATH=. uv run python scripts/validate_manifests.py
+```
+
+**Validation checks**:
+- ✅ SHA-256 hashes match actual files
+- ✅ Provenance chain intact (RUN_MANIFEST → interim manifest → source PDFs)
+- ✅ All referenced files exist
+- ✅ Configuration reflects actual runtime values (not hardcoded templates)
+
+## HuggingFace Datasets
+
+This project publishes **4 datasets** to HuggingFace Hub:
+
+### Interim Datasets (Raw Data)
+1. **[dwb2023/gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2)** - 38 GDELT documentation pages
+2. **[dwb2023/gdelt-rag-golden-testset-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-golden-testset-v2)** - 12 QA pairs
+
+### Processed Datasets (Evaluation Results)
+3. **[dwb2023/gdelt-rag-evaluation-inputs](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-inputs)** - 60 evaluation records (consolidated inputs)
+4. **[dwb2023/gdelt-rag-evaluation-metrics](https://huggingface.co/datasets/dwb2023/gdelt-rag-evaluation-metrics)** - 60 evaluation records with RAGAS scores
+
+**Scientific Value**: First publicly available evaluation suite for GDELT-focused RAG systems, enabling reproducible benchmarking of retrieval strategies.
+
+## LangGraph State Management
+
+Graph nodes return **partial state updates** that LangGraph auto-merges:
+
+```python
+from typing import List, TypedDict
+from langchain_core.documents import Document
+
+class State(TypedDict):
+    """State schema for RAG graph"""
+    question: str                  # User question
+    context: List[Document]        # Retrieved documents
+    response: str                  # Generated answer
+
+def retrieve(state: State) -> dict:
+    docs = retriever.invoke(state["question"])
+    return {"context": docs}  # Partial update
+
+def generate(state: State) -> dict:
+    response = llm.invoke(prompt)
+    return {"response": response.content}  # Partial update
+```
+
+**State evolution**: `{question}` → `{question, context}` → `{question, context, response}`
+
+## Common Development Workflows
+
+### Standard Development Cycle
+
+```bash
+# 1. Validate environment and modules (MUST pass 100%)
+make validate
+
+# 2. Run comparative evaluation (writes Parquet to data/processed/)
+make eval
+
+# 3. Generate human-readable deliverables (Parquet → CSV)
+make deliverables
+
+# 4. Publish datasets (optional, one-time)
+python scripts/publish_interim_datasets.py        # Raw sources + golden testset
+python scripts/publish_processed_datasets.py      # Evaluation results
+```
+
+### Quick Validation Before Deployment
+
+```bash
+# Fast check - validates environment + imports + factory patterns
+make validate
+# Expected: 23/23 checks PASS (100%)
+```
+
+### Iterative Retriever Development
+
+```bash
+# 1. Edit src/retrievers.py (add new retriever to factory)
+# 2. Validate
+make validate
+
+# 3. Quick test on reused collection (faster)
+make eval
+
+# 4. Full test with fresh embeddings (slower, more accurate)
+make eval recreate=true
+```
+
+## Best Practices
+
+### DO:
+✅ Use factories (`create_retrievers`, `build_graph`) instead of module-level instances
+✅ Use `@lru_cache` for singletons (LLM, embeddings)
+✅ Return partial state updates from LangGraph nodes
+✅ Validate with `make validate` before committing
+✅ Save working data as Parquet in `data/processed/`
+✅ Generate deliverables via `make deliverables` (never write directly to `deliverables/`)
+✅ Pin critical dependency versions (RAGAS, LangGraph, Cohere)
+✅ Set `PYTHONPATH=.` when running scripts directly
+
+### DON'T:
+❌ Create retrievers/graphs at module import time
+❌ Hardcode API keys (use environment variables)
+❌ Return complete states from LangGraph nodes
+❌ Skip validation before deployment
+❌ Write directly to `deliverables/` (always regenerate from Parquet)
+❌ Manually edit Parquet or CSV files (regenerate via scripts)
+❌ Delete `manifest.json` (breaks provenance chain)
+❌ Upgrade RAGAS to 0.3.x without testing (breaking API changes)
+
+## Performance Characteristics
+
+### Latency Breakdown
+- **BM25 retrieval**: 10-20ms (in-memory)
+- **Naive retrieval**: 50-100ms (Qdrant vector search)
+- **Ensemble retrieval**: 60-120ms (parallel naive + BM25)
+- **Cohere rerank**: 200-500ms (includes API call)
+- **LLM generation**: 1,000-3,000ms (GPT-4.1-mini)
+
+**Total end-to-end**: 1.5-3.5 seconds
+
+### Cost Analysis (per query)
+- **Embeddings**: ~$0.00001 (one query embedding)
+- **LLM generation**: ~$0.001-$0.003 (500-1000 tokens)
+- **Cohere rerank**: ~$0.0001 (one rerank call)
+- **Total per query**: ~$0.001-$0.003 (dominated by LLM)
+
+**Evaluation cost**: ~$5-6 per full RAGAS run (48 Q&A pairs + ~150 metric LLM calls)
+
+### Scaling Considerations
+- **Current**: 38 documents (trivial for Qdrant)
+- **100 documents**: No changes needed
+- **1,000 documents**: Consider BM25 disk-based index
+- **10,000+ documents**: HNSW index tuning, chunking strategy review
+- **100,000+ documents**: Distributed Qdrant, pre-filtering, caching layer
+
+## Troubleshooting
+
+### Import Errors
+```bash
+# Error: ModuleNotFoundError: No module named 'src'
+# Fix: Set PYTHONPATH
+export PYTHONPATH=.
+python scripts/run_eval_harness.py
+
+# Or use make commands (handles PYTHONPATH automatically)
+make eval
+```
+
+### Qdrant Connection Refused
+```bash
+# Fix: Start Qdrant
+docker-compose up -d qdrant
+# Verify
+curl http://localhost:6333/collections
+```
+
+### Validation Failures
+```bash
+# Fix: Ensure dependencies installed
+uv pip install -e .
+
+# Fix: Ensure Qdrant running
+make qdrant-up
+
+# Fix: Ensure API keys set
+make env  # Check environment
+```
+
+### Deliverables Missing
+```bash
+# Deliverables are derived artifacts - regenerate them
+make deliverables
+```
+
+### RAGAS Evaluation Stalls
+```bash
+# Results saved incrementally - just re-run
+python scripts/run_eval_harness.py
+```
+
+## WSL Configuration
+
+Git is configured for WSL compatibility:
+
+```bash
+git config --global core.autocrlf input
+git config --global core.filemode false
+git config --global pull.ff only
+git config --global init.defaultBranch main
+```
+
+## Documentation Structure
+
+- **`CLAUDE.md`** (this file) - Canonical developer guide
+- **`README.md`** - Project overview and quick start
+- **`architecture/`** - Auto-generated architecture documentation (Claude Agent SDK)
+- **`docs/deliverables.md`** - Certification submissions
+- **`docs/initial-architecture.md`** - Original design sketch (frozen, historical)
+- **`scripts/README.md`** - Script usage guide
+- **`data/README.md`** - Data flow and manifest schema
+- **`src/README.md`** - Factory pattern guide
 
 ## Repository Analyzer Framework
 
-This repository includes an optional **Repository Analyzer Framework** (`ra_orchestrators/`, `ra_agents/`, `ra_tools/`) - a portable, drop-in analysis toolkit for comprehensive codebase analysis. This framework was used to generate the comprehensive architecture documentation in `architecture/`.
+This repository includes the **Repository Analyzer Framework** (`ra_orchestrators/`, `ra_agents/`, `ra_tools/`, `ra_output/`) - a portable multi-agent analysis toolkit.
 
-### What It Does
-
-The framework provides multi-domain orchestration with specialized agents for:
-- **Architecture Analysis** - Code structure, patterns, diagrams, data flows, API documentation
-- **UX/UI Design** - User research, information architecture, visual design, prototyping
-- **DevOps** (Future) - Infrastructure analysis, CI/CD workflows, IaC generation
-- **Testing** (Future) - Test strategy, coverage analysis, test generation
-
-### Key Features
-
-1. **Portable** - Drop into any repository without modification
-2. **No Collisions** - `ra_` prefix avoids conflicts with existing code
-3. **Timestamped Outputs** - Each run creates `ra_output/{domain}_{YYYYMMDD_HHMMSS}/`
-4. **Extensibility** - Base framework supports new domains in <1 day
-5. **Reusability** - Agents and tools shared across domains
-
-### Usage
-
+**Usage**:
 ```bash
-# Architecture analysis (used to generate architecture/ docs)
-python -m ra_orchestrators.architecture_orchestrator
-
-# UX design workflow
-python -m ra_orchestrators.ux_orchestrator "Project Name"
-
-# With timeout for long-running analyses
-timeout 1800 python -m ra_orchestrators.architecture_orchestrator
+# Generate architecture documentation
+python -m ra_orchestrators.architecture_orchestrator "GDELT architecture"
+# Output: ra_output/architecture_{timestamp}/
 ```
 
-### Documentation
+See `ra_orchestrators/CLAUDE.md` and `ra_orchestrators/README.md` for details.
 
-- **[ra_orchestrators/README.md](ra_orchestrators/README.md)** - User-facing usage guide
-- **[ra_orchestrators/CLAUDE.md](ra_orchestrators/CLAUDE.md)** - Complete technical reference for AI assistants
-- **[ra_orchestrators/claude-agents-research.md](ra_orchestrators/claude-agents-research.md)** - Comprehensive research (832 lines)
+## Notes
 
-### When to Use
-
-- Generating comprehensive architecture documentation
-- Analyzing new codebases for patterns and structure
-- Creating UX design specifications from requirements
-- Performing multi-domain repository analysis
-
-**Note**: The framework is separate from the core GDELT RAG application and can be safely ignored for typical development work. It's primarily useful for documentation generation and deep codebase analysis.
+- This is a production-grade certification challenge project
+- All architecture documentation in `architecture/` is auto-generated (do not edit manually)
+- `docs/initial-architecture.md` is frozen (historical reference only)
+- Parquet-first architecture: working data in `data/processed/`, deliverables derived
+- Factory pattern is critical - never initialize retrievers/graphs at module level
+- Python 3.11+ required for modern type hints
+- RAGAS 0.2.10 pinned (API changed in 0.3.x)
+- Add to memory.  improve @CLAUDE.md instructions to make it clear what each of the make commands does.  it should be clear what the scope and end result of running the make commands is.  based on the current instructions it is unclear which make command creates and populates the QDRANT vector store.

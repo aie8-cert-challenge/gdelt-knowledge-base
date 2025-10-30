@@ -17,6 +17,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+# Import actual runtime configuration
+from src.config import (
+    OPENAI_MODEL,
+    OPENAI_EMBED_MODEL,
+    COLLECTION_NAME,
+    QDRANT_HOST,
+    QDRANT_PORT,
+)
+
 
 def generate_manifest(
     output_path: Path,
@@ -54,14 +63,14 @@ def generate_manifest(
         "python_version": python_version,
 
         "llm": {
-            "model": "gpt-4.1-mini",
+            "model": OPENAI_MODEL,  # Dynamic from src.config
             "temperature": 0,
             "provider": "openai",
             "purpose": "RAG generation and RAGAS evaluation"
         },
 
         "embeddings": {
-            "model": "text-embedding-3-small",
+            "model": OPENAI_EMBED_MODEL,  # Dynamic from src.config
             "dimensions": 1536,
             "provider": "openai",
             "purpose": "Document and query embeddings"
@@ -107,7 +116,7 @@ def generate_manifest(
 
         "evaluation": {
             "golden_testset": "dwb2023/gdelt-rag-golden-testset",
-            "golden_testset_size": 12,
+            "golden_testset_size": 12,  # Note: Actual size, RAGAS may generate more than requested
             "source_dataset": "dwb2023/gdelt-rag-sources",
             "source_dataset_size": 38,
             "metrics": [
@@ -125,9 +134,9 @@ def generate_manifest(
 
         "vector_store": {
             "type": "qdrant",
-            "collection_name": "gdelt_comparative_eval",
-            "host": "localhost",
-            "port": 6333,
+            "collection_name": COLLECTION_NAME,  # Dynamic from src.config
+            "host": QDRANT_HOST,  # Dynamic from src.config
+            "port": QDRANT_PORT,  # Dynamic from src.config
             "distance": "cosine",
             "vector_size": 1536
         },

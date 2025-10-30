@@ -1,23 +1,6 @@
-# Rule: Certification Challenge — Evidence Map & Slide Generator (v4, deliverables/)
-
-## 🚫 File Safety (Hard Constraints)
-- Do **not** read or write outside the current repository.
-- Do **not** edit or overwrite `README.md` (no inserts unless explicitly asked with anchors).
-- **Only** create or update files under: `/deliverables/`.
-- If a required path doesn’t exist, create it.
-
 ---
-
-## 🎯 Objective
-Produce two concise, gradable artifacts that prove completion of the **7 Certification Challenge tasks** and make grading fast:
-
-1) **/deliverables/CERT_CHECKLIST.md** — Self‑Checklist & Evidence Map  
-2) **/deliverables/CERT_SLIDES.md** — Presentation outline (intro, 1 slide per task, conclusion)
-
-Use repository content only; if evidence is missing, mark **Partial/No** and specify the missing artifact.
-
+alwaysApply: false
 ---
-
 ## 📥 Input Scope
 Search only within this repository. Prefer these locations if present:
 - `@cert-challenge-grading/cert-challenge-task-list.md` (authoritative tasks)

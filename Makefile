@@ -1,16 +1,23 @@
 # Makefile for GDELT RAG Evaluation System
 
-.PHONY: help validate eval deliverables clean clean-deliverables clean-processed clean-all env docker-up docker-down test
+.PHONY: help validate eval deliverables ingest publish-interim publish-processed clean clean-deliverables clean-processed clean-all env docker-up docker-down test notebook
 
 # Default target
 help:
 	@echo "GDELT RAG Evaluation System - Available Commands"
 	@echo ""
+	@echo "Data Preparation (one-time setup):"
+	@echo "  make ingest      - Extract PDFs and generate golden testset (~5-10 min, \$$2-3)"
+	@echo ""
 	@echo "Development:"
 	@echo "  make validate    - Validate src/ module implementation (100% pass required)"
-	@echo "  make eval        - Run full RAGAS evaluation harness (~20-30 min)"
+	@echo "  make eval        - Run full RAGAS evaluation harness (~20-30 min, \$$5-6)"
 	@echo "  make deliverables - Generate human-friendly CSV files from Parquet data"
 	@echo "  make test        - Run quick validation test"
+	@echo ""
+	@echo "Publishing (optional, requires HF_TOKEN):"
+	@echo "  make publish-interim    - Upload sources & golden testset to HuggingFace Hub"
+	@echo "  make publish-processed  - Upload evaluation results to HuggingFace Hub"
 	@echo ""
 	@echo "Infrastructure:"
 	@echo "  make docker-up   - Start all infrastructure services (Qdrant, Redis, Neo4j, etc.)"
@@ -33,7 +40,10 @@ help:
 # Validate src/ module implementation
 validate:
 	@echo "🔍 Validating src/ module implementation..."
-	@PYTHONPATH=. python scripts/run_app_validation.py
+	@PYTHONPATH=. uv run python scripts/run_app_validation.py
+	@echo ""
+	@echo "🔐 Validating manifest files and SHA-256 checksums..."
+	@PYTHONPATH=. uv run python scripts/validate_manifests.py
 
 # Run full RAGAS evaluation (same as run_full_evaluation.py but uses src/ modules)
 # Usage: make eval              (reuses existing Qdrant collection)
@@ -57,7 +67,7 @@ eval:
 		echo "  ✓ Will reuse existing Qdrant collection (faster)"; \
 	fi
 	@echo ""
-	@PYTHONPATH=. python scripts/run_eval_harness.py --recreate=$(recreate)
+	@PYTHONPATH=. uv run python scripts/run_eval_harness.py --recreate=$(recreate)
 
 # Quick test (validation only, no full eval)
 test: validate
@@ -144,7 +154,49 @@ notebook:
 	@echo "📓 Starting Jupyter notebook..."
 	jupyter notebook
 
+# Data preparation (one-time ingestion from raw PDFs)
+ingest:
+	@echo "📄 Ingesting raw PDFs and generating golden testset..."
+	@echo ""
+	@echo "This extracts PDFs from data/raw/ and generates:"
+	@echo "  - 38 source documents (page-level chunks)"
+	@echo "  - 12 RAGAS golden testset QA pairs"
+	@echo "  - Persisted to data/interim/ (JSONL, Parquet, HFDS)"
+	@echo "  - manifest.json with checksums and provenance"
+	@echo ""
+	@echo "⏱️  Time: 5-10 minutes"
+	@echo "💰 Cost: ~\$$2-3 in OpenAI API calls"
+	@echo ""
+	@PYTHONPATH=. uv run python scripts/ingest_raw_pdfs.py
+
+# Publish interim datasets to HuggingFace Hub
+publish-interim:
+	@echo "📤 Publishing interim datasets to HuggingFace Hub..."
+	@echo ""
+	@echo "Uploads to HuggingFace Hub:"
+	@echo "  - dwb2023/gdelt-rag-sources-v3 (38 documents)"
+	@echo "  - dwb2023/gdelt-rag-golden-testset-v3 (12 QA pairs)"
+	@echo ""
+	@echo "⏱️  Time: 1-2 minutes"
+	@echo "⚠️  Requires: HF_TOKEN environment variable"
+	@echo ""
+	@PYTHONPATH=. uv run python scripts/publish_interim_datasets.py
+
+# Publish processed evaluation results to HuggingFace Hub
+publish-processed:
+	@echo "📤 Publishing evaluation results to HuggingFace Hub..."
+	@echo ""
+	@echo "Uploads to HuggingFace Hub:"
+	@echo "  - dwb2023/gdelt-rag-evaluation-inputs-v3 (48 records)"
+	@echo "  - dwb2023/gdelt-rag-evaluation-metrics-v3 (48 records with RAGAS scores)"
+	@echo ""
+	@echo "⏱️  Time: 1-2 minutes"
+	@echo "⚠️  Requires: HF_TOKEN environment variable"
+	@echo ""
+	@PYTHONPATH=. uv run python scripts/publish_processed_datasets.py
+
 # Convenience aliases
 v: validate
 e: eval
 d: docker-up
+i: ingest

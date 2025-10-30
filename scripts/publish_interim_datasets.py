@@ -19,8 +19,8 @@ from huggingface_hub import HfApi, login
 
 # Configuration
 HF_USERNAME = "dwb2023"
-SOURCES_DATASET_NAME = f"{HF_USERNAME}/gdelt-rag-sources-v2"
-GOLDEN_TESTSET_NAME = f"{HF_USERNAME}/gdelt-rag-golden-testset-v2"
+SOURCES_DATASET_NAME = f"{HF_USERNAME}/gdelt-rag-sources-v3"
+GOLDEN_TESTSET_NAME = f"{HF_USERNAME}/gdelt-rag-golden-testset-v3"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent

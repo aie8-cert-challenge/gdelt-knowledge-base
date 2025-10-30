@@ -102,8 +102,9 @@ def main():
             manifest = json.load(f)
 
         print(f"   ✓ RUN_MANIFEST.json copied")
-        print(f"      - Timestamp: {manifest.get('timestamp', 'N/A')}")
-        print(f"      - Retrievers: {', '.join(manifest.get('retrievers', []))}")
+        print(f"      - Timestamp: {manifest.get('generated_at', 'N/A')}")
+        retriever_names = [r['name'] for r in manifest.get('retrievers', [])]
+        print(f"      - Retrievers: {', '.join(retriever_names)}")
         print(f"   ✅ Manifest copied")
     else:
         print(f"   ⚠️  RUN_MANIFEST.json not found in data/processed/")
