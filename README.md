@@ -57,6 +57,9 @@ cp .env.example .env
 
 ### Run
 
+![LangGraph Studio](./images/langgraph-studio.png)
+
+
 ```bash
 # Interactive LangGraph Studio UI
 uv add langgraph-cli[inmem]

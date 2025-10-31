@@ -866,4 +866,3 @@ See `ra_orchestrators/CLAUDE.md` and `ra_orchestrators/README.md` for details.
 - Factory pattern is critical - never initialize retrievers/graphs at module level
 - Python 3.11+ required for modern type hints
 - RAGAS 0.2.10 pinned (API changed in 0.3.x)
-- Add to memory.  improve @CLAUDE.md instructions to make it clear what each of the make commands does.  it should be clear what the scope and end result of running the make commands is.  based on the current instructions it is unclear which make command creates and populates the QDRANT vector store.
