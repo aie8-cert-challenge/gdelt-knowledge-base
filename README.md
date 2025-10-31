@@ -38,7 +38,7 @@ Located in the **`architecture/`** directory — produced by the *Claude Agent S
 
 ### Installation
 ```bash
-git clone https://github.com/<your-username>/cert-challenge.git
+git clone https://github.com/aie8-cert-challenge/gdelt-knowledge-base.git
 cd cert-challenge
 uv venv --python 3.11
 source .venv/bin/activate        # Linux/WSL/Mac
@@ -156,7 +156,7 @@ By preserving SHA-256 fingerprints and HF lineage, this mechanism “signs” th
 | **Evaluation**    | RAGAS 0.2.10 (pinned)                | Stable evaluation API          |
 | **Monitoring**    | LangSmith                            | LLM trace observability        |
 | **Data**          | Hugging Face Datasets                | Reproducible versioned sources |
-| **UI**            | Streamlit                            | Prototype chat interface       |
+| **UI**            | LangGraph Studio UI                  | Prototype chat interface       |
 
 ---
 

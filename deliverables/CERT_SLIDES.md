@@ -10,7 +10,7 @@ GDELT’s documentation is vast and complex; analysts need fast, precise answers
 ## Slide 3: Task 2 — Proposed Solution & Stack
 **Goal:** Describe solution and select tools per stack layer.
 **Evidence:** `README.md` — Architecture Summary, Technology Stack.
-**Result:** LangGraph‑based RAG with OpenAI, Qdrant, RAGAS, LangSmith, Streamlit.
+**Result:** LangGraph‑based RAG with OpenAI, Qdrant, RAGAS, LangSmith, LangGraph Studio.
 **Next Step:** Add 1‑sentence rationale per tool inline in the stack table.
 
 ## Slide 4: Task 3 — Data & Chunking
@@ -23,7 +23,7 @@ GDELT’s documentation is vast and complex; analysts need fast, precise answers
 **Goal:** Local end‑to‑end Agentic RAG prototype.
 **Evidence:** `app/graph_app.py` get_app; `src/graph.py` build_graph.
 **Result:** LangGraph Server app compiles and serves default rerank graph.
-**Next Step:** Surface Streamlit UI launch instructions in `README.md`.
+**Next Step:** Replace LangGraph Studio UI with React based frontend.
 
 ## Slide 6: Task 5 — Golden Test Set & RAGAS
 **Goal:** Create golden dataset and evaluate with RAGAS.
@@ -80,7 +80,7 @@ Key results: reproducible pipeline, advanced retrieval lifts precision, full lin
 
 **Evidence**: `docs/initial-architecture.md` lines 9-18, `docs/deliverables.md` lines 172-184
 
-**Result**: Complete a16z LLM App Stack implementation with GPT-4.1-mini (LLM), text-embedding-3-small (Embeddings), LangGraph (Orchestration), Qdrant (Vector DB), LangSmith (Logging), RAGAS (Evaluation), and Streamlit (UI), each with detailed rationale for tooling choices.
+**Result**: Complete a16z LLM App Stack implementation with GPT-4.1-mini (LLM), text-embedding-3-small (Embeddings), LangGraph (Orchestration), Qdrant (Vector DB), LangSmith (Logging), RAGAS (Evaluation), and LangGraph Studio (UI), each with detailed rationale for tooling choices.
 
 **Next Step**: Implement agentic reasoning strategy with Retrieval Agent and GDELT Domain Expert Agent for complex multi-hop queries.
 
@@ -94,7 +94,7 @@ Key results: reproducible pipeline, advanced retrieval lifts precision, full lin
 - `docs/deliverables.md` lines 227-256
 - **Public Dataset**: [gdelt-rag-sources-v2](https://huggingface.co/datasets/dwb2023/gdelt-rag-sources-v2) (38 documents, publicly verifiable)
 
-**Result**: Page-level chunking strategy using PyMuPDFLoader with metadata preservation, yielding 38 documents from GDELT research paper with SHA-256 fingerprints for data integrity, plus Tavily Search API integration for external knowledge augmentation. All source documents published to HuggingFace with complete provenance tracking.
+**Result**: Page-level chunking strategy using PyMuPDFLoader with metadata preservation, yielding 38 documents from GDELT research paper with SHA-256 fingerprints for data integrity, plus Tavily Search API integration (excluded from current implementation focused on RAG evaluation) for external knowledge augmentation. All source documents published to HuggingFace with complete provenance tracking.
 
 **Next Step**: Implement graph-based retrieval using Neo4j to leverage GDELT entity relationships for enhanced context retrieval.
 
