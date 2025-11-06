@@ -120,7 +120,7 @@ PYTHONPATH=. python scripts/run_app_validation.py
 | **Retrievers** | naive, bm25, ensemble, cohere_rerank | naive, bm25, ensemble, cohere_rerank |
 | **Test questions** | 12 (from golden testset) | 12 (from golden testset) |
 | **RAGAS metrics** | 4 metrics | 4 metrics |
-| **Output files** | 16 files (12 CSVs + 4 parquet + manifest) | 16 files (12 CSVs + 4 parquet + manifest) |
+| **Output files** | 10 files (8 parquet + 1 summary parquet + manifest) | 10 files (8 parquet + 1 summary parquet + manifest) |
 | **Models used** | gpt-4.1-mini, text-embedding-3-small | gpt-4.1-mini, text-embedding-3-small |
 | **Code** | 508 lines (inline implementations) | 268 lines (uses src/ modules) |
 | **Results** | Identical | Identical |
@@ -136,6 +136,18 @@ PYTHONPATH=. python scripts/run_app_validation.py
   - ⚠️ You want a standalone reference (works without src/)
   - ⚠️ You want to see full implementation details inline
   - ⚠️ You're comparing results between old and new versions
+
+### Architectural Decision: Inference/Evaluation Decoupling
+
+Both evaluation scripts save `*_evaluation_inputs.parquet` **immediately after Step 3 (inference)**, NOT during Step 4 (RAGAS evaluation).
+
+**Why this matters**:
+- **Data preservation**: If RAGAS fails mid-run, inference results are preserved
+- **Failure resilience**: API timeouts or rate limits won't lose expensive RAG inference work
+- **Future extensibility**: Enables inference-only and evaluation-only execution modes
+- **Clear separation**: Inference (Step 3) and evaluation (Step 4) are architecturally decoupled
+
+**Implementation**: See `scripts/run_eval_harness.py:196-198` where evaluation inputs are saved immediately after each retriever's inference completes, before RAGAS metrics are computed.
 
 ---
 
@@ -224,9 +236,9 @@ python scripts/ingest_raw_pdfs.py
 **Pipeline Steps**:
 1. Extract PDFs from `data/raw/` → LangChain Documents (PyMuPDF)
 2. Sanitize metadata for Arrow/JSON compatibility
-3. Persist sources to `data/interim/` (JSONL, Parquet, HFDS)
+3. Persist sources to `data/interim/` (Parquet, HFDS)
 4. Generate synthetic test questions via RAGAS (12 QA pairs)
-5. Persist golden testset to `data/interim/` (JSONL, Parquet, HFDS)
+5. Persist golden testset to `data/interim/` (Parquet)
 6. Create `manifest.json` with checksums + schema + provenance
 
 **Output Artifacts**:
@@ -303,8 +315,8 @@ python scripts/publish_interim_datasets.py
 export HF_TOKEN=hf_...
 
 # Ensure processed results exist
-ls data/processed/*_evaluation_dataset.csv
-ls data/processed/*_detailed_results.csv
+ls data/processed/*_evaluation_inputs.parquet
+ls data/processed/*_evaluation_metrics.parquet
 ```
 
 **Usage**:
@@ -313,10 +325,12 @@ python scripts/publish_processed_datasets.py
 ```
 
 **What it uploads**:
-- `dwb2023/gdelt-rag-evaluation-datasets` (consolidated evaluation inputs from 5 retrievers)
-- `dwb2023/gdelt-rag-detailed-results` (consolidated RAGAS metric scores from 5 retrievers)
+- `dwb2023/gdelt-rag-evaluation-datasets` (consolidated evaluation inputs from 4 retrievers)
+- `dwb2023/gdelt-rag-detailed-results` (consolidated RAGAS metric scores from 4 retrievers)
 
-**Key Feature**: Automatically adds `retriever` column to identify source retriever (baseline, naive, bm25, ensemble, cohere_rerank)
+**Key Feature**: Automatically adds `retriever` column to identify source retriever (naive, bm25, ensemble, cohere_rerank)
+
+**Note**: Published datasets may include "baseline" as an alias for "naive" from earlier evaluation runs.
 
 **Dataset 1 Schema** (`gdelt-rag-evaluation-datasets`):
 - `retriever` (string) - Source retriever name [NEW]

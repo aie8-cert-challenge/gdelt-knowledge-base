@@ -60,6 +60,24 @@ parser.add_argument(
     choices=["true", "false"],
     help="Recreate Qdrant collection (true) or reuse existing (false). Default: false"
 )
+parser.add_argument(
+    "--version",
+    type=str,
+    default="v3",
+    help="Dataset version (e.g., v2, v3). Default: v3"
+)
+parser.add_argument(
+    "--embed-model",
+    type=str,
+    default="text-embedding-3-small",
+    help="OpenAI embedding model. Default: text-embedding-3-small"
+)
+parser.add_argument(
+    "--llm-model",
+    type=str,
+    default="gpt-4.1-mini",
+    help="OpenAI LLM model. Default: gpt-4.1-mini"
+)
 args = parser.parse_args()
 
 # Convert string to boolean
@@ -70,8 +88,9 @@ RECREATE_COLLECTION = args.recreate.lower() == "true"
 # CONFIGURATION
 # ==============================================================================
 
-DATASET_SOURCES = "dwb2023/gdelt-rag-sources"
-DATASET_GOLDEN = "dwb2023/gdelt-rag-golden-testset"
+# Build dataset names with version
+DATASET_SOURCES = f"dwb2023/gdelt-rag-sources-{args.version}"
+DATASET_GOLDEN = f"dwb2023/gdelt-rag-golden-testset-{args.version}"
 K = 5  # Number of documents to retrieve (matches run_full_evaluation.py)
 OUT_DIR = Path(__file__).parent.parent / "data" / "processed"
 OUT_DIR.mkdir(parents=True, exist_ok=True)

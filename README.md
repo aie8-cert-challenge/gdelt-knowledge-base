@@ -171,6 +171,8 @@ By preserving SHA-256 fingerprints and HF lineage, this mechanism “signs” th
 | BM25             | 94.2%        | 94.8%            | 85.8%             | **98.8%**      | 93.4% |
 | Naive            | 94.0%        | 94.4%            | 88.5%             | **98.8%**      | 93.9% |
 
+**Note on retriever terminology:** The current codebase implements 4 retrievers (naive, bm25, ensemble, cohere_rerank). In evaluation reporting and published datasets, "baseline" may appear as an alias for the "naive" retriever, which serves as the performance comparison reference using simple dense vector search.
+
 **Provenance:** dataset paths & SHA-256 fingerprints are recorded in `data/interim/manifest.json`.
 **Reproducibility:** these numbers are written by the evaluation run into `RUN_MANIFEST.json`.
 **TLDR summary:** `data/processed/comparative_ragas_results.csv`

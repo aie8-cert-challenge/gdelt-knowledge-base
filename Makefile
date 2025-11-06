@@ -1,202 +1,196 @@
-# Makefile for GDELT RAG Evaluation System
+# ===============================================
+# GDELT RAG Evaluation System — Reproducible Pipeline
+# ===============================================
 
-.PHONY: help validate eval deliverables ingest publish-interim publish-processed clean clean-deliverables clean-processed clean-all env docker-up docker-down test notebook
+.DEFAULT_GOAL := help
+SHELL := /bin/bash
+.SHELLFLAGS := -euo pipefail -c
 
-# Default target
+.PHONY: help config ingest validate eval deliverables \
+        publish-interim publish-processed \
+        docker-up docker-down qdrant-up \
+        clean clean-deliverables clean-processed clean-all \
+        test notebook v e d i
+
+# -------- Global Parameters --------
+VERSION ?= v3
+HF_NAMESPACE ?= dwb2023
+
+# Embedding + LLM (optional overrides)
+EMBED_MODEL ?= text-embedding-3-small
+LLM_MODEL ?= gpt-4.1-mini
+RECREATE ?= false
+
+# If your scripts already import modules via a package (e.g. src/),
+# you can remove PYTHONPATH entirely.
+PYTHONPATH_OPT ?= .
+
+# -------- Derived HuggingFace Dataset Names --------
+INTERIM_SOURCES  := $(HF_NAMESPACE)/gdelt-rag-sources-$(VERSION)
+INTERIM_GOLDEN   := $(HF_NAMESPACE)/gdelt-rag-golden-testset-$(VERSION)
+PROCESSED_INPUTS := $(HF_NAMESPACE)/gdelt-rag-evaluation-inputs-$(VERSION)
+PROCESSED_METRICS:= $(HF_NAMESPACE)/gdelt-rag-evaluation-metrics-$(VERSION)
+
+# -------- Help --------
 help:
-	@echo "GDELT RAG Evaluation System - Available Commands"
+	@echo "🔎 GDELT RAG Pipeline Commands"
 	@echo ""
-	@echo "Data Preparation (one-time setup):"
-	@echo "  make ingest      - Extract PDFs and generate golden testset (~5-10 min, \$$2-3)"
+	@echo "🧠 Core Pipeline"
+	@echo "  make ingest               Extract PDFs + generate golden testset"
+	@echo "  make eval                 Run full evaluation pipeline (3 phases)"
+	@echo "  make deliverables         Generate CSV artifacts"
 	@echo ""
-	@echo "Development:"
-	@echo "  make validate    - Validate src/ module implementation (100% pass required)"
-	@echo "  make eval        - Run RAGAS evaluation, reuse collection (~20-30 min, \$$5-6)"
-	@echo "  make eval recreate=true - Force fresh Qdrant collection (adds ~5 min)"
-	@echo "  make deliverables - Generate human-friendly CSV files from Parquet data"
-	@echo "  make test        - Run quick validation test"
+	@echo "🔄 Three-Phase Pipeline (NEW)"
+	@echo "  make inference            Phase 1: Run inference only (~\$$3-4)"
+	@echo "  make eval-metrics         Phase 2: Run RAGAS evaluation (~\$$2)"
+	@echo "  make summarize            Phase 3: Create summary & manifest (\$$0)"
+	@echo "  make eval-monolithic      Legacy: Run old single-script version"
 	@echo ""
-	@echo "Publishing (optional, requires HF_TOKEN):"
-	@echo "  make publish-interim    - Upload sources & golden testset to HuggingFace Hub"
-	@echo "  make publish-processed  - Upload evaluation results to HuggingFace Hub"
+	@echo "📦 Publishing"
+	@echo "  make publish-interim      Upload sources & golden set to HF Hub"
+	@echo "  make publish-processed    Upload eval outputs to HF Hub"
 	@echo ""
-	@echo "Infrastructure:"
-	@echo "  make docker-up   - Start all infrastructure services (Qdrant, Redis, Neo4j, etc.)"
-	@echo "  make docker-down - Stop all infrastructure services"
-	@echo "  make qdrant-up   - Start only Qdrant (minimal requirement)"
+	@echo "🧰 Dev & Infra"
+	@echo "  make validate             Validate src + manifests"
+	@echo "  make docker-up            Start all infra (Qdrant, Redis, etc.)"
+	@echo "  make qdrant-up            Start Qdrant only"
+	@echo "  make notebook             Launch Jupyter"
 	@echo ""
-	@echo "Cleanup:"
-	@echo "  make clean       - Clean Python cache and temporary files"
-	@echo "  make clean-deliverables - Clean derived deliverables (regenerable)"
-	@echo "  make clean-processed    - Clean processed data (requires re-eval)"
-	@echo "  make clean-all   - Full cleanup (cache + interim + processed + deliverables)"
+	@echo "🧽 Cleanups"
+	@echo "  make clean                Python cache clean"
+	@echo "  make clean-deliverables   Remove CSV artifacts"
+	@echo "  make clean-processed      Remove eval outputs"
+	@echo "  make clean-all            Reset everything"
 	@echo ""
-	@echo "Environment:"
-	@echo "  make env         - Show environment variables"
-	@echo ""
-	@echo "Jupyter:"
-	@echo "  make notebook    - Start Jupyter notebook server"
-	@echo ""
+	@echo "🧪 Shortcuts"
+	@echo "  make v   -> validate"
+	@echo "  make e   -> eval"
+	@echo "  make d   -> docker-up"
+	@echo "  make i   -> ingest"
 
-# Validate src/ module implementation
+# -------- Config Printer --------
+config:
+	@echo "⚙️  Pipeline Configuration"
+	@echo "-------------------------------------"
+	@echo "VERSION:           $(VERSION)"
+	@echo "HF_NAMESPACE:      $(HF_NAMESPACE)"
+	@echo "EMBED_MODEL:       $(EMBED_MODEL)"
+	@echo "LLM_MODEL:         $(LLM_MODEL)"
+	@echo "RECREATE:          $(RECREATE)"
+	@echo "PYTHONPATH_OPT:    $(PYTHONPATH_OPT)"
+	@echo ""
+	@echo "Datasets:"
+	@echo "  Sources:         $(INTERIM_SOURCES)"
+	@echo "  Golden:          $(INTERIM_GOLDEN)"
+	@echo "  Eval Inputs:     $(PROCESSED_INPUTS)"
+	@echo "  Eval Metrics:    $(PROCESSED_METRICS)"
+
+# -------- Pipeline Steps --------
+
+ingest:
+	@echo "📄 Ingesting PDFs + generating golden testset (VERSION=$(VERSION))"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/ingest_raw_pdfs.py \
+		--version $(VERSION)
+
 validate:
-	@echo "🔍 Validating src/ module implementation..."
-	@PYTHONPATH=. uv run python scripts/run_app_validation.py
-	@echo ""
-	@echo "🔐 Validating manifest files and SHA-256 checksums..."
-	@PYTHONPATH=. uv run python scripts/validate_manifests.py
+	@echo "🔍 Validating src + manifests"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/run_app_validation.py
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/validate_manifests.py
 
-# Run full RAGAS evaluation (same as run_full_evaluation.py but uses src/ modules)
-# Usage: make eval              (reuses existing Qdrant collection)
-#        make eval recreate=true (recreates Qdrant collection)
-recreate ?= false
-eval:
-	@echo "🚀 Running RAGAS evaluation harness..."
-	@echo ""
-	@echo "This does the SAME thing as scripts/run_full_evaluation.py:"
-	@echo "  - 12 questions × 4 retrievers = 48 queries"
-	@echo "  - RAGAS evaluation with 4 metrics"
-	@echo "  - Saves to deliverables/evaluation_evidence/"
-	@echo ""
-	@echo "⏱️  Time: 20-30 minutes"
-	@echo "💰 Cost: ~\$$5-6 in OpenAI API calls"
-	@echo ""
-	@echo "Vector store: recreate=$(recreate)"
-	@if [ "$(recreate)" = "true" ]; then \
-		echo "  ⚠️  Will DELETE and recreate Qdrant collection"; \
-	else \
-		echo "  ✓ Will reuse existing Qdrant collection (faster)"; \
-	fi
-	@echo ""
-	@PYTHONPATH=. uv run python scripts/run_eval_harness.py --recreate=$(recreate)
+# -------- Three-Phase Evaluation Pipeline --------
 
-# Quick test (validation only, no full eval)
-test: validate
+# Phase 1: Run inference only (most expensive, ~$3-4)
+inference:
+	@echo "🤖 Phase 1: Running inference (RECREATE=$(RECREATE))"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/run_inference.py \
+		--sources $(INTERIM_SOURCES) \
+		--golden $(INTERIM_GOLDEN) \
+		--recreate $(RECREATE) \
+		--embed-model $(EMBED_MODEL)
 
-# Start all infrastructure services
-docker-up:
-	@echo "🐳 Starting all infrastructure services..."
-	docker-compose up -d
-	@echo "✅ Services started. Access points:"
-	@echo "  - Qdrant: http://localhost:6333"
-	@echo "  - Redis: localhost:6379"
-	@echo "  - Neo4j: http://localhost:7474"
-	@echo "  - Phoenix: http://localhost:6006"
-	@echo "  - MinIO: http://localhost:9001"
+# Phase 2: Run RAGAS evaluation on saved inputs (~$2)
+eval-metrics:
+	@echo "📊 Phase 2: Running RAGAS evaluation"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/run_evaluation.py \
+		--llm-model $(LLM_MODEL)
 
-# Stop all infrastructure services
-docker-down:
-	@echo "🛑 Stopping all infrastructure services..."
-	docker-compose down
+# Phase 3: Summarize results and create manifest (no API calls)
+summarize:
+	@echo "📈 Phase 3: Summarizing results (VERSION=$(VERSION))"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/summarize_results.py \
+		--version $(VERSION)
 
-# Start only Qdrant (minimal requirement)
-qdrant-up:
-	@echo "🐳 Starting Qdrant..."
-	docker-compose up -d qdrant
-	@echo "✅ Qdrant started at http://localhost:6333"
+# Combined target: run all three phases (backward compatibility)
+eval: inference eval-metrics summarize
+	@echo "✅ Full evaluation pipeline complete"
 
-# Show environment configuration
-env:
-	@echo "Environment Configuration:"
-	@echo ""
-	@echo "API Keys:"
-	@if [ -n "$$OPENAI_API_KEY" ]; then echo "  ✅ OPENAI_API_KEY: set"; else echo "  ❌ OPENAI_API_KEY: not set"; fi
-	@if [ -n "$$COHERE_API_KEY" ]; then echo "  ✅ COHERE_API_KEY: set"; else echo "  ⚠️  COHERE_API_KEY: not set (cohere_rerank will fail)"; fi
-	@if [ -n "$$LANGCHAIN_API_KEY" ]; then echo "  ✅ LANGCHAIN_API_KEY: set"; else echo "  ℹ️  LANGCHAIN_API_KEY: not set (tracing disabled)"; fi
-	@echo ""
-	@echo "Python:"
-	@python --version 2>/dev/null || echo "  ❌ Python not found"
-	@echo ""
-	@echo "Infrastructure:"
-	@docker-compose ps 2>/dev/null || echo "  ℹ️  Docker Compose not running"
+# Legacy target using monolithic script (for comparison)
+eval-monolithic:
+	@echo "🚀 Running monolithic evaluation (RECREATE=$(RECREATE), VERSION=$(VERSION))"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/run_eval_harness.py \
+		--recreate $(RECREATE) \
+		--version $(VERSION) \
+		--embed-model $(EMBED_MODEL) \
+		--llm-model $(LLM_MODEL)
 
-# Clean Python cache and temporary files
-clean:
-	@echo "🧹 Cleaning Python cache and temporary files..."
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	find . -type f -name "*.pyo" -delete 2>/dev/null || true
-	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} + 2>/dev/null || true
-	@echo "✅ Clean complete"
-
-# Generate human-friendly deliverables from Parquet data
 deliverables:
-	@echo "📂 Generating deliverables from data/processed/..."
+	@echo "📊 Generating deliverables"
 	uv run python scripts/generate_deliverables.py
 
-# Clean derived deliverables (can be regenerated)
-clean-deliverables:
-	@echo "🧹 Cleaning deliverables/evaluation_evidence/..."
-	@rm -f deliverables/evaluation_evidence/*.csv 2>/dev/null || true
-	@rm -f deliverables/evaluation_evidence/*.parquet 2>/dev/null || true
-	@rm -f deliverables/evaluation_evidence/RUN_MANIFEST.json 2>/dev/null || true
-	@echo "✅ Deliverables cleaned (regenerate with 'make deliverables')"
+# -------- Hugging Face Publishing --------
 
-# Clean processed data (requires re-running evaluation)
-clean-processed:
-	@echo "🧹 Cleaning data/processed/..."
-	@rm -f data/processed/*.parquet 2>/dev/null || true
-	@rm -f data/processed/*.csv 2>/dev/null || true
-	@rm -f data/processed/RUN_MANIFEST.json 2>/dev/null || true
-	@echo "⚠️  Processed data cleaned (re-run evaluation with 'make eval')"
+publish-interim:
+	@echo "📤 Publishing interim datasets (VERSION=$(VERSION))"
+	@test -n "$$HF_TOKEN" || { echo "❌ HF_TOKEN not set"; exit 1; }
+	@echo "→ $(INTERIM_SOURCES)"
+	@echo "→ $(INTERIM_GOLDEN)"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/publish_interim_datasets.py \
+		--sources $(INTERIM_SOURCES) \
+		--golden $(INTERIM_GOLDEN)
 
-# Full clean (interim + processed + deliverables + cache)
-clean-all: clean clean-deliverables clean-processed
-	@echo "🧹 Cleaning data/interim/..."
-	@rm -f data/interim/*.parquet 2>/dev/null || true
-	@rm -f data/interim/*.jsonl 2>/dev/null || true
-	@rm -f data/interim/manifest.json 2>/dev/null || true
-	@echo "✅ Full cleanup complete (cache + interim + processed + deliverables)"
+publish-processed:
+	@echo "📤 Publishing processed eval outputs (VERSION=$(VERSION))"
+	@test -n "$$HF_TOKEN" || { echo "❌ HF_TOKEN not set"; exit 1; }
+	@echo "→ $(PROCESSED_INPUTS)"
+	@echo "→ $(PROCESSED_METRICS)"
+	@PYTHONPATH=$(PYTHONPATH_OPT) uv run python scripts/publish_processed_datasets.py \
+		--inputs $(PROCESSED_INPUTS) \
+		--metrics $(PROCESSED_METRICS)
 
-# Start Jupyter notebook
+# -------- Infra Commands --------
+# Prefer 'docker compose'; fall back to 'docker-compose' if needed.
+DOCKER_COMPOSE := $(shell command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+
+docker-up:
+	@echo "🐳 Starting infrastructure"
+	$(DOCKER_COMPOSE) up -d
+
+docker-down:
+	$(DOCKER_COMPOSE) down
+
+qdrant-up:
+	@echo "🐳 Starting Qdrant only"
+	$(DOCKER_COMPOSE) up -d qdrant
+
 notebook:
-	@echo "📓 Starting Jupyter notebook..."
 	jupyter notebook
 
-# Data preparation (one-time ingestion from raw PDFs)
-ingest:
-	@echo "📄 Ingesting raw PDFs and generating golden testset..."
-	@echo ""
-	@echo "This extracts PDFs from data/raw/ and generates:"
-	@echo "  - 38 source documents (page-level chunks)"
-	@echo "  - 12 RAGAS golden testset QA pairs"
-	@echo "  - Persisted to data/interim/ (JSONL, Parquet, HFDS)"
-	@echo "  - manifest.json with checksums and provenance"
-	@echo ""
-	@echo "⏱️  Time: 5-10 minutes"
-	@echo "💰 Cost: ~\$$2-3 in OpenAI API calls"
-	@echo ""
-	@PYTHONPATH=. uv run python scripts/ingest_raw_pdfs.py
+# -------- Cleaning --------
 
-# Publish interim datasets to HuggingFace Hub
-publish-interim:
-	@echo "📤 Publishing interim datasets to HuggingFace Hub..."
-	@echo ""
-	@echo "Uploads to HuggingFace Hub:"
-	@echo "  - dwb2023/gdelt-rag-sources-v3 (38 documents)"
-	@echo "  - dwb2023/gdelt-rag-golden-testset-v3 (12 QA pairs)"
-	@echo ""
-	@echo "⏱️  Time: 1-2 minutes"
-	@echo "⚠️  Requires: HF_TOKEN environment variable"
-	@echo ""
-	@PYTHONPATH=. uv run python scripts/publish_interim_datasets.py
+clean:
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
 
-# Publish processed evaluation results to HuggingFace Hub
-publish-processed:
-	@echo "📤 Publishing evaluation results to HuggingFace Hub..."
-	@echo ""
-	@echo "Uploads to HuggingFace Hub:"
-	@echo "  - dwb2023/gdelt-rag-evaluation-inputs-v3 (48 records)"
-	@echo "  - dwb2023/gdelt-rag-evaluation-metrics-v3 (48 records with RAGAS scores)"
-	@echo ""
-	@echo "⏱️  Time: 1-2 minutes"
-	@echo "⚠️  Requires: HF_TOKEN environment variable"
-	@echo ""
-	@PYTHONPATH=. uv run python scripts/publish_processed_datasets.py
+clean-deliverables:
+	rm -f deliverables/evaluation_evidence/*
 
-# Convenience aliases
+clean-processed:
+	rm -f data/processed/*
+
+clean-all: clean clean-deliverables clean-processed
+	rm -rf data/interim/*
+
+# -------- Aliases --------
 v: validate
 e: eval
 d: docker-up

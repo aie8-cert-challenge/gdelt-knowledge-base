@@ -78,7 +78,7 @@ def create_retrievers(
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=reranker,
         base_retriever=wide_retriever
-        # Note: search_kwargs not valid here - k controlled by base_retriever
+        # Note: whent top_n is not set default is set to 3 in LangChain
     )
 
     return {

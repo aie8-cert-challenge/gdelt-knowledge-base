@@ -14,29 +14,36 @@ Datasets Created:
 - dwb2023/gdelt-rag-evaluation-metrics: RAGAS evaluation results with metric scores
 """
 
+import argparse
 import os
+import sys
 from pathlib import Path
 
 import pandas as pd
 from datasets import Dataset
 from huggingface_hub import HfApi, login
 
-# Configuration
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.config import get_retrievers
+
+retrievers = get_retrievers()
+
+# Defaults (can be overridden via CLI)
 HF_USERNAME = "dwb2023"
-EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-inputs-v3"
-DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-metrics-v3"
+DEFAULT_VERSION = "v3"
+EVALUATION_DATASETS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-inputs-{DEFAULT_VERSION}"
+DETAILED_RESULTS_NAME = f"{HF_USERNAME}/gdelt-rag-evaluation-metrics-{DEFAULT_VERSION}"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data" / "processed"
 
-# Retriever names (matches filenames)
-RETRIEVERS = ["baseline", "naive", "bm25", "ensemble", "cohere_rerank"]
 
-
-def create_evaluation_datasets_card() -> str:
+def create_evaluation_datasets_card(sources_version="v2", golden_version="v2") -> str:
     """Create dataset card for consolidated evaluation datasets."""
-    return """---
+    return f"""---
 license: apache-2.0
 task_categories:
 - question-answering
@@ -57,17 +64,16 @@ size_categories:
 
 ## Dataset Description
 
-This dataset contains consolidated RAGAS evaluation input datasets from 5 different retrieval strategies tested on the GDELT (Global Database of Events, Language, and Tone) RAG system. Each strategy was evaluated on the same golden testset of 12 questions, providing a direct comparison of retrieval performance.
+This dataset contains consolidated RAGAS evaluation input datasets from 4 different retrieval strategies tested on the GDELT (Global Database of Events, Language, and Tone) RAG system. Each strategy was evaluated on the same golden testset of 12 questions, providing a direct comparison of retrieval performance.
 
 ### Dataset Summary
 
-- **Total Examples**: ~1,400+ evaluation records across 5 retrievers
+- **Total Examples**: 48 evaluation records (12 questions × 4 retrievers)
 - **Retrievers Compared**:
-  1. Baseline (Naive dense vector search)
-  2. Naive (Dense vector search with k=5)
-  3. BM25 (Sparse keyword matching)
-  4. Ensemble (50% dense + 50% sparse hybrid)
-  5. Cohere Rerank (Dense retrieval with rerank-v3.5 compression)
+  1. Naive (Dense vector search baseline, k=5)
+  2. BM25 (Sparse keyword matching)
+  3. Ensemble (50% dense + 50% sparse hybrid)
+  4. Cohere Rerank (Dense retrieval with rerank-v3.5 compression)
 - **Questions Per Retriever**: 12 test questions
 - **Purpose**: RAG system comparative evaluation
 - **Framework**: RAGAS (Retrieval-Augmented Generation Assessment)
@@ -75,7 +81,7 @@ This dataset contains consolidated RAGAS evaluation input datasets from 5 differ
 
 ### Data Fields
 
-- `retriever` (string): Source retriever strategy (baseline | naive | bm25 | ensemble | cohere_rerank)
+- `retriever` (string): Source retriever strategy (naive | bm25 | ensemble | cohere_rerank)
 - `user_input` (string): The question or query
 - `retrieved_contexts` (list[string]): Document chunks retrieved by the retriever
 - `reference_contexts` (list[string]): Ground truth context passages containing the answer
@@ -84,10 +90,11 @@ This dataset contains consolidated RAGAS evaluation input datasets from 5 differ
 
 ### Retriever Strategies Explained
 
-**Baseline (Naive)**:
+**Naive (Baseline)**:
 - Simple dense vector similarity search
 - OpenAI text-embedding-3-small embeddings
 - Top-k=5 documents
+- This is the baseline strategy for comparison
 
 **BM25**:
 - Sparse keyword-based retrieval
@@ -124,11 +131,11 @@ This dataset is intended for:
 
 ### Source Data
 
-**Golden Testset**: `dwb2023/gdelt-rag-golden-testset-v2` (12 QA pairs)
+**Golden Testset**: `dwb2023/gdelt-rag-golden-testset-{golden_version}` (12 QA pairs)
 - Generated using RAGAS synthetic test data generation
 - Based on "Talking to GDELT Through Knowledge Graphs" (arXiv:2503.07584v3)
 
-**Source Documents**: `dwb2023/gdelt-rag-sources-v2` (38 documents)
+**Source Documents**: `dwb2023/gdelt-rag-sources-{sources_version}` (38 documents)
 - GDELT GKG 2.1 architecture documentation
 - Knowledge graph construction guides
 - Baltimore Bridge Collapse case study
@@ -156,9 +163,9 @@ This dataset was created as part of the AI Engineering Bootcamp Cohort 8 certifi
 
 ### Related Datasets
 
-- **Evaluation Results**: `dwb2023/gdelt-rag-evaluation-metrics` (RAGAS metric scores)
-- **Golden Testset**: `dwb2023/gdelt-rag-golden-testset-v2` (ground truth QA pairs)
-- **Source Documents**: `dwb2023/gdelt-rag-sources-v2` (knowledge base)
+- **Evaluation Results**: `dwb2023/gdelt-rag-evaluation-metrics-{sources_version}` (RAGAS metric scores)
+- **Golden Testset**: `dwb2023/gdelt-rag-golden-testset-{golden_version}` (ground truth QA pairs)
+- **Source Documents**: `dwb2023/gdelt-rag-sources-{sources_version}` (knowledge base)
 
 ### Contact
 
@@ -166,9 +173,9 @@ For questions or issues, please open an issue on the GitHub repository.
 """
 
 
-def create_detailed_results_card() -> str:
+def create_detailed_results_card(sources_version="v2", golden_version="v2") -> str:
     """Create dataset card for consolidated detailed results."""
-    return """---
+    return f"""---
 license: apache-2.0
 task_categories:
 - question-answering
@@ -189,19 +196,19 @@ size_categories:
 
 ## Dataset Description
 
-This dataset contains detailed RAGAS evaluation results with per-question metric scores for 5 different retrieval strategies tested on the GDELT RAG system. Each record includes the full evaluation context (question, contexts, response) plus 4 RAGAS metric scores.
+This dataset contains detailed RAGAS evaluation results with per-question metric scores for 4 different retrieval strategies tested on the GDELT RAG system. Each record includes the full evaluation context (question, contexts, response) plus 4 RAGAS metric scores.
 
 ### Dataset Summary
 
-- **Total Examples**: ~1,400+ evaluation records with metric scores
-- **Retrievers Evaluated**: Baseline, Naive, BM25, Ensemble, Cohere Rerank
+- **Total Examples**: 48 evaluation records with metric scores (12 questions × 4 retrievers)
+- **Retrievers Evaluated**: Naive (baseline), BM25, Ensemble, Cohere Rerank
 - **Metrics Per Record**: 4 RAGAS metrics (faithfulness, answer_relevancy, context_precision, context_recall)
 - **Questions Per Retriever**: 12 test questions from golden testset
 - **Purpose**: Detailed RAG performance analysis and metric comparison
 
 ### Data Fields
 
-- `retriever` (string): Source retriever strategy (baseline | naive | bm25 | ensemble | cohere_rerank)
+- `retriever` (string): Source retriever strategy (naive | bm25 | ensemble | cohere_rerank)
 - `user_input` (string): The question or query
 - `retrieved_contexts` (list[string]): Document chunks retrieved by the retriever
 - `reference_contexts` (list[string]): Ground truth context passages
@@ -294,12 +301,12 @@ This dataset contains a single split with all detailed evaluation records.
 
 ### Source Data
 
-**Golden Testset**: dwb2023/gdelt-rag-golden-testset-v2
+**Golden Testset**: dwb2023/gdelt-rag-golden-testset-{golden_version}
 - 12 synthetically generated QA pairs
 - Single-hop and multi-hop questions
 - GDELT-specific technical questions
 
-**Source Documents**: dwb2023/gdelt-rag-sources-v2
+**Source Documents**: dwb2023/gdelt-rag-sources-{sources_version}
 - 38 pages from GDELT research paper
 - Topics: GKG 2.1 architecture, event encoding, knowledge graphs
 
@@ -317,9 +324,9 @@ Created as part of AI Engineering Bootcamp Cohort 8 certification challenge (Jan
 
 ### Related Datasets
 
-- **Evaluation Inputs**: dwb2023/gdelt-rag-evaluation-inputs (without metric scores)
-- **Golden Testset**: dwb2023/gdelt-rag-golden-testset-v2
-- **Source Documents**: dwb2023/gdelt-rag-sources-v2
+- **Evaluation Inputs**: dwb2023/gdelt-rag-evaluation-inputs-{sources_version} (without metric scores)
+- **Golden Testset**: dwb2023/gdelt-rag-golden-testset-{golden_version}
+- **Source Documents**: dwb2023/gdelt-rag-sources-{sources_version}
 
 ### Contact
 
@@ -334,11 +341,11 @@ def load_parquet_with_retriever_column(file_path: Path, retriever_name: str) -> 
     return df
 
 
-def load_and_consolidate_datasets(pattern: str) -> pd.DataFrame:
+def load_and_consolidate_datasets(pattern: str, retrievers: list[str]) -> pd.DataFrame:
     """Load and consolidate all Parquet files matching pattern with retriever column."""
     dfs = []
 
-    for retriever in RETRIEVERS:
+    for retriever in retrievers:
         file_path = DATA_DIR / f"{retriever}_{pattern}.parquet"
 
         if not file_path.exists():
@@ -358,8 +365,28 @@ def load_and_consolidate_datasets(pattern: str) -> pd.DataFrame:
     return consolidated
 
 
+def parse_args():
+    """Parse command line arguments."""
+    p = argparse.ArgumentParser(description="Publish processed HF datasets")
+    # Option A: pass full repo IDs (highest precedence)
+    p.add_argument("--inputs", type=str, help="Full HF repo id for eval inputs (e.g. dwb2023/gdelt-rag-evaluation-inputs-v4)")
+    p.add_argument("--metrics", type=str, help="Full HF repo id for eval metrics (e.g. dwb2023/gdelt-rag-evaluation-metrics-v4)")
+    # Option B: build from namespace+version if full ids not provided
+    p.add_argument("--namespace", type=str, default=HF_USERNAME, help="HF namespace (default: dwb2023)")
+    p.add_argument("--version", type=str, default=DEFAULT_VERSION, help="version string (default: v3)")
+    return p.parse_args()
+
+
 def main():
     """Main upload function."""
+    args = parse_args()
+
+    # Resolve final repo ids
+    namespace = args.namespace
+    version = args.version
+    inputs_repo = args.inputs or f"{namespace}/gdelt-rag-evaluation-inputs-{version}"
+    metrics_repo = args.metrics or f"{namespace}/gdelt-rag-evaluation-metrics-{version}"
+
     # Check for HF token
     hf_token = os.environ.get("HF_TOKEN")
     if not hf_token:
@@ -376,16 +403,16 @@ def main():
     # Dataset 1: Evaluation Datasets
     # ========================================
     print(f"\n📂 Loading evaluation datasets from {DATA_DIR}...")
-    eval_df = load_and_consolidate_datasets("evaluation_inputs")
+    eval_df = load_and_consolidate_datasets("evaluation_inputs", retrievers)
 
     print("\n🔄 Converting evaluation datasets to HuggingFace Dataset...")
     eval_dataset = Dataset.from_pandas(eval_df)
     print(f"   • Dataset size: {len(eval_dataset)} examples")
     print(f"   • Features: {list(eval_dataset.features.keys())}")
 
-    print(f"\n📤 Uploading evaluation datasets to {EVALUATION_DATASETS_NAME}...")
+    print(f"\n📤 Uploading evaluation datasets to {inputs_repo}...")
     eval_dataset.push_to_hub(
-        EVALUATION_DATASETS_NAME,
+        inputs_repo,
         private=False,
         token=hf_token
     )
@@ -393,29 +420,29 @@ def main():
     # Create and upload dataset card
     print("   • Creating dataset card...")
     api.upload_file(
-        path_or_fileobj=create_evaluation_datasets_card().encode(),
+        path_or_fileobj=create_evaluation_datasets_card(sources_version=version, golden_version=version).encode(),
         path_in_repo="README.md",
-        repo_id=EVALUATION_DATASETS_NAME,
+        repo_id=inputs_repo,
         repo_type="dataset",
         token=hf_token
     )
     print("   ✅ Evaluation datasets uploaded successfully!")
-    print(f"      View at: https://huggingface.co/datasets/{EVALUATION_DATASETS_NAME}")
+    print(f"      View at: https://huggingface.co/datasets/{inputs_repo}")
 
     # ========================================
     # Dataset 2: Detailed Results
     # ========================================
     print(f"\n📂 Loading detailed results from {DATA_DIR}...")
-    results_df = load_and_consolidate_datasets("evaluation_metrics")
+    results_df = load_and_consolidate_datasets("evaluation_metrics", retrievers)
 
     print("\n🔄 Converting detailed results to HuggingFace Dataset...")
     results_dataset = Dataset.from_pandas(results_df)
     print(f"   • Dataset size: {len(results_dataset)} examples")
     print(f"   • Features: {list(results_dataset.features.keys())}")
 
-    print(f"\n📤 Uploading detailed results to {DETAILED_RESULTS_NAME}...")
+    print(f"\n📤 Uploading detailed results to {metrics_repo}...")
     results_dataset.push_to_hub(
-        DETAILED_RESULTS_NAME,
+        metrics_repo,
         private=False,
         token=hf_token
     )
@@ -423,22 +450,22 @@ def main():
     # Create and upload dataset card
     print("   • Creating dataset card...")
     api.upload_file(
-        path_or_fileobj=create_detailed_results_card().encode(),
+        path_or_fileobj=create_detailed_results_card(sources_version=version, golden_version=version).encode(),
         path_in_repo="README.md",
-        repo_id=DETAILED_RESULTS_NAME,
+        repo_id=metrics_repo,
         repo_type="dataset",
         token=hf_token
     )
     print("   ✅ Detailed results uploaded successfully!")
-    print(f"      View at: https://huggingface.co/datasets/{DETAILED_RESULTS_NAME}")
+    print(f"      View at: https://huggingface.co/datasets/{metrics_repo}")
 
     # ========================================
     # Summary
     # ========================================
     print("\n🎉 All datasets uploaded successfully!")
     print("\n📊 Dataset URLs:")
-    print(f"   • Evaluation Datasets: https://huggingface.co/datasets/{EVALUATION_DATASETS_NAME}")
-    print(f"   • Detailed Results: https://huggingface.co/datasets/{DETAILED_RESULTS_NAME}")
+    print(f"   • Evaluation Datasets: https://huggingface.co/datasets/{inputs_repo}")
+    print(f"   • Detailed Results: https://huggingface.co/datasets/{metrics_repo}")
 
     print("\n📈 Dataset Statistics:")
     print(f"   • Evaluation Datasets: {len(eval_dataset)} examples across {len(eval_df['retriever'].unique())} retrievers")
