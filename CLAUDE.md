@@ -20,36 +20,22 @@ make qdrant-up && make validate && make eval && make deliverables
 
 ## Common Commands
 
-### Development
-```bash
-make validate          # Validate environment + modules (23 checks, must pass 100%)
-make eval             # Run full evaluation: inference → RAGAS → summarize
-make deliverables     # Generate human-readable CSV files from Parquet
+> **📖 Complete Makefile Documentation: [README_MAKEFILE.md](./README_MAKEFILE.md)**
+>
+> Includes detailed pipeline steps, parameters (VERSION, RECREATE, HF_TOKEN), cost/time estimates, common scenarios, and troubleshooting.
 
-# Three-phase evaluation (for cost control)
-make inference        # Phase 1: RAG inference only (~$3-4)
-make eval-metrics     # Phase 2: RAGAS scoring (~$2)
-make summarize        # Phase 3: Create summary + manifest ($0)
-```
-
-### Infrastructure
+### Quick Reference
 ```bash
-make qdrant-up        # Start Qdrant vector database
-make docker-up        # Start all services (Qdrant, Redis, etc.)
-make notebook         # Launch Jupyter
-```
+# Essential shortcuts
+make v    # Validate (23 checks)
+make e    # Full evaluation
+make d    # Start Docker
+make i    # Ingest PDFs
 
-### Publishing
-```bash
-make publish-interim     # Upload sources + testset to HuggingFace
-make publish-processed   # Upload evaluation results to HuggingFace
-```
-
-### Cleaning
-```bash
-make clean-deliverables  # Remove CSV files (regenerable)
-make clean-processed     # Remove evaluation results
-make clean-all           # Reset everything
+# Full commands
+make validate      # Must pass 23/23 before deployment
+make eval          # Run 3-phase pipeline: inference → metrics → summarize
+make deliverables  # Generate CSV files from Parquet
 ```
 
 ## Critical Architecture Patterns
@@ -216,81 +202,6 @@ make eval      # Automatically includes your new retriever
 
 Results appear in `data/processed/comparative_ragas_results.parquet`.
 
-## Common Workflows
-
-### Standard Development Flow
-```bash
-make qdrant-up         # Start infrastructure
-make validate          # Must pass 100% (23/23)
-make eval              # Run evaluation (~$5-6, 20-30 min)
-make deliverables      # Generate CSV files
-```
-
-### Cost-Conscious Evaluation
-```bash
-make inference         # Only if you need fresh inference (~$3-4)
-make eval-metrics      # Only if you need fresh RAGAS scores (~$2)
-make summarize         # Always free (local aggregation)
-```
-
-### Ingesting New Data (Rare)
-```bash
-# Only needed if recreating datasets from PDFs
-make ingest            # PDF → interim datasets (~$2-3)
-make eval recreate=true  # Force recreate Qdrant collection
-```
-
-### Publishing (One-Time)
-```bash
-export HF_TOKEN=hf_...
-make publish-interim     # Upload sources + testset
-make publish-processed   # Upload evaluation results
-```
-
-## End-to-End Workflow
-
-### Pipeline Steps (Base Commands)
-
-The complete evaluation pipeline in logical order:
-
-| Step | Command | What It Does | Cost | Time | Creates |
-|------|---------|--------------|------|------|---------|
-| **0** | `make clean-all` | Resets workspace by removing all generated data | $0 | <1s | Clean slate |
-| **1** | `make ingest` | Extracts text from PDFs and generates test questions | ~$2-3 | 5-10m | `data/interim/` datasets |
-| **2** | `make publish-interim` | Uploads source docs & testset to HuggingFace | $0 | 1-2m | HF datasets (sources, testset) |
-| **3** | `make validate` | Verifies environment setup (23 checks must pass) | $0 | <1s | Validation report |
-| **4** | `make qdrant-up` | Starts vector database Docker container | $0 | <1s | Qdrant on port 6333 |
-| **5a** | `make inference` | Runs RAG queries using all 4 retrievers | ~$3-4 | 5-10m | Inference results (Parquet) |
-| **5b** | `make eval-metrics` | Scores RAG outputs with RAGAS metrics | ~$2 | 5-10m | Evaluation scores (Parquet) |
-| **5c** | `make summarize` | Aggregates results across all retrievers | $0 | <1s | Comparative analysis |
-| **6** | `make deliverables` | Converts Parquet to human-readable CSVs | $0 | <1s | `deliverables/` CSVs |
-| **7** | `make publish-processed` | Uploads evaluation results to HuggingFace | $0 | 1-2m | HF evaluation datasets |
-
-**Shortcut:** Steps 5a-5c can be combined with `make eval` (runs all three phases sequentially)
-
-**Total:** ~$7-9, 30-45 minutes
-
-### Parameter Guide
-
-Control pipeline behavior with these parameters:
-
-| Parameter | Commands | Purpose | Values | Example | When to Use |
-|-----------|----------|---------|--------|---------|-------------|
-| **VERSION** | `ingest`<br>`publish-*`<br>`inference`<br>`summarize`<br>`eval` | Dataset version tag | `v3` (default)<br>`v4`, `v5`, etc. | `make ingest VERSION=v4` | • New dataset creation<br>• Version tracking<br>• A/B testing |
-| **RECREATE** | `inference`<br>`eval` | Force new Qdrant collection | `false` (default)<br>`true` | `make inference RECREATE=true` | • Collection corrupted<br>• Schema changes<br>• Fresh start needed |
-| **HF_TOKEN** | `publish-*` | HuggingFace authentication | Your token | `export HF_TOKEN=hf_...` | Required for publishing |
-
-### Common Scenarios
-
-| Scenario | Command | Why |
-|----------|---------|-----|
-| **First-time setup** | `make eval RECREATE=true` | Creates new Qdrant collection and runs full pipeline |
-| **Re-run with existing data** | `make eval` | Uses existing Qdrant collection, faster startup |
-| **Test new version** | `make eval VERSION=v5 RECREATE=true` | Creates v5 datasets with fresh collection |
-| **Fix failed RAGAS** | `make eval-metrics` | Re-runs only RAGAS scoring (inference preserved) |
-| **Update CSVs only** | `make deliverables` | Regenerates CSVs from existing Parquet files |
-| **Publish v4 results** | `make publish-processed VERSION=v4` | Uploads v4 evaluation to HuggingFace |
-
 ## Environment Variables
 
 ```bash
@@ -402,13 +313,14 @@ These tools solve the provenance tracking issue properly by design.
 
 ## Documentation Map
 
-- **This file** - High-level architecture and common commands
-- **scripts/README.md** - Detailed script documentation (11 scripts)
-- **src/README.md** - Factory pattern guide + module reference
-- **data/README.md** - Data flow, manifest schema, file formats
-- **Makefile** - All command specifications (scope, duration, cost)
-- **README.md** - Project overview, datasets, evaluation results
-- **architecture/** - Auto-generated (Claude Agent SDK analyzer)
+- **This file (CLAUDE.md)** - High-level architecture and critical patterns
+- **[README_MAKEFILE.md](./README_MAKEFILE.md)** - Complete Makefile guide (commands, parameters, workflows, troubleshooting)
+- **[README.md](./README.md)** - Project overview, datasets, evaluation results
+- **[scripts/README.md](./scripts/README.md)** - Detailed script documentation (11 scripts)
+- **[src/README.md](./src/README.md)** - Factory pattern guide + module reference
+- **[data/README.md](./data/README.md)** - Data flow, manifest schema, file formats
+- **[Makefile](./Makefile)** - Source code for all automation commands
+- **[architecture/](./architecture/)** - Auto-generated architecture docs (Claude Agent SDK)
 
 ## Reproducibility & Provenance
 
