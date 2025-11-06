@@ -9,6 +9,7 @@ This script:
 4. Updates manifest.json with dataset repo IDs
 """
 
+import argparse
 import json
 import os
 from datetime import datetime, timezone
@@ -17,10 +18,11 @@ from pathlib import Path
 from datasets import load_from_disk
 from huggingface_hub import HfApi, login
 
-# Configuration
+# Defaults (can be overridden via CLI)
 HF_USERNAME = "dwb2023"
-SOURCES_DATASET_NAME = f"{HF_USERNAME}/gdelt-rag-sources-v3"
-GOLDEN_TESTSET_NAME = f"{HF_USERNAME}/gdelt-rag-golden-testset-v3"
+DEFAULT_VERSION = "v3"
+SOURCES_DATASET_NAME = f"{HF_USERNAME}/gdelt-rag-sources-{DEFAULT_VERSION}"
+GOLDEN_TESTSET_NAME = f"{HF_USERNAME}/gdelt-rag-golden-testset-{DEFAULT_VERSION}"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -223,8 +225,28 @@ def update_manifest(sources_repo: str, golden_testset_repo: str):
     print(f"\n✅ Updated manifest.json with dataset repo IDs")
 
 
+def parse_args():
+    """Parse command line arguments."""
+    p = argparse.ArgumentParser(description="Publish interim HF datasets")
+    # Option A: pass full repo IDs (highest precedence)
+    p.add_argument("--sources", type=str, help="Full HF repo id for sources dataset (e.g. dwb2023/gdelt-rag-sources-v4)")
+    p.add_argument("--golden", type=str, help="Full HF repo id for golden testset (e.g. dwb2023/gdelt-rag-golden-testset-v4)")
+    # Option B: build from namespace+version if full ids not provided
+    p.add_argument("--namespace", type=str, default=HF_USERNAME, help="HF namespace (default: dwb2023)")
+    p.add_argument("--version", type=str, default=DEFAULT_VERSION, help="version string (default: v3)")
+    return p.parse_args()
+
+
 def main():
     """Main upload function."""
+    args = parse_args()
+
+    # Resolve final repo ids
+    namespace = args.namespace
+    version = args.version
+    sources_repo = args.sources or f"{namespace}/gdelt-rag-sources-{version}"
+    golden_repo = args.golden or f"{namespace}/gdelt-rag-golden-testset-{version}"
+
     # Check for HF token
     hf_token = os.environ.get("HF_TOKEN")
     if not hf_token:
@@ -246,9 +268,9 @@ def main():
     print(f"   • Golden testset: {len(golden_testset_dataset)} examples")
 
     # Upload sources dataset
-    print(f"\n📤 Uploading sources dataset to {SOURCES_DATASET_NAME}...")
+    print(f"\n📤 Uploading sources dataset to {sources_repo}...")
     sources_dataset.push_to_hub(
-        SOURCES_DATASET_NAME,
+        sources_repo,
         private=False,
         token=hf_token
     )
@@ -258,17 +280,17 @@ def main():
     api.upload_file(
         path_or_fileobj=create_sources_card().encode(),
         path_in_repo="README.md",
-        repo_id=SOURCES_DATASET_NAME,
+        repo_id=sources_repo,
         repo_type="dataset",
         token=hf_token
     )
     print(f"   ✅ Sources dataset uploaded successfully!")
-    print(f"      View at: https://huggingface.co/datasets/{SOURCES_DATASET_NAME}")
+    print(f"      View at: https://huggingface.co/datasets/{sources_repo}")
 
     # Upload golden testset dataset
-    print(f"\n📤 Uploading golden testset to {GOLDEN_TESTSET_NAME}...")
+    print(f"\n📤 Uploading golden testset to {golden_repo}...")
     golden_testset_dataset.push_to_hub(
-        GOLDEN_TESTSET_NAME,
+        golden_repo,
         private=False,
         token=hf_token
     )
@@ -278,21 +300,21 @@ def main():
     api.upload_file(
         path_or_fileobj=create_golden_testset_card().encode(),
         path_in_repo="README.md",
-        repo_id=GOLDEN_TESTSET_NAME,
+        repo_id=golden_repo,
         repo_type="dataset",
         token=hf_token
     )
     print(f"   ✅ Golden testset uploaded successfully!")
-    print(f"      View at: https://huggingface.co/datasets/{GOLDEN_TESTSET_NAME}")
+    print(f"      View at: https://huggingface.co/datasets/{golden_repo}")
 
     # Update manifest
     print(f"\n📝 Updating manifest...")
-    update_manifest(SOURCES_DATASET_NAME, GOLDEN_TESTSET_NAME)
+    update_manifest(sources_repo, golden_repo)
 
     print("\n🎉 All datasets uploaded successfully!")
     print(f"\n📊 Dataset URLs:")
-    print(f"   • Sources: https://huggingface.co/datasets/{SOURCES_DATASET_NAME}")
-    print(f"   • Golden Testset: https://huggingface.co/datasets/{GOLDEN_TESTSET_NAME}")
+    print(f"   • Sources: https://huggingface.co/datasets/{sources_repo}")
+    print(f"   • Golden Testset: https://huggingface.co/datasets/{golden_repo}")
 
 
 if __name__ == "__main__":

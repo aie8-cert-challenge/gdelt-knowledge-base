@@ -16,6 +16,7 @@ from langchain_core.documents import Document
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv(override=not os.getenv("CI"))
 
@@ -36,6 +37,8 @@ LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
 COLLECTION_NAME= os.getenv("QDRANT_COLLECTION", "gdelt_comparative_eval")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+
+RETRIEVERS   = [s.strip() for s in (os.getenv("RETRIEVERS") or "naive,bm25,ensemble,cohere_rerank").split(",")]
 # ----------------------------------------
 
 @lru_cache(maxsize=1)
@@ -79,7 +82,12 @@ def get_qdrant():
         return QdrantClient(url=QDRANT_URL, **kwargs)
     return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, **kwargs)
 
+@lru_cache(maxsize=1)
+def get_retrievers() -> List[str]:
+    # sorted(unique) is optional — only if you want deterministic ordering
+    return list(dict.fromkeys(RETRIEVERS))
 
+@lru_cache(maxsize=1)
 def get_collection_name() -> str:
     """
     Get configured collection name.
@@ -92,7 +100,7 @@ def get_collection_name() -> str:
 
 def create_vector_store(
     documents: List[Document],
-    collection_name: str = None,
+    collection_name: Optional[str] = None,
     recreate_collection: bool = False
 ) -> QdrantVectorStore:
     """

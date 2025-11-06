@@ -1,0 +1,167 @@
+---
+alwaysApply: false
+---
+  Evaluate and scaffold AI Product Management deliverables across:
+  1) Problem, 2) Success, 3) Audience, 4) Solution [Demo + Infra], 5) Conclusions.
+  Produces a PM Checklist and a slide deck draft. Focus on strategy, outcomes, and governance
+  (NOT code implementation).
+rules:
+  - match: "*"
+    steps:
+      - name: Load Context
+        actions:
+          - search:
+              - "**/*PRD*.md"
+              - "**/*BusinessCase*.md"
+              - "**/*Strategy*.md"
+              - "**/*Metrics*.md"
+              - "**/*Experiment*.md"
+              - "**/*Launch*.md"
+              - "**/*GTM*.md"
+              - "**/*Postmortem*.md"
+              - "**/*Risk*.md"
+              - "**/*Ethics*.md"
+              - "**/*DataPrivacy*.md"
+              - "**/*Compliance*.md"
+              # explicit guidance docs
+              - "**/llm-stack-guidance.md"
+              - "**/ai_product_management_layers_2025.md"
+          - open:
+              - "docs/llm-stack-guidance.md"
+              - "docs/ai_product_management_layers_2025.md"
+
+      - name: Validate 1) Problem (1-2 min)
+        expect:
+          - "Single-sentence problem statement exists and is testable"
+          - "Clear scope boundaries and non-goals"
+          - "Evidence of problem discovery: user interviews, logs, baseline KPIs, or market data"
+          - "Problem framing includes AI-specific constraints (probabilistic outputs, data availability, latency/cost)"
+        evidence:
+          - files: ["**/*PRD*.md", "**/*Strategy*.md", "**/*Problem*.md", "**/*Discovery*.md"]
+          - artifacts: ["interview-notes", "baseline-metrics", "support-tickets", "workflow-maps"]
+        fail_if_absent: ["single-sentence problem", "baseline metric or pain quantification"]
+
+      - name: Validate 2) Success (1 min)
+        expect:
+          - "North Star metric defined (business outcome)"
+          - "Guardrail metrics (quality, safety, latency, cost, fairness) with thresholds"
+          - "Leading indicators and measurement plan (data sources, cadence, owners)"
+          - "Hypothesis with success criteria (e.g., ≥Y accuracy within ≤Z latency yields T mins saved)"
+        evidence:
+          - files: ["**/*Metrics*.md", "**/*OKR*.md", "**/*Eval*.md"]
+        fail_if_absent: ["NSM + guardrails + measurement plan"]
+
+      - name: Validate 3) Audience (1-2 min)
+        expect:
+          - "Primary persona(s) with job-to-be-done and current workflow"
+          - "Stakeholder map (DS, Eng, Design, Legal/Compliance, RevOps) with RACI"
+          - "Critical user journeys + top tasks + acceptance criteria"
+        evidence:
+          - files: ["**/*Persona*.md", "**/*JTBD*.md", "**/*Journey*.md", "**/*RACI*.md"]
+        fail_if_absent: ["persona + journey + RACI"]
+
+      - name: Validate 4a) Solution — Demo (2-4 min)
+        expect:
+          - "Demo storyboard or script aligned to problem & success metrics"
+          - "Trust & control UX: citations, confidence, feedback loop, human-in-the-loop or overrides"
+          - "Known-failure scenarios & safe fallbacks"
+          - "Experiment plan (A/B or interleaving) with primary/secondary metrics"
+        evidence:
+          - files: ["**/*Demo*.md", "**/*Storyboard*.md", "**/*Experiment*.md", "**/*UX*.md"]
+        guidance:
+          - "docs/llm-stack-guidance.md"
+          - "docs/ai_product_management_layers_2025.md"
+        fail_if_absent: ["demo storyboard + experiment plan"]
+
+      - name: Validate 4b) Solution — Infra Diagram (1-2 min)
+        expect:
+          - "Product-level architecture diagram (not low-level): data sources → decision service → UX"
+          - "Policy & governance overlays: PII handling, consent, retention, auditability"
+          - "Ops: monitoring (quality, drift), rollbacks, versioning, cost budgets"
+          - "Change management: feature flags, gated rollout, canaries"
+        evidence:
+          - files: ["**/*Architecture*.md", "**/*Infra*.md", "**/*Governance*.md", "**/*Risk*.md"]
+        guidance:
+          - "docs/llm-stack-guidance.md"
+          - "docs/ai_product_management_layers_2025.md"
+        fail_if_absent: ["diagram + governance + ops"]
+
+      - name: Validate 5) Conclusions (1-2 min)
+        expect:
+          - "Key insights, trade-offs, and explicit next steps with owners & dates"
+          - "Risks table (Likelihood x Impact) with mitigations"
+          - "GTM/enablement plan: who needs what to adopt (sales, CS, docs)"
+          - "Post-launch review plan (what will we learn, when, and how to iterate)"
+        evidence:
+          - files: ["**/*Conclusion*.md", "**/*Risk*.md", "**/*GTM*.md", "**/*Postmortem*.md", "**/*Enablement*.md"]
+        fail_if_absent: ["risks + next steps + GTM"]
+
+      - name: Output — Reports
+        output:
+          - path: "PM_CHECKLIST.md"
+            template: |
+              # AI Product Management — Checklist (v1)
+
+              ## Summary Verdict
+              - Overall: {{overall_status}}
+              - High-risk gaps: {{high_risk_gaps}}
+
+              ## Section Results
+              1) Problem .......... {{problem_status}}
+              2) Success .......... {{success_status}}
+              3) Audience ......... {{audience_status}}
+              4a) Demo ............ {{demo_status}}
+              4b) Infra Diagram ... {{infra_status}}
+              5) Conclusions ...... {{conclusion_status}}
+
+              ## Missing or Weak Evidence
+              {{missing_evidence_list}}
+
+              ## Next Actions (Owners / Dates)
+              {{next_actions_table}}
+
+              ## Notes
+              {{notes}}
+
+          - path: "PM_SLIDES.md"
+            template: |
+              # Slide 1 — Title & Hook
+              - Product name, one-line value prop
+              - Hook: baseline pain and desired outcome
+
+              # Slide 2 — Problem
+              - Single-sentence problem
+              - Scope, non-goals, baseline metrics
+
+              # Slide 3 — Success
+              - North Star + guardrails
+              - Measurement plan
+
+              # Slide 4 — Audience
+              - Persona & JTBD
+              - Top tasks and acceptance criteria
+              - Stakeholder RACI (mini)
+
+              # Slide 5 — Solution Overview
+              - Before/after flow
+              - Where AI intervenes & why
+              - Sources: docs/llm-stack-guidance.md; docs/ai_product_management_layers_2025.md
+
+              # Slide 6 — Demo
+              - Storyboard frames
+              - Trust, control, feedback loop
+              - Experiment plan
+
+              # Slide 7 — Infra Diagram
+              - Data → Decision → UX
+              - Governance overlays, monitoring, rollbacks
+              - Sources: docs/llm-stack-guidance.md; docs/ai_product_management_layers_2025.md
+
+              # Slide 8 — Results & Trade-offs
+              - Early signals / pilot data
+              - Key trade-offs & rationale
+
+              # Slide 9 — Conclusions
+              - Risks & mitigations
+              - Next steps
+              - GTM/enablement plan

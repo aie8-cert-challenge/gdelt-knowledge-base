@@ -87,43 +87,13 @@
     "Fine-tuned embeddings out of scope per instructor guidance",
     "Evaluation follows RAGAS 0.2.10 API patterns from session08"
   ],
-  "generated_at": "2025-10-30T22:45:59.935180Z",
+  "generated_at": "2025-11-02T00:56:45.129643Z",
   "generated_by": "scripts/generate_run_manifest.py",
-  "results_summary": {
-    "naive": {
-      "faithfulness": 0.9575492312334416,
-      "answer_relevancy": 0.9473514986978371,
-      "context_precision": 0.8425925925525387,
-      "context_recall": 0.9880952380952381,
-      "average": 0.9338971401447639
-    },
-    "bm25": {
-      "faithfulness": 0.9592193792331621,
-      "answer_relevancy": 0.9457929893285049,
-      "context_precision": 0.8582175925534443,
-      "context_recall": 0.9880952380952381,
-      "average": 0.9378312998025874
-    },
-    "ensemble": {
-      "faithfulness": 0.9564027672386368,
-      "answer_relevancy": 0.9473050044577467,
-      "context_precision": 0.8391369047294238,
-      "context_recall": 1.0,
-      "average": 0.9357111691064518
-    },
-    "cohere_rerank": {
-      "faithfulness": 0.956895419941837,
-      "answer_relevancy": 0.9397163986048178,
-      "context_precision": 0.8958333332850693,
-      "context_recall": 0.9672619047619048,
-      "average": 0.9399267641484073
-    }
-  },
   "data_provenance": {
-    "ingest_manifest_id": "ragas_pipeline_b0c7cba5-9a85-49b5-8872-a3bf689f54a7",
-    "ingest_timestamp": "2025-10-30T22:07:38.392914Z",
+    "ingest_manifest_id": "ragas_pipeline_f4df656e-997e-4830-ab75-dc15fa57621c",
+    "ingest_timestamp": "2025-11-01T23:59:54.594112Z",
     "sources_sha256": "c39263dea5cf001f18b36e7c7c7273f4f4f4134240e288fb3256dc72b193a5fa",
-    "golden_testset_sha256": "d5f815af2fedb7703b5bd6232554ffa8c9c566bbb17e3eb1902c50833062dd7e",
+    "golden_testset_sha256": "e410c99a1c9e37a2650ced20e11342a2324cc55132b2e1b53e5757c7e4fbe176",
     "source_pdfs_count": "all",
     "ragas_testset_size": 10
   }
