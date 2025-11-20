@@ -1,0 +1,21 @@
+meta {
+  name: Search for items within a namespace prefix.
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/store/items/search
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "namespace_prefix": "",
+    "filter": "",
+    "limit": 0,
+    "offset": 0,
+    "query": ""
+  }
+}

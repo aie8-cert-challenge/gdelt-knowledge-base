@@ -1,0 +1,15 @@
+meta {
+  name: System Metrics
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/metrics
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~format: 
+}

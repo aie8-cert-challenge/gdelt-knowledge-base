@@ -1,0 +1,15 @@
+meta {
+  name: Get Assistant Versions
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/assistants/:assistant_id/versions
+  body: none
+  auth: inherit
+}
+
+params:path {
+  assistant_id: 
+}

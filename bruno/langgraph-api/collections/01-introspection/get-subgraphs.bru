@@ -1,0 +1,56 @@
+meta {
+  name: Get Subgraphs
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/assistants/{{assistant_id}}/subgraphs
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Subgraphs
+
+  Retrieves information about nested subgraphs (if any exist).
+
+  ### When to Use
+  - Exploring complex multi-graph architectures
+  - Understanding nested workflow structures
+  - LangGraph Studio uses this for hierarchical visualization
+
+  ### GDELT Graph
+  The current GDELT graph is **simple** (no subgraphs):
+  - 2 nodes only: retrieve → generate
+  - No nested graphs or teams
+  - Direct linear execution
+
+  ### External API Calls Triggered
+  Same initialization overhead as other introspection endpoints:
+  - HuggingFace HEAD requests (5x)
+  - Qdrant GET requests (2x)
+  - OpenAI POST /embeddings (1x)
+
+  ### Performance
+  - Latency: ~2-3 seconds
+  - External API calls: 8 total
+
+  ### Expected Response (GDELT)
+  ```json
+  {
+    "subgraphs": []
+  }
+  ```
+
+  ### Note
+  This endpoint would be more useful for:
+  - Multi-agent systems (Session 06 patterns)
+  - Team-based architectures
+  - Supervisor/worker patterns
+  - Nested state machines
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Cancel Runs
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/runs/cancel
+  body: json
+  auth: inherit
+}
+
+params:query {
+  ~action: 
+}
+
+body:json {
+  {
+    "status": "",
+    "thread_id": "",
+    "run_ids": []
+  }
+}

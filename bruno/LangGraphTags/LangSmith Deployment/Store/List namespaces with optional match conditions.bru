@@ -1,0 +1,21 @@
+meta {
+  name: List namespaces with optional match conditions.
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/store/namespaces
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prefix": [],
+    "suffix": [],
+    "max_depth": 0,
+    "limit": 0,
+    "offset": 0
+  }
+}

@@ -1,0 +1,64 @@
+meta {
+  name: Get Graph Structure
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/assistants/{{assistant_id}}/graph
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Graph Structure
+
+  Retrieves the compiled graph structure showing nodes, edges, and execution flow.
+
+  ### When to Use
+  - Understanding the graph's execution flow
+  - Debugging node transitions
+  - Visualizing the workflow
+  - LangGraph Studio uses this to render the graph diagram
+
+  ### Graph Structure (GDELT)
+  ```
+  START → retrieve → generate → END
+  ```
+
+  **Nodes**:
+  - `retrieve`: Cohere Rerank retriever (k=5)
+  - `generate`: GPT-4.1-mini (temperature=0)
+
+  ### External API Calls Triggered
+  Same as `get-schemas`:
+  - HuggingFace HEAD requests (5x)
+  - Qdrant GET requests (2x)
+  - OpenAI POST /embeddings (1x)
+
+  ### Performance
+  - Latency: ~2-3 seconds
+  - External API calls: 8 total
+  - Retriever initialization overhead
+
+  ### Expected Response
+  ```json
+  {
+    "nodes": [
+      {"id": "__start__", "type": "start"},
+      {"id": "retrieve", "type": "node"},
+      {"id": "generate", "type": "node"},
+      {"id": "__end__", "type": "end"}
+    ],
+    "edges": [
+      {"source": "__start__", "target": "retrieve"},
+      {"source": "retrieve", "target": "generate"},
+      {"source": "generate", "target": "__end__"}
+    ]
+  }
+  ```
+}

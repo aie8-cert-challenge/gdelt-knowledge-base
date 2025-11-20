@@ -1,0 +1,28 @@
+meta {
+  name: A2A Post
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/a2a/:assistant_id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  assistant_id: 
+}
+
+headers {
+  Accept: 
+}
+
+body:json {
+  {
+    "jsonrpc": "",
+    "id": "",
+    "method": "",
+    "params": {}
+  }
+}

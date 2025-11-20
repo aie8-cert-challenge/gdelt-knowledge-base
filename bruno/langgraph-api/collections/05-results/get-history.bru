@@ -1,0 +1,102 @@
+meta {
+  name: Get Thread History
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/threads/{{thread_id}}/history
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Thread History
+
+  Retrieves the complete execution history of a thread (all checkpoints).
+
+  ### When to Use
+  - Debugging graph execution
+  - Time-travel debugging (inspect state at any point)
+  - Auditing conversation flow
+  - Understanding node-by-node state evolution
+
+  ### Prerequisites
+  - Valid `thread_id`
+  - At least one run has completed
+
+  ### Performance
+  - Latency: < 200ms
+  - No external API calls
+  - Checkpoint history traversal
+
+  ### Checkpoint Timeline
+  Each checkpoint represents state after a node execution:
+  ```
+  Checkpoint 0: __start__ → {"question": "What is GDELT?"}
+  Checkpoint 1: retrieve  → {"question": "...", "context": [...]}
+  Checkpoint 2: generate  → {"question": "...", "context": [...], "response": "..."}
+  ```
+
+  ### Expected Response
+  ```json
+  {
+    "values": [
+      {
+        "values": {"question": "What is GDELT?", "context": [...], "response": "..."},
+        "next": [],
+        "config": {...},
+        "metadata": {"step": 2, "writes": {"generate": {...}}},
+        "created_at": "2025-11-20T17:58:44.461321Z",
+        "parent_config": {...}
+      },
+      {
+        "values": {"question": "What is GDELT?", "context": [...]},
+        "next": ["generate"],
+        "config": {...},
+        "metadata": {"step": 1, "writes": {"retrieve": {...}}},
+        "created_at": "2025-11-20T17:58:37.849928Z",
+        "parent_config": {...}
+      },
+      {
+        "values": {"question": "What is GDELT?"},
+        "next": ["retrieve"],
+        "config": {...},
+        "metadata": {"step": 0, "writes": {"__start__": {...}}},
+        "created_at": "2025-11-20T17:58:35.002657Z",
+        "parent_config": null
+      }
+    ]
+  }
+  ```
+
+  ### Use Cases
+
+  **Time-Travel Debugging**:
+  - Inspect state after retrieve but before generate
+  - Compare inputs vs outputs for each node
+  - Identify where bugs were introduced
+
+  **Performance Analysis**:
+  - Calculate time between checkpoints
+  - Identify slow nodes
+  - Measure retrieval vs generation latency
+
+  **Conversation Replay**:
+  - Replay multi-turn conversations
+  - Export conversation transcripts
+  - Generate training data
+
+  ### History Order
+  - Returned in **reverse chronological order** (newest first)
+  - Access oldest checkpoint: `response.values[-1]`
+  - Access newest checkpoint: `response.values[0]`
+
+  ### Troubleshooting
+  - Empty array → No checkpoints saved yet
+  - 404 Not Found → Thread doesn't exist
+}

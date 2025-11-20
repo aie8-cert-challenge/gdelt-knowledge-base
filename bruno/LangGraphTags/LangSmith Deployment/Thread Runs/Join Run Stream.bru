@@ -1,0 +1,25 @@
+meta {
+  name: Join Run Stream
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/threads/:thread_id/runs/:run_id/stream
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~stream_mode: 
+  ~cancel_on_disconnect: 
+}
+
+params:path {
+  thread_id: 
+  run_id: 
+}
+
+headers {
+  ~Last-Event-ID: 
+}

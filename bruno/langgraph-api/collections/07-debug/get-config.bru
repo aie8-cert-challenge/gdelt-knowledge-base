@@ -1,0 +1,128 @@
+meta {
+  name: Get Assistant Config [NOT AVAILABLE in 0.5.20]
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/assistants/{{assistant_id}}/config
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Assistant Configuration
+
+  ⚠️ **NOT AVAILABLE IN LANGGRAPH-API 0.5.20**
+
+  This endpoint does not exist in the current version. Configuration information
+  is available through `/assistants/{id}/schemas` instead.
+
+  Retrieves the runtime configuration schema for an assistant.
+
+  ### When to Use
+  - Understanding configurable parameters
+  - Building dynamic configuration UIs
+  - Validating config payloads before runs
+  - Debugging configuration issues
+
+  ### Prerequisites
+  - Valid `assistant_id` in environment
+
+  ### Performance
+  - Latency: < 50ms
+  - No external API calls
+  - Schema retrieval only
+
+  ### Expected Response
+  ```json
+  {
+    "config_schema": {
+      "type": "object",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "default": 0.0,
+          "description": "LLM temperature for response generation"
+        },
+        "k_documents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 5,
+          "description": "Number of documents to return after reranking"
+        },
+        "initial_k": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 100,
+          "default": 20,
+          "description": "Number of documents to retrieve before reranking"
+        }
+      }
+    }
+  }
+  ```
+
+  ### Configurable Parameters (GDELT)
+
+  **temperature** (0.0 - 2.0, default: 0.0):
+  - Controls randomness in LLM responses
+  - 0.0 = deterministic (recommended for factual QA)
+  - 1.0 = balanced creativity
+  - 2.0 = maximum creativity
+
+  **k_documents** (1 - 20, default: 5):
+  - Final number of documents used for generation
+  - Higher = more context, but more expensive
+  - Lower = faster, cheaper, but less context
+
+  **initial_k** (5 - 100, default: 20):
+  - Documents retrieved before reranking
+  - Higher = better recall, but slower reranking
+  - Lower = faster, but may miss relevant docs
+
+  ### Using Configurable Parameters
+  Pass config when creating runs:
+  ```json
+  {
+    "assistant_id": "...",
+    "input": {"question": "..."},
+    "config": {
+      "configurable": {
+        "temperature": 0.5,
+        "k_documents": 10
+      }
+    }
+  }
+  ```
+
+  ### Use Cases
+  - **Dynamic UIs**: Build sliders/inputs from schema
+  - **Parameter Tuning**: Test different configurations
+  - **Experimentation**: Compare temperature/k values
+  - **Validation**: Ensure config values are within bounds
+
+  ### Performance Implications
+
+  **Increasing k_documents (5 → 10)**:
+  - +5 more docs in context
+  - +~2s latency (more tokens to process)
+  - +~$0.0005 cost (longer context)
+
+  **Increasing temperature (0 → 1)**:
+  - No latency change
+  - No cost change
+  - More creative/varied responses
+  - Less deterministic (may affect reproducibility)
+
+  ### Troubleshooting
+  - 404 Not Found → Invalid assistant_id
+  - Empty schema → Graph has no configurable parameters
+}

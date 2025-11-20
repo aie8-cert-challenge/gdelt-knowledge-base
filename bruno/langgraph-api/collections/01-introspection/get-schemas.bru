@@ -1,0 +1,64 @@
+meta {
+  name: Get Schemas
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/assistants/{{assistant_id}}/schemas
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Graph Schemas
+
+  Retrieves the input and output schemas for the graph.
+
+  ### When to Use
+  - Understanding what data structure the graph expects
+  - Validating request payloads before submission
+  - Auto-generating client code
+  - LangGraph Studio uses this on initial load
+
+  ### External API Calls Triggered
+  Based on server logs, this endpoint triggers:
+  - HuggingFace HEAD requests (5x) - Dataset validation
+  - Qdrant GET requests (2x) - Collection verification
+  - OpenAI POST /embeddings (1x) - Embedding model warmup
+
+  ### Performance
+  - Latency: ~2-3 seconds (first call)
+  - Subsequent calls: ~1-2 seconds (cached)
+  - External API calls: 8 total
+
+  ### Expected Response
+  ```json
+  {
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "question": {"type": "string"}
+      },
+      "required": ["question"]
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "question": {"type": "string"},
+        "context": {"type": "array"},
+        "response": {"type": "string"}
+      }
+    }
+  }
+  ```
+
+  ### Notes
+  - **Inefficiency Warning**: Each call re-initializes the retriever stack
+  - This is a known issue in langgraph-api 0.4.48
+  - Consider caching the response client-side
+}

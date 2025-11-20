@@ -1,0 +1,114 @@
+meta {
+  name: Run Graph (Streaming)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/threads/{{thread_id}}/runs/stream
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: text/event-stream
+}
+
+body:json {
+  {
+    "assistant_id": "{{assistant_id}}",
+    "input": {
+      "question": "What is GDELT?"
+    },
+    "stream_mode": ["values"]
+  }
+}
+
+docs {
+  ## Run Graph (Streaming)
+
+  Executes the GDELT RAG graph with streaming response (Server-Sent Events).
+
+  ### When to Use
+  - Building interactive UIs
+  - Providing real-time progress feedback
+  - Showing intermediate results as they're generated
+  - Improving perceived performance
+
+  ### Prerequisites
+  - Valid `thread_id` (use "Create Thread" first)
+  - Valid `assistant_id` in environment
+  - Client must support Server-Sent Events (SSE)
+
+  ### Stream Events
+  ```
+  event: values
+  data: {"question": "What is GDELT?"}
+
+  event: values
+  data: {"question": "What is GDELT?", "context": [...]}
+
+  event: values
+  data: {"question": "What is GDELT?", "context": [...], "response": "..."}
+
+  event: end
+  data: {"run_id": "019aa26b-051a-728c-9893-1e2ca3867e76"}
+  ```
+
+  ### Stream Modes
+  - `values`: Full state after each node
+  - `updates`: Only the changes from each node
+  - `messages`: Message-by-message for chat applications
+
+  ### Performance
+  Same total time as non-streaming (~10.5s) but:
+  - First event (after retrieve): ~4s
+  - Final event (after generate): ~10.5s
+  - Better perceived performance
+
+  ### External API Calls
+  Identical to non-streaming:
+  - Initialization (8 calls, ~2s)
+  - Retrieve node (3 calls, ~2.5s)
+  - Generate node (1 call, ~6.6s)
+
+  ### Testing in Bruno
+  **Note**: Bruno's HTTP client may not render SSE streams properly.
+
+  For testing streaming:
+  - Use `curl` with `--no-buffer` flag
+  - Use browser's EventSource API
+  - Use Python's `httpx` with streaming
+  - Use LangGraph Studio UI
+
+  ### Example with curl
+  ```bash
+  curl -X POST http://127.0.0.1:2024/threads/{thread_id}/runs/stream \
+    -H "Content-Type: application/json" \
+    -H "Accept: text/event-stream" \
+    --no-buffer \
+    -d '{
+      "assistant_id": "e45a51c7-e110-55eb-b8c6-c2b51f0c2c8f",
+      "input": {"question": "What is GDELT?"},
+      "stream_mode": ["values"]
+    }'
+  ```
+
+  ### Expected Events
+  ```
+  event: metadata
+  data: {"run_id": "...", "thread_id": "..."}
+
+  event: values
+  data: {"question": "What is GDELT?"}
+
+  event: values
+  data: {"question": "What is GDELT?", "context": [Document(...)]}
+
+  event: values
+  data: {"question": "...", "context": [...], "response": "GDELT is..."}
+
+  event: end
+  ```
+}

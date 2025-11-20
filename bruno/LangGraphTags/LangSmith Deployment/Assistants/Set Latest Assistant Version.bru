@@ -1,0 +1,19 @@
+meta {
+  name: Set Latest Assistant Version
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/assistants/:assistant_id/latest
+  body: none
+  auth: inherit
+}
+
+params:query {
+  version: 
+}
+
+params:path {
+  assistant_id: 
+}

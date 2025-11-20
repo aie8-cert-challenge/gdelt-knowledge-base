@@ -1,0 +1,16 @@
+meta {
+  name: Delete Run
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/threads/:thread_id/runs/:run_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+  run_id: 
+}

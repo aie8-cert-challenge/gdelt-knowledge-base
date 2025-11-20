@@ -1,0 +1,22 @@
+meta {
+  name: List Runs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/threads/:thread_id/runs
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~limit: 
+  ~offset: 
+  ~status: 
+  ~select: 
+}
+
+params:path {
+  thread_id: 
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Patch Thread
+  type: http
+  seq: 13
+}
+
+patch {
+  url: {{baseUrl}}/threads/:thread_id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+}
+
+body:json {
+  {
+    "metadata": {},
+    "ttl": {
+      "strategy": "",
+      "ttl": ""
+    }
+  }
+}

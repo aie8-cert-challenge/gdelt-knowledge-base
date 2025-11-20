@@ -1,0 +1,149 @@
+meta {
+  name: Respond to Interrupt [EDUCATIONAL - NOT AVAILABLE in 0.5.20]
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/threads/{{thread_id}}/events
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "event_id": "evt_123",
+    "response": {
+      "approved": true,
+      "feedback": "Deployment approved by manager"
+    }
+  }
+}
+
+docs {
+  ## Respond to Interrupt
+
+  ⚠️ **EDUCATIONAL ONLY - NOT AVAILABLE IN LANGGRAPH-API 0.5.20**
+
+  This endpoint pattern does not exist. HITL resume is handled through the same
+  `/threads/{id}/runs/wait` endpoint used for initial execution.
+
+  **Actual Resume Pattern in 0.5.20**:
+  ```
+  POST /threads/{id}/runs/wait
+  {
+    "assistant_id": "gdelt",
+    "command": {
+      "resume": "Human-provided input here"
+    }
+  }
+  ```
+
+  Provides human input to resume an interrupted run.
+
+  ### When to Use
+  - Responding to approval requests
+  - Providing human feedback during graph execution
+  - Confirming tool usage
+  - Resolving ambiguity or errors
+
+  ### HITL Workflow
+  ```
+  1. Run interrupted at approval gate
+  2. GET /events → retrieve interrupt details
+  3. Human reviews and decides
+  4. POST /events → provide decision
+  5. Run automatically resumes with human input
+  ```
+
+  ### Prerequisites
+  - Valid `thread_id`
+  - Valid `event_id` from GET /events
+  - Run in "interrupted" status
+
+  ### GDELT Graph Note
+  ⚠️ **The current GDELT graph does NOT use interrupts**
+  - This endpoint won't be needed for simple RAG queries
+  - Useful for future multi-agent enhancements
+  - Example provided for educational purposes
+
+  ### Request Body Structure
+  ```json
+  {
+    "event_id": "evt_123",
+    "response": {
+      // Arbitrary JSON matching what the graph expects
+      "approved": true,
+      "feedback": "Optional human feedback",
+      "modifications": {...}
+    }
+  }
+  ```
+
+  ### Performance
+  - Latency: < 100ms (event processing only)
+  - Run resumes asynchronously after response
+  - No external API calls for event submission
+
+  ### Expected Response
+  ```json
+  {
+    "event_id": "evt_123",
+    "status": "processed",
+    "run_id": "019aa26b-051a-728c-9893-1e2ca3867e76",
+    "resumed": true
+  }
+  ```
+
+  ### Example HITL Scenarios
+
+  **Approval Gate**:
+  ```json
+  {
+    "event_id": "evt_approve_123",
+    "response": {
+      "approved": true
+    }
+  }
+  ```
+
+  **Tool Confirmation**:
+  ```json
+  {
+    "event_id": "evt_tool_456",
+    "response": {
+      "allow_tool": true,
+      "tool_name": "send_email"
+    }
+  }
+  ```
+
+  **Error Resolution**:
+  ```json
+  {
+    "event_id": "evt_error_789",
+    "response": {
+      "retry": true,
+      "fallback_action": "use_cached_result"
+    }
+  }
+  ```
+
+  ### Monitoring Resumed Run
+  After posting event:
+  ```
+  1. POST /events → run resumes
+  2. Poll GET /runs/{run_id} → check status
+  3. When status="success" → GET /state
+  ```
+
+  ### Troubleshooting
+  - 404 Event Not Found → Invalid event_id or already processed
+  - 400 Invalid Response → Response schema doesn't match graph expectations
+  - 409 Conflict → Event already responded to
+}

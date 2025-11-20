@@ -1,0 +1,47 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/ok
+  body: none
+  auth: none
+}
+
+docs {
+  ## Health Check
+
+  Verifies that the LangGraph server is running and responsive.
+
+  ### Endpoint
+  **Correct**: `/ok` (not `/health`)
+
+  Verified against langgraph-api 0.5.20
+
+  ### When to Use
+  - Before starting any API workflow
+  - As part of automated health monitoring
+  - To verify server startup completed successfully
+
+  ### Expected Response
+  ```json
+  {
+    "ok": true
+  }
+  ```
+
+  ### Performance
+  - Latency: < 10ms
+  - No external API calls
+  - No database queries
+
+  ### Server Information
+  For detailed version info, use: `GET /info`
+
+  ### Troubleshooting
+  - Connection refused → Server not running (`uv run langgraph dev --allow-blocking`)
+  - Timeout → Check firewall/network settings
+  - 404 Not Found → Ensure using `/ok` endpoint (not `/health`)
+}

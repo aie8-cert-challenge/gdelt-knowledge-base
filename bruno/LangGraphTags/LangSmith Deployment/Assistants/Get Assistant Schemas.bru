@@ -1,0 +1,15 @@
+meta {
+  name: Get Assistant Schemas
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/assistants/:assistant_id/schemas
+  body: none
+  auth: inherit
+}
+
+params:path {
+  assistant_id: 
+}

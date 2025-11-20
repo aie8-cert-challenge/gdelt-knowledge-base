@@ -1,0 +1,20 @@
+meta {
+  name: Get Thread State At Checkpoint
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/threads/:thread_id/state/:checkpoint_id
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~subgraphs: 
+}
+
+params:path {
+  thread_id: 
+  checkpoint_id: 
+}

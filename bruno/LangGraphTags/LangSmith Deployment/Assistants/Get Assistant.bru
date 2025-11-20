@@ -1,0 +1,15 @@
+meta {
+  name: Get Assistant
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/assistants/:assistant_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  assistant_id: 
+}
