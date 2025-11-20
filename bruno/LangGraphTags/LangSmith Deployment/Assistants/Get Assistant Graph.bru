@@ -1,0 +1,19 @@
+meta {
+  name: Get Assistant Graph
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/assistants/:assistant_id/graph
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~xray: 
+}
+
+params:path {
+  assistant_id: 
+}

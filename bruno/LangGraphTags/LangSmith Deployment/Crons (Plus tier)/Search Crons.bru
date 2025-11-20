@@ -1,0 +1,23 @@
+meta {
+  name: Search Crons
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/runs/crons/search
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "assistant_id": "",
+    "thread_id": "",
+    "limit": 0,
+    "offset": 0,
+    "sort_by": "",
+    "sort_order": "",
+    "select": []
+  }
+}

@@ -1,0 +1,16 @@
+meta {
+  name: Get Run
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/threads/:thread_id/runs/:run_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+  run_id: 
+}

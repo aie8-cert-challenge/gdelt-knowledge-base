@@ -1,5 +1,5 @@
 meta {
-  name: Get Thread Events
+  name: Get Thread Events [EDUCATIONAL - NOT AVAILABLE in 0.5.20]
   type: http
   seq: 1
 }
@@ -16,6 +16,16 @@ headers {
 
 docs {
   ## Get Thread Events
+
+  ⚠️ **EDUCATIONAL ONLY - NOT AVAILABLE IN LANGGRAPH-API 0.5.20**
+
+  This endpoint pattern does not exist in the current version. HITL (Human-in-the-Loop)
+  is handled through interrupts in the run execution flow via `/threads/{id}/runs/wait`.
+
+  **Actual HITL Pattern in 0.5.20**:
+  1. POST `/threads/{id}/runs/wait` - Returns with interrupt info in response
+  2. Handle interrupt in application logic
+  3. POST `/threads/{id}/runs/wait` again - Provide human input to resume
 
   Retrieves pending interruptions or events requiring human input (HITL - Human-in-the-Loop).
 

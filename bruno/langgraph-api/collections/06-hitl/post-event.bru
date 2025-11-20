@@ -1,5 +1,5 @@
 meta {
-  name: Respond to Interrupt
+  name: Respond to Interrupt [EDUCATIONAL - NOT AVAILABLE in 0.5.20]
   type: http
   seq: 2
 }
@@ -27,6 +27,22 @@ body:json {
 
 docs {
   ## Respond to Interrupt
+
+  ⚠️ **EDUCATIONAL ONLY - NOT AVAILABLE IN LANGGRAPH-API 0.5.20**
+
+  This endpoint pattern does not exist. HITL resume is handled through the same
+  `/threads/{id}/runs/wait` endpoint used for initial execution.
+
+  **Actual Resume Pattern in 0.5.20**:
+  ```
+  POST /threads/{id}/runs/wait
+  {
+    "assistant_id": "gdelt",
+    "command": {
+      "resume": "Human-provided input here"
+    }
+  }
+  ```
 
   Provides human input to resume an interrupted run.
 

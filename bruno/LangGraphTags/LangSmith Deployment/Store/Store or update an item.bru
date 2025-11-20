@@ -1,0 +1,19 @@
+meta {
+  name: Store or update an item.
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{baseUrl}}/store/items
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "namespace": [],
+    "key": "",
+    "value": {}
+  }
+}

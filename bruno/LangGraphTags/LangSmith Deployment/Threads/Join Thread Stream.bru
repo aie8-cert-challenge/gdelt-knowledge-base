@@ -1,0 +1,23 @@
+meta {
+  name: Join Thread Stream
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/threads/:thread_id/stream
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~stream_modes: 
+}
+
+params:path {
+  thread_id: 
+}
+
+headers {
+  ~Last-Event-ID: 
+}

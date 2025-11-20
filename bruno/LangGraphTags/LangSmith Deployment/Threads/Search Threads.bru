@@ -1,0 +1,25 @@
+meta {
+  name: Search Threads
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/threads/search
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "ids": [],
+    "metadata": {},
+    "values": {},
+    "status": "",
+    "limit": 0,
+    "offset": 0,
+    "sort_by": "",
+    "sort_order": "",
+    "select": []
+  }
+}

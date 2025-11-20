@@ -1,0 +1,29 @@
+meta {
+  name: Get Thread History Post
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/threads/:thread_id/history
+  body: json
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+}
+
+body:json {
+  {
+    "limit": 0,
+    "before": {
+      "thread_id": "",
+      "checkpoint_ns": "",
+      "checkpoint_id": "",
+      "checkpoint_map": {}
+    },
+    "metadata": {},
+    "checkpoint": {}
+  }
+}

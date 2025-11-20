@@ -1,0 +1,20 @@
+meta {
+  name: Join Run
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/threads/:thread_id/runs/:run_id/join
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~cancel_on_disconnect: 
+}
+
+params:path {
+  thread_id: 
+  run_id: 
+}

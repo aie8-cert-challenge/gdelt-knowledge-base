@@ -1,0 +1,19 @@
+meta {
+  name: Get Assistant Subgraphs
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/assistants/:assistant_id/subgraphs
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~recurse: 
+}
+
+params:path {
+  assistant_id: 
+}

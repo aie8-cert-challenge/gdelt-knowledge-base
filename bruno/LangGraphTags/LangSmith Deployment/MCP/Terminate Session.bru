@@ -1,0 +1,11 @@
+meta {
+  name: Terminate Session
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/mcp/
+  body: none
+  auth: inherit
+}

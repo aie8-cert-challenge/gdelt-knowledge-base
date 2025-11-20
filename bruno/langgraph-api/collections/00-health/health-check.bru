@@ -5,7 +5,7 @@ meta {
 }
 
 get {
-  url: {{base_url}}/health
+  url: {{base_url}}/ok
   body: none
   auth: none
 }
@@ -15,6 +15,11 @@ docs {
 
   Verifies that the LangGraph server is running and responsive.
 
+  ### Endpoint
+  **Correct**: `/ok` (not `/health`)
+
+  Verified against langgraph-api 0.5.20
+
   ### When to Use
   - Before starting any API workflow
   - As part of automated health monitoring
@@ -23,7 +28,7 @@ docs {
   ### Expected Response
   ```json
   {
-    "status": "ok"
+    "ok": true
   }
   ```
 
@@ -32,7 +37,11 @@ docs {
   - No external API calls
   - No database queries
 
+  ### Server Information
+  For detailed version info, use: `GET /info`
+
   ### Troubleshooting
   - Connection refused → Server not running (`uv run langgraph dev --allow-blocking`)
   - Timeout → Check firewall/network settings
+  - 404 Not Found → Ensure using `/ok` endpoint (not `/health`)
 }

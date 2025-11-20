@@ -1,0 +1,18 @@
+meta {
+  name: Count Crons
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/runs/crons/count
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "assistant_id": "",
+    "thread_id": ""
+  }
+}

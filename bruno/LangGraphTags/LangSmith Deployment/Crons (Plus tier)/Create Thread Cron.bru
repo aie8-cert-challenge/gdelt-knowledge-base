@@ -1,0 +1,35 @@
+meta {
+  name: Create Thread Cron
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/threads/:thread_id/runs/crons
+  body: json
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+}
+
+body:json {
+  {
+    "schedule": "",
+    "end_time": "",
+    "assistant_id": "",
+    "input": "",
+    "metadata": {},
+    "config": {
+      "tags": [],
+      "recursion_limit": 0,
+      "configurable": {}
+    },
+    "context": {},
+    "webhook": "",
+    "interrupt_before": "",
+    "interrupt_after": "",
+    "multitask_strategy": ""
+  }
+}

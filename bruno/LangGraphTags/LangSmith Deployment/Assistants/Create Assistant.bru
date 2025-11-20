@@ -1,0 +1,24 @@
+meta {
+  name: Create Assistant
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/assistants
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "assistant_id": "",
+    "graph_id": "",
+    "config": {},
+    "context": {},
+    "metadata": {},
+    "if_exists": "",
+    "name": "",
+    "description": ""
+  }
+}

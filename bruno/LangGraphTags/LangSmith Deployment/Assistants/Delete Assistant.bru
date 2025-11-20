@@ -1,0 +1,15 @@
+meta {
+  name: Delete Assistant
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/assistants/:assistant_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  assistant_id: 
+}

@@ -1,0 +1,49 @@
+meta {
+  name: Create Run, Stream Output
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/threads/:thread_id/runs/stream
+  body: json
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+}
+
+body:json {
+  {
+    "assistant_id": "",
+    "checkpoint": {
+      "thread_id": "",
+      "checkpoint_ns": "",
+      "checkpoint_id": "",
+      "checkpoint_map": {}
+    },
+    "input": "",
+    "command": "",
+    "metadata": {},
+    "config": {
+      "tags": [],
+      "recursion_limit": 0,
+      "configurable": {}
+    },
+    "context": {},
+    "webhook": "",
+    "interrupt_before": "",
+    "interrupt_after": "",
+    "stream_mode": "",
+    "stream_subgraphs": false,
+    "stream_resumable": false,
+    "on_disconnect": "",
+    "feedback_keys": [],
+    "multitask_strategy": "",
+    "if_not_exists": "",
+    "after_seconds": "",
+    "checkpoint_during": false,
+    "durability": ""
+  }
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Copy Thread
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/threads/:thread_id/copy
+  body: none
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Delete Cron
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/runs/crons/:cron_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  cron_id: 
+}

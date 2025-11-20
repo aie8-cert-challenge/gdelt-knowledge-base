@@ -1,0 +1,26 @@
+meta {
+  name: Patch Assistant
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/assistants/:assistant_id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  assistant_id: 
+}
+
+body:json {
+  {
+    "graph_id": "",
+    "config": {},
+    "context": {},
+    "metadata": {},
+    "name": "",
+    "description": ""
+  }
+}

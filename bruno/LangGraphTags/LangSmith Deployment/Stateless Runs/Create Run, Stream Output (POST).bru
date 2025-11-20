@@ -1,0 +1,38 @@
+meta {
+  name: Create Run, Stream Output (POST)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/runs/stream
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "assistant_id": "",
+    "input": "",
+    "command": "",
+    "metadata": {},
+    "config": {
+      "tags": [],
+      "recursion_limit": 0,
+      "configurable": {}
+    },
+    "context": {},
+    "webhook": "",
+    "interrupt_before": "",
+    "interrupt_after": "",
+    "stream_mode": "",
+    "feedback_keys": [],
+    "stream_subgraphs": false,
+    "stream_resumable": false,
+    "on_completion": "",
+    "on_disconnect": "",
+    "after_seconds": "",
+    "checkpoint_during": false,
+    "durability": ""
+  }
+}

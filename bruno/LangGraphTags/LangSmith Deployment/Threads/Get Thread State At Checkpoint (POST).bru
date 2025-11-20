@@ -1,0 +1,31 @@
+meta {
+  name: Get Thread State At Checkpoint (POST)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/threads/:thread_id/state/checkpoint
+  body: json
+  auth: inherit
+}
+
+params:query {
+  ~subgraphs: 
+}
+
+params:path {
+  thread_id: 
+}
+
+body:json {
+  {
+    "checkpoint": {
+      "thread_id": "",
+      "checkpoint_ns": "",
+      "checkpoint_id": "",
+      "checkpoint_map": {}
+    },
+    "subgraphs": false
+  }
+}

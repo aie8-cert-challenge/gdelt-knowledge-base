@@ -1,0 +1,28 @@
+meta {
+  name: Update Thread State
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/threads/:thread_id/state
+  body: json
+  auth: inherit
+}
+
+params:path {
+  thread_id: 
+}
+
+body:json {
+  {
+    "values": "",
+    "checkpoint": {
+      "thread_id": "",
+      "checkpoint_ns": "",
+      "checkpoint_id": "",
+      "checkpoint_map": {}
+    },
+    "as_node": ""
+  }
+}

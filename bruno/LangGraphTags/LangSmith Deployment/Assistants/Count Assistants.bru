@@ -1,0 +1,18 @@
+meta {
+  name: Count Assistants
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/assistants/count
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "metadata": {},
+    "graph_id": ""
+  }
+}

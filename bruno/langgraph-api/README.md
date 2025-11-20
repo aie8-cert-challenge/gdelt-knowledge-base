@@ -2,9 +2,15 @@
 
 A comprehensive Bruno API collection for testing and exploring the GDELT Knowledge Base LangGraph server. This collection provides complete lifecycle testing from health checks to HITL workflows.
 
+> **✅ Validated Against**: langgraph-api 0.5.20, LangGraph 1.0.1
+> **📅 Last Updated**: 2025-11-20
+> **🎯 Target**: Self-hosted LangGraph Server (local development)
+> **📊 Working Endpoints**: 13/16 (3 marked as educational/not available)
+
 ## 📋 Table of Contents
 
 - [Overview](#overview)
+- [Version Compatibility](#version-compatibility)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Collection Structure](#collection-structure)
@@ -34,6 +40,32 @@ Question → [retrieve node] → [generate node] → Answer
 - **Embeddings**: OpenAI text-embedding-3-small (1536 dimensions)
 - **LLM**: GPT-4.1-mini (deterministic, temperature=0)
 - **Documents**: 38 GDELT documentation PDFs
+
+## Version Compatibility
+
+**Validated Against**:
+- **langgraph-api**: 0.5.20
+- **LangGraph**: 1.0.1
+- **Host**: Self-hosted (local development)
+
+**Endpoint Status**:
+
+| Category | Working | Not Available | Notes |
+|----------|---------|---------------|-------|
+| Health & Info | 1/1 | - | Use `/ok` not `/health` |
+| Introspection | 3/3 | - | Schemas, graph, subgraphs |
+| Threads | 2/2 | - | Create, get |
+| Runs | 4/4 | - | Wait, stream, status, history |
+| State | 1/1 | - | Get thread state |
+| Debug | 2/3 | 1 | Config endpoint N/A in 0.5.20 |
+| HITL | 0/2 | 2 | Use interrupt pattern instead |
+| **Total** | **13/16** | **3/16** | **81% functional** |
+
+**Not Available in 0.5.20**:
+- ❌ `/assistants/{id}/config` - Use `/assistants/{id}/schemas` instead
+- ❌ `/threads/{id}/events` (GET/POST) - Use interrupt pattern in `/runs/wait`
+
+**See**: [VERSION_VALIDATION.md](VERSION_VALIDATION.md) for detailed validation report
 
 ## Prerequisites
 
