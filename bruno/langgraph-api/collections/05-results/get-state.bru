@@ -1,0 +1,111 @@
+meta {
+  name: Get Thread State
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/threads/{{thread_id}}/state
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Thread State
+
+  Retrieves the current state of a thread (after the most recent run).
+
+  ### When to Use
+  - Accessing the complete state after a run completes
+  - Getting conversation context for multi-turn interactions
+  - Debugging state management issues
+  - Building stateful UIs
+
+  ### Prerequisites
+  - Valid `thread_id`
+  - At least one run has completed on the thread
+
+  ### Performance
+  - Latency: < 100ms
+  - No external API calls
+  - State retrieval from checkpoint
+
+  ### State Schema (GDELT)
+  ```typescript
+  {
+    question: string,
+    context: Array<Document>,
+    response: string
+  }
+  ```
+
+  ### Expected Response
+  ```json
+  {
+    "values": {
+      "question": "What is GDELT?",
+      "context": [
+        {
+          "page_content": "GDELT is a global database of events...",
+          "metadata": {
+            "source": "gdelt_codebook.pdf",
+            "page": 1,
+            "chunk_id": 0
+          }
+        },
+        {
+          "page_content": "The database monitors news media globally...",
+          "metadata": {
+            "source": "gdelt_handbook.pdf",
+            "page": 5,
+            "chunk_id": 2
+          }
+        }
+      ],
+      "response": "GDELT is a comprehensive global database of events, language, and tone. It monitors news media from across the world and provides structured event data..."
+    },
+    "next": [],
+    "config": {
+      "configurable": {
+        "thread_id": "1464924d-545e-4652-88f9-ca61506e5800",
+        "checkpoint_ns": "",
+        "checkpoint_id": "1e01b7a0-01a7-65e1-8001-000000000003"
+      }
+    },
+    "metadata": {
+      "source": "loop",
+      "step": 2,
+      "writes": {
+        "generate": {
+          "response": "GDELT is a comprehensive global database..."
+        }
+      }
+    },
+    "created_at": "2025-11-20T17:58:44.461321Z",
+    "parent_config": null
+  }
+  ```
+
+  ### Multi-Turn Conversations
+  For follow-up questions:
+  ```
+  1. First run: "What is GDELT?"
+  2. GET /state → see full context
+  3. Second run: "How does it work?" (uses same thread)
+  4. GET /state → see accumulated context
+  ```
+
+  ### Key Fields
+  - **values**: Current state (question, context, response)
+  - **next**: Next nodes to execute (empty if completed)
+  - **metadata.step**: Node execution count
+  - **metadata.writes**: What each node wrote to state
+
+  ### Troubleshooting
+  - Empty values → No runs have completed yet
+  - 404 Not Found → Thread doesn't exist
+}

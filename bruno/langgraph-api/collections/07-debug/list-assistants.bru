@@ -1,0 +1,93 @@
+meta {
+  name: List Assistants
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/assistants
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## List Assistants
+
+  Retrieves all available graph assistants registered with the server.
+
+  ### When to Use
+  - Discovering available graphs
+  - Getting assistant IDs for requests
+  - Verifying server configuration
+  - Debugging graph registration issues
+
+  ### Performance
+  - Latency: < 50ms
+  - No external API calls
+  - Simple metadata lookup
+
+  ### Expected Response
+  ```json
+  {
+    "assistants": [
+      {
+        "assistant_id": "e45a51c7-e110-55eb-b8c6-c2b51f0c2c8f",
+        "graph_id": "gdelt",
+        "name": "GDELT RAG Assistant",
+        "description": "RAG system for GDELT documentation with Cohere rerank",
+        "config": {
+          "retriever": "cohere_rerank",
+          "llm": "gpt-4.1-mini",
+          "temperature": 0
+        },
+        "created_at": "2025-11-20T17:58:15.076652Z"
+      }
+    ]
+  }
+  ```
+
+  ### Server Configuration
+  From `langgraph.json`:
+  ```json
+  {
+    "graphs": {
+      "gdelt": "app.graph_app:get_app"
+    }
+  }
+  ```
+
+  ### Multiple Assistants
+  If you have multiple graphs defined:
+  ```python
+  # app/graph_app.py
+  def get_naive_app():
+      return build_graph(retriever_type="naive")
+
+  def get_cohere_app():
+      return build_graph(retriever_type="cohere_rerank")
+  ```
+
+  Then `langgraph.json`:
+  ```json
+  {
+    "graphs": {
+      "gdelt-naive": "app.graph_app:get_naive_app",
+      "gdelt-cohere": "app.graph_app:get_cohere_app"
+    }
+  }
+  ```
+
+  ### Use Cases
+  - **Multi-Graph Comparison**: Compare different retriever strategies
+  - **A/B Testing**: Route traffic to different graph versions
+  - **Feature Flags**: Enable/disable graphs without code changes
+  - **Environment Management**: Different graphs for dev/staging/prod
+
+  ### Troubleshooting
+  - Empty array → No graphs registered (check `langgraph.json`)
+  - Missing expected graph → Check entrypoint path and function name
+}

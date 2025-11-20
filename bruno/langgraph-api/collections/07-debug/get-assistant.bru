@@ -1,0 +1,93 @@
+meta {
+  name: Get Assistant Details
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/assistants/{{assistant_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  ## Get Assistant Details
+
+  Retrieves detailed information about a specific assistant.
+
+  ### When to Use
+  - Inspecting assistant configuration
+  - Debugging graph setup issues
+  - Verifying correct graph is being used
+  - Understanding assistant capabilities
+
+  ### Prerequisites
+  - Valid `assistant_id` in environment
+
+  ### Performance
+  - Latency: < 50ms
+  - No external API calls
+  - Metadata lookup only
+
+  ### Expected Response
+  ```json
+  {
+    "assistant_id": "e45a51c7-e110-55eb-b8c6-c2b51f0c2c8f",
+    "graph_id": "gdelt",
+    "name": "GDELT RAG Assistant",
+    "description": "RAG system for GDELT documentation with Cohere rerank",
+    "metadata": {
+      "version": "1.0.0",
+      "retriever": "cohere_rerank",
+      "llm": "gpt-4.1-mini",
+      "embedding_model": "text-embedding-3-small",
+      "vector_store": "qdrant",
+      "collection": "gdelt_comparative_eval"
+    },
+    "config": {
+      "configurable": {
+        "temperature": 0,
+        "k_documents": 5,
+        "initial_k": 20
+      }
+    },
+    "created_at": "2025-11-20T17:58:15.076652Z"
+  }
+  ```
+
+  ### Configuration Details
+
+  **Retriever**: Cohere Rerank
+  - Initial retrieval: k=20 documents
+  - Reranked to: k=5 documents
+  - Model: rerank-v3.5
+  - Performance: 94.43% average (best of 4 retrievers)
+
+  **LLM**: GPT-4.1-mini
+  - Temperature: 0 (deterministic)
+  - Purpose: Answer generation
+  - Cost: ~$0.001 per query
+
+  **Embeddings**: text-embedding-3-small
+  - Dimensions: 1536
+  - Cost: ~$0.0001 per query
+
+  **Vector Store**: Qdrant
+  - Collection: gdelt_comparative_eval
+  - Distance: COSINE
+  - Local deployment: http://localhost:6333
+
+  ### Use Cases
+  - **Configuration Audit**: Verify correct models/parameters
+  - **Cost Estimation**: Understand API usage patterns
+  - **Performance Debugging**: Identify configuration issues
+  - **Documentation**: Auto-generate API docs from assistant metadata
+
+  ### Troubleshooting
+  - 404 Not Found → Invalid assistant_id or graph not registered
+  - Check `langgraph.json` for correct graph configuration
+}

@@ -1,0 +1,38 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  ## Health Check
+
+  Verifies that the LangGraph server is running and responsive.
+
+  ### When to Use
+  - Before starting any API workflow
+  - As part of automated health monitoring
+  - To verify server startup completed successfully
+
+  ### Expected Response
+  ```json
+  {
+    "status": "ok"
+  }
+  ```
+
+  ### Performance
+  - Latency: < 10ms
+  - No external API calls
+  - No database queries
+
+  ### Troubleshooting
+  - Connection refused → Server not running (`uv run langgraph dev --allow-blocking`)
+  - Timeout → Check firewall/network settings
+}

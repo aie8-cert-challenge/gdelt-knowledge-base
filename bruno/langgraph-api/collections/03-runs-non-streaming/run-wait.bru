@@ -1,0 +1,123 @@
+meta {
+  name: Run Graph (Wait for Completion)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/threads/{{thread_id}}/runs/wait
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "assistant_id": "{{assistant_id}}",
+    "input": {
+      "question": "What is GDELT?"
+    },
+    "stream_mode": ["values"]
+  }
+}
+
+script:post-response {
+  // Capture run_id from response for subsequent requests
+  const response = res.getBody();
+  if (response && response.run_id) {
+    bru.setEnvVar("run_id", response.run_id);
+  }
+}
+
+docs {
+  ## Run Graph (Non-Streaming)
+
+  Executes the GDELT RAG graph and waits for completion before returning results.
+
+  ### When to Use
+  - Standard query execution
+  - When you want complete results in a single response
+  - For batch processing or automated testing
+  - When latency is acceptable (~10 seconds per query)
+
+  ### Prerequisites
+  - Valid `thread_id` (use "Create Thread" first)
+  - Valid `assistant_id` in environment
+
+  ### Execution Flow
+  ```
+  1. POST /runs/wait
+  2. [retrieve node] → OpenAI embeddings + Qdrant + Cohere rerank
+  3. [generate node] → OpenAI chat completion
+  4. Return complete state
+  ```
+
+  ### External API Calls (Per Run)
+  Based on server logs, each run triggers:
+
+  **Initialization** (~2s):
+  - HuggingFace HEAD/GET (5x) - Dataset loading
+  - Qdrant GET (2x) - Collection verification
+  - OpenAI POST /embeddings (1x) - Warmup
+
+  **Retrieve Node** (~2.5s):
+  - OpenAI POST /embeddings (1x) - ~398ms - Embed question
+  - Qdrant POST /points/query (1x) - ~20ms - Vector search (k=20)
+  - Cohere POST /v2/rerank (1x) - ~552ms - Rerank to k=5
+
+  **Generate Node** (~6.6s):
+  - OpenAI POST /chat/completions (1x) - ~6.6s - Generate answer
+
+  **Total**: 14 external API calls, ~10.5 seconds end-to-end
+
+  ### Performance
+  - Queue wait: ~1s
+  - Initialization: ~2s
+  - Execution: ~9.5s
+  - **Total: ~10.5 seconds**
+
+  ### Cost per Query
+  - OpenAI Embeddings: ~$0.0001
+  - Cohere Rerank: ~$0.001
+  - OpenAI Chat (GPT-4.1-mini): ~$0.001
+  - **Total: ~$0.0021**
+
+  ### Sample Questions
+  Try these for testing:
+  - "What is GDELT?"
+  - "How does GDELT monitor news?"
+  - "What data formats does GDELT support?"
+  - "Explain GDELT's event database structure"
+
+  ### Expected Response
+  ```json
+  {
+    "run_id": "019aa26b-051a-728c-9893-1e2ca3867e76",
+    "thread_id": "1464924d-545e-4652-88f9-ca61506e5800",
+    "status": "success",
+    "values": {
+      "question": "What is GDELT?",
+      "context": [
+        {
+          "page_content": "GDELT is a global database of events...",
+          "metadata": {
+            "source": "gdelt_codebook.pdf",
+            "page": 1,
+            "chunk_id": 0
+          }
+        }
+      ],
+      "response": "GDELT is a comprehensive global database of events, language, and tone..."
+    }
+  }
+  ```
+
+  ### Troubleshooting
+  - Timeout → Increase client timeout to 30s
+  - 404 Thread Not Found → Create thread first
+  - 500 Internal Error → Check server logs for Qdrant/OpenAI connection issues
+}

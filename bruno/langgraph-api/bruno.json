@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "LangGraph API - GDELT Knowledge Base",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
